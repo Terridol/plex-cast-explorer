@@ -40,7 +40,7 @@ PORTRAIT_DIR = ROOT / 'portraits'
 NETWORK_CONFIG_PATH = ROOT / 'network.json'
 HOST = os.getenv('CAST_EXPLORER_HOST', '0.0.0.0')
 PORT = int(os.getenv('CAST_EXPLORER_PORT', '8765'))
-VERSION = '0.4.2'
+VERSION = '0.4.3-beta'
 SESSION_SECONDS = 14 * 24 * 60 * 60
 LOGIN_LOCK = threading.Lock()
 LOGIN_ATTEMPTS = {}
@@ -596,6 +596,17 @@ def plex_link_config(peer, server_ip):
     return {'mode': 'local', 'base': base + '/web/index.html'}
 
 
+def provider_enabled(name):
+    """Opt-in to third-party providers requiring additional terms compliance.
+
+    TMDB and Wikimedia are OFF by default. Saved tokens do not activate TMDB.
+    The operator is responsible for provider-specific permitted uses.
+    """
+    flag = {'tmdb': 'CAST_EXPLORER_ENABLE_TMDB',
+            'wikimedia': 'CAST_EXPLORER_ENABLE_WIKIMEDIA'}.get(name)
+    return bool(flag and os.environ.get(flag, '').strip() == '1')
+
+
 def artwork_keys():
     try:
         obj = json.loads(ART_CONFIG_PATH.read_text(encoding='utf-8'))
@@ -715,7 +726,7 @@ def find_art(key):
         choice = new_art_candidate(key, name_found, image, source, reference, credit)
         if choice:
             results.append(choice)
-    if keys['tmdb']:
+    if keys['tmdb'] and provider_enabled('tmdb'):
         try:
             response = provider_json('https://api.themoviedb.org/3/search/person?' + urlencode({'query': name, 'include_adult': 'true'}), keys['tmdb'])
             for item in response.get('results', [])[:12]:
@@ -740,31 +751,32 @@ def find_art(key):
         except Exception as exc:
             logging.warning('ThePornDB portrait search failed: %s', exc)
             warnings.append('ThePornDB lookup unavailable: ' + str(exc)[:140])
-    try:
-        response = provider_json('https://www.wikidata.org/w/api.php?' + urlencode({
-            'action': 'wbsearchentities', 'search': name, 'language': 'en', 'format': 'json', 'limit': 6}))
-        hits = [x for x in response.get('search', []) if normal_name(x.get('label', '')) == normal_name(name)][:3]
-        if hits:
-            more = provider_json('https://www.wikidata.org/w/api.php?' + urlencode({
-                'action': 'wbgetentities', 'ids': '|'.join(x['id'] for x in hits), 'props': 'claims', 'format': 'json'}))
-            for hit in hits:
-                claims = more.get('entities', {}).get(hit['id'], {}).get('claims', {}).get('P18', [])
-                for claim in claims[:1]:
-                    try:
-                        filename = claim['mainsnak']['datavalue']['value']
-                        if not isinstance(filename, str) or not filename.lower().endswith(('.jpg','.jpeg','.png','.webp')):
+    if provider_enabled('wikimedia'):
+        try:
+            response = provider_json('https://www.wikidata.org/w/api.php?' + urlencode({
+                'action': 'wbsearchentities', 'search': name, 'language': 'en', 'format': 'json', 'limit': 6}))
+            hits = [x for x in response.get('search', []) if normal_name(x.get('label', '')) == normal_name(name)][:3]
+            if hits:
+                more = provider_json('https://www.wikidata.org/w/api.php?' + urlencode({
+                    'action': 'wbgetentities', 'ids': '|'.join(x['id'] for x in hits), 'props': 'claims', 'format': 'json'}))
+                for hit in hits:
+                    claims = more.get('entities', {}).get(hit['id'], {}).get('claims', {}).get('P18', [])
+                    for claim in claims[:1]:
+                        try:
+                            filename = claim['mainsnak']['datavalue']['value']
+                            if not isinstance(filename, str) or not filename.lower().endswith(('.jpg','.jpeg','.png','.webp')):
+                                continue
+                            file_id = filename.replace(' ', '_')
+                            image = 'https://commons.wikimedia.org/wiki/Special:Redirect/file/' + quote(file_id, safe='') + '?width=300'
+                            reference = 'https://commons.wikimedia.org/wiki/File:' + quote(file_id, safe='')
+                            add(hit['label'], image, 'Wikimedia Commons', reference, 'Wikimedia Commons — review image license and attribution')
+                        except (KeyError, TypeError):
                             continue
-                        file_id = filename.replace(' ', '_')
-                        image = 'https://commons.wikimedia.org/wiki/Special:Redirect/file/' + quote(file_id, safe='') + '?width=300'
-                        reference = 'https://commons.wikimedia.org/wiki/File:' + quote(file_id, safe='')
-                        add(hit['label'], image, 'Wikimedia Commons', reference, 'Wikimedia Commons — review image license and attribution')
-                    except (KeyError, TypeError):
-                        continue
-    except Exception as exc:
-        logging.warning('Wikimedia portrait search failed: %s', exc)
-        warnings.append('Wikimedia lookup unavailable: ' + str(exc)[:140])
+        except Exception as exc:
+            logging.warning('Wikimedia portrait search failed: %s', exc)
+            warnings.append('Wikimedia lookup unavailable: ' + str(exc)[:140])
     return {'actor': name, 'results': results[:25], 'warnings': warnings,
-            'configured': {'tmdb': bool(keys['tmdb']), 'theporndb': bool(keys['theporndb']), 'wikimedia': True}}
+            'configured': {'tmdb': bool(keys['tmdb']) and provider_enabled('tmdb'), 'theporndb': bool(keys['theporndb']), 'wikimedia': provider_enabled('wikimedia')}}
 
 
 def apply_art(actor_key, choice_token):
@@ -921,7 +933,7 @@ def verified_portrait_candidates(actor_key):
         return [], ['Actor no longer exists']
     keys = artwork_keys()
     found, errors = [], []
-    if keys['tmdb']:
+    if keys['tmdb'] and provider_enabled('tmdb'):
         try:
             search = paced_provider_json('https://api.themoviedb.org/3/search/person?' + urlencode({
                 'query': name, 'include_adult': 'true'}), keys['tmdb'])
@@ -1340,6 +1352,26 @@ class Handler(BaseHTTPRequestHandler):
         except ValueError:
             return False
 
+    def valid_host(self):
+        """Reject unexpected Host headers to reduce DNS rebinding risks.
+
+        Never use user-provided forwarding headers to determine admin rights.
+        """
+        header = self.headers.get('Host', '')
+        try:
+            parsed = urlsplit('http://' + header)
+            if (not header or parsed.username or parsed.password or parsed.path or
+                    parsed.query or parsed.fragment or parsed.port != PORT):
+                return False
+            hostname = (parsed.hostname or '').lower().rstrip('.')
+            allowed = {'localhost', '127.0.0.1', '::1'}
+            allowed.add(self.connection.getsockname()[0].lower())
+            allowed.update(x.strip().lower() for x in
+                           os.getenv('CAST_EXPLORER_ALLOWED_HOSTS', '').split(',') if x.strip())
+            return hostname in allowed
+        except (ValueError, AttributeError):
+            return False
+
     def logged_in(self):
         if self.is_local():
             return True
@@ -1384,6 +1416,8 @@ class Handler(BaseHTTPRequestHandler):
         return target.scheme in ('http', 'https') and target.netloc.lower() == host
 
     def do_GET(self):
+        if not self.valid_host():
+            return self.respond(400, {'error': 'Unrecognized host'})
         parts = urlsplit(self.path)
         path, params = parts.path, parse_qs(parts.query)
         if path == '/login':
@@ -1417,7 +1451,7 @@ class Handler(BaseHTTPRequestHandler):
                 if not self.is_local():
                     return self.respond(403, {'error': 'Server-only settings'})
                 art_keys = artwork_keys()
-                self.respond(200, {'tmdb_set': bool(art_keys['tmdb']), 'theporndb_set': bool(art_keys['theporndb'])})
+                self.respond(200, {'tmdb_set': bool(art_keys['tmdb']), 'tmdb_enabled': provider_enabled('tmdb'), 'theporndb_set': bool(art_keys['theporndb']), 'wikimedia_enabled': provider_enabled('wikimedia')})
             elif path == '/api/art/search':
                 if not self.is_local():
                     return self.respond(403, {'error': 'Art searches can be started only on the server'})
@@ -1464,6 +1498,8 @@ class Handler(BaseHTTPRequestHandler):
             self.respond(404 if path == '/api/image' else 500, {'error': str(exc)})
 
     def do_POST(self):
+        if not self.valid_host():
+            return self.respond(400, {'error': 'Unrecognized host'})
         parts = urlsplit(self.path)
         path = parts.path
         if not self.valid_origin():
