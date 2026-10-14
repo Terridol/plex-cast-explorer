@@ -22,6 +22,16 @@
 - [x] 21 unit tests passed locally; JavaScript syntax and Python bytecode compilation passed.
 - [x] GitHub Actions tests passed on the published source branch ([successful run](https://github.com/Terridol/plex-cast-explorer/actions/runs/38597503476)).
 
+## Staged security update — v0.4.3-beta
+
+- [x] Development branch: `release/0.4.3-beta-local-validation`.
+- [x] Default-off TMDB and Wikimedia calls, with explicit environment opt-in and updated Settings messaging.
+- [x] Reject HTTP Host headers that are not recognized for the receiving interface.
+- [x] Added three regression tests, for **27 tests passing locally**.
+- [x] JavaScript syntax check and Python bytecode compilation passed locally.
+- [ ] **Hosted execution deliberately not performed**: no GitHub Actions, pull request, tag, or deployment for this branch, per maintainer instruction.
+- [ ] Real Plex-server smoke test and provider permissions/attribution verification remain outstanding.
+
 ## Before a supported release
 
 - [ ] Review third-party metadata/image terms, caching and attribution (including TMDB branding).
