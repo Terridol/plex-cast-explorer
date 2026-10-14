@@ -7,7 +7,8 @@ param(
     [ValidateSet(0,1)][int]$EnableTMDB = 0,
     [ValidateSet(0,1)][int]$CreateFirewall = 1,
     [ValidateSet(0,1)][int]$AllowBetaUpdates = 0,
-    [string]$RemoteAdminCIDRs = ''
+    [string]$RemoteAdminCIDRs = '',
+    [string]$ExpectedVersion = '0.4.7-beta'
 )
 $ErrorActionPreference = 'Stop'
 $serviceName = 'PlexCastExplorer'
@@ -128,7 +129,44 @@ $settingsPath = Join-Path $dataDir 'installer-options.ini'
 & $wrapper start
 if ($LASTEXITCODE -ne 0) { throw 'Installed/updated service could not start. Check Event Viewer and ProgramData logs.' }
 (Get-Service -Name $serviceName).WaitForStatus('Running', [TimeSpan]::FromSeconds(30))
-Write-Host "Plex Cast Explorer service running on port $Port. Runtime files preserved in $dataDir"
+
+# The service manager reporting Running only confirms WinSW is running.
+# The installed web app must respond on localhost with the EXPECTED new version.
+$healthUrl = "http://127.0.0.1:$Port/api/config"
+$ready = $false
+$lastFailure = 'No application response'
+$deadline = [DateTime]::UtcNow.AddSeconds(45)
+do {
+    try {
+        $request = [Net.HttpWebRequest][Net.WebRequest]::Create($healthUrl)
+        $request.Method = 'GET'
+        $request.Proxy = $null
+        $request.Timeout = 2000
+        $request.ReadWriteTimeout = 2000
+        $response = $request.GetResponse()
+        try {
+            $reader = New-Object IO.StreamReader($response.GetResponseStream())
+            try { $body = $reader.ReadToEnd() } finally { $reader.Dispose() }
+        } finally { $response.Dispose() }
+        $health = ConvertFrom-Json -InputObject $body
+        if ($health.version -eq $ExpectedVersion -and $health.admin -eq $true) {
+            $ready = $true
+            break
+        }
+        $lastFailure = "Unexpected application or version at $healthUrl"
+    } catch {
+        $lastFailure = $_.Exception.Message
+    }
+    $current = Get-Service -Name $serviceName -ErrorAction Stop
+    if ($current.Status -eq 'Stopped') {
+        throw 'Service stopped before the app became ready; check ProgramData logs.'
+    }
+    if ([DateTime]::UtcNow -lt $deadline) { Start-Sleep -Seconds 1 }
+} while ([DateTime]::UtcNow -lt $deadline)
+if (-not $ready) {
+    throw "Service wrapper started but the application v$ExpectedVersion did not respond on port $Port within 45 seconds. Last error: $lastFailure"
+}
+Write-Host "Plex Cast Explorer v$ExpectedVersion is running and responding on port $Port. Data is preserved in $dataDir"
 if (-not (Test-Path -LiteralPath (Join-Path $dataDir 'auth.json'))) {
     Write-Host 'NEW INSTALL: Set a gallery password using the Start Menu shortcut before allowing gallery access.'
 }
