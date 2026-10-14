@@ -1,0 +1,67 @@
+Plex Cast Explorer Noncommercial Network Source-Share License 1.0
+Copyright (c) 2026 Terridol and contributors, as applicable.
+
+NOTICE TO USERS
+This is a project-specific source-available license, NOT an OSI-approved open-source license. It prohibits ALL Commercial Use without advance written authorization and imposes source-sharing duties for redistribution and network deployment of modified versions. This license applies only to rights the relevant copyright holders are authorized to grant. It does not license third-party portraits, provider data, trademarks, or other third-party materials.
+
+1. Definitions
+
+"Program" means the Plex Cast Explorer code and documentation expressly distributed under this License, including lawful modifications of it. It excludes unrelated independently authored programs merely communicating with its documented interfaces.
+
+"You" means the individual or entity exercising rights under this License.
+
+"Licensor" means each holder of copyright who has placed all or part of the Program under this License, or their authorized representative.
+
+"Commercial Use" means ANY use, execution, copying, modification, distribution, hosting, deployment, sublicensing, or provision of the Program or a derivative work in connection with a business, trade, profession, commercial enterprise, commercial service, or revenue-generating activity. It includes internal use by or on behalf of a for-profit business, use intended to provide direct or indirect financial or competitive benefit, charging fees for access or hosting, advertising-supported services, and sale or incorporation into commercial products or services. Commercial Use is prohibited even if no fee is charged for the Program itself.
+
+"Permitted Noncommercial Use" means personal, hobby, educational, or research use that is not Commercial Use and is not performed for the material benefit of a commercial enterprise. Nonprofit organizational use is permitted only to the extent it is genuinely noncommercial under these definitions. If classification is uncertain, obtain written permission before use.
+
+"Modification" means a change to the Program, or a derivative work based on copyrightable portions of the Program, to the extent the applicable law treats it as a derivative or adapted work.
+
+"Corresponding Source" means the complete preferred source form for making and maintaining the version used, including the Program and its Modifications, available build/install/launch scripts, and non-secret configuration templates needed to produce and run it. User databases, passwords, tokens, provider datasets, third-party copyrighted media, and independently obtained third-party dependencies are excluded.
+
+"Public Source Location" means a URL where anyone may retrieve the Corresponding Source, at no charge, without credentials or a separately imposed restriction inconsistent with this License.
+
+2. Noncommercial Grant
+
+Subject to all conditions in this License, Licensors grant You a worldwide, nonexclusive, royalty-free, nontransferable copyright permission to use, copy, study, change, and share the Program solely for Permitted Noncommercial Use. No right to exercise Commercial Use is granted. This is not a grant of trademark rights, third-party content rights, or an express patent license.
+
+3. Absolute Commercial Restriction
+
+You must NOT engage in Commercial Use without prior, express, written permission covering the specific activity from every copyright holder whose authorization is legally required, or from an agent validly authorized to license those rights. A written commercial arrangement may impose separate terms. An email request alone, silence, public repository availability, or attribution does not constitute permission.
+
+4. Sharing and Same-Terms Requirements
+
+If You distribute the Program or any Modification, in source or executable form, You must:
+(a) publish the exact Corresponding Source for any Modified Program at a Public Source Location, and provide the Corresponding Source or identify a Public Source Location for any unmodified Program;
+(b) include this entire License and preserve copyright, provider-attribution, and legal notices;
+(c) identify which portions You changed and when, in a reasonably discoverable change log or equivalent; and
+(d) make Your Modification and any copyrightable Program-derived portions available under this same License, without imposing further use restrictions or fees for accessing the source.
+
+You may not relicense Program-derived portions on terms allowing Commercial Use without satisfying Section 3. These duties do not automatically cover unrelated independent works using a separately documented interface.
+
+5. Network Source-Sharing for Modified Versions
+
+If You make a Modified Program accessible for interaction by another person over any computer network, even when You do not distribute copies, You must provide an easily discoverable link within the modified application's user interface to the Public Source Location containing its exact Corresponding Source. Keep that source accessible without charge for the duration of the network deployment. Providing an executable alone is insufficient. This requirement also applies to noncommercial hosting or services. It does not itself authorize Commercial Use.
+
+6. Private Modifications
+
+You may make and run a Modification solely for your own Permitted Noncommercial Use without publicly releasing it, provided You neither distribute the Modified Program nor make it available for network interaction by anyone else. Nothing here requires public release of undistributed and unserved private modifications.
+
+7. Preservation of Rights and Third-Party Materials
+
+All rights not expressly granted are reserved. This License does not grant rights to Plex, TMDB, ThePornDB, Wikimedia, or any other provider's trademarks, photos, portraits, metadata, or API content. You are separately responsible for applicable provider terms, privacy requirements, and third-party copyright notices. You must not publish or redistribute other users' secret tokens, credentials, library databases, or cached third-party portraits as part of a source release.
+
+8. Termination and Correction
+
+Rights granted under this License end upon breach. If it is Your first notified violation and You promptly stop the violation and fully correct it within 30 days of written notice, Licensors may reinstate the rights they control; reinstatement does not require waiver of claims for past conduct. Nothing in this section grants Commercial Use while a breach is being corrected. This section is subject to mandatory applicable law.
+
+9. Warranty Disclaimer and Liability
+
+TO THE MAXIMUM EXTENT PERMITTED BY APPLICABLE LAW, THE PROGRAM IS PROVIDED "AS IS" WITHOUT ANY EXPRESS OR IMPLIED WARRANTY, INCLUDING MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, AND NON-INFRINGEMENT. TO THE MAXIMUM EXTENT PERMITTED BY LAW, LICENSORS ARE NOT LIABLE FOR DAMAGES ARISING FROM ITS USE, MODIFICATION, OR DISTRIBUTION. Mandatory legal rights are not excluded where exclusion is prohibited.
+
+10. Interpretation
+
+If any provision is legally unenforceable, the remaining provisions shall apply to the extent allowed by law. No failure to enforce a condition is a waiver of any future enforcement. Permissions under this License apply separately from rights obtained under other lawful written agreements. Nothing in this License limits statutory exceptions and limitations to copyright.
+
+END OF LICENSE
