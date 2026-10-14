@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="color-scheme" content="dark" />
+  <title>Plex Cast Explorer</title>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+  <div class="shell">
+    <aside class="sidebar">
+      <a class="brand" href="/" aria-label="Cast Explorer home"><span class="brand-mark">✦</span><span>CAST <strong>EXPLORER</strong><small>FOR PLEX</small></span></a>
+      <div class="side-label">BROWSE</div>
+      <nav id="mediaNav" class="side-nav">
+        <button class="nav-button active" data-type=""><span class="nav-icon">▦</span> All performers</button>
+        <button class="nav-button" data-type="movie"><span class="nav-icon">▤</span> Movies</button>
+        <button class="nav-button" data-type="show"><span class="nav-icon">▣</span> TV series</button>
+      </nav>
+      <div class="side-label libraries-label">YOUR LIBRARIES</div>
+      <nav id="libraryNav" class="side-nav library-nav"><div class="nav-muted">Connect to Plex to list libraries.</div></nav>
+      <div class="sidebar-bottom">
+        <span class="connection-indicator" id="connDot"></span><span id="connectionLabel">Not configured</span>
+        <button class="settings-link" id="settingsBtn" aria-label="Open settings">⚙</button>
+      </div>
+    </aside>
+    <div class="main">
+      <header class="topbar">
+        <div class="eyebrow"><span class="gold-dash"></span> YOUR COLLECTION, YOUR CAST</div>
+        <div class="top-actions"><button class="text-button" id="refreshBtn" title="Index new or updated media"><span>↻</span> Sync library</button><button class="icon-button" id="settingsTopBtn" title="Plex connection settings">⚙</button><button class="text-button" id="logoutBtn" hidden>Sign out</button></div>
+      </header>
+      <main>
+        <section class="hero">
+          <div class="hero-copy"><span class="hero-eyebrow">THE PEOPLE BEHIND THE PICTURE</span><h1>Every face.<br><em>Every story.</em></h1><p>One place to explore the actors and actresses appearing across every one of your Plex libraries.</p></div>
+          <div class="hero-stats"><div><b id="statPeople">—</b><span>PERFORMERS</span></div><div><b id="statTitles">—</b><span>MOVIES &amp; SHOWS</span></div><div><b id="statCredits">—</b><span>CAST APPEARANCES</span></div></div>
+        </section>
+        <div id="syncBanner" class="sync-banner" hidden><div class="sync-head"><strong id="syncPhase">Indexing</strong><span id="syncFraction"></span></div><div class="progress"><div id="syncBar"></div></div><div id="syncError" class="sync-error"></div></div>
+        <section class="directory">
+          <div class="directory-title"><div><div class="eyebrow">CAST DIRECTORY</div><h2 id="directoryHeading">All performers</h2><p id="directoryDescription">Discover familiar faces throughout your collection.</p></div><div class="result-count" id="resultCount"></div></div>
+          <div class="tool-row"><label class="search-box"><span class="glass">⌕</span><input type="search" id="searchInput" placeholder="Search performers by name..." autocomplete="off" aria-label="Search performers by name"></label><label class="sort-box missing-filter"><input id="missingOnly" type="checkbox"> Missing portraits</label><label class="sort-box">Sort <select id="sortSelect"><option value="name">A to Z</option><option value="count">Most appearances</option></select></label></div>
+          <div id="alphabet" class="alphabet" aria-label="Filter by first letter"></div>
+          <div id="emptyState" class="empty-state" hidden><div class="empty-symbol">✦</div><h3 id="emptyTitle">Your directory starts here</h3><p id="emptyText">Open settings to connect to Plex and scan your movies and shows.</p><button id="emptyAction" class="primary-button">Connect to Plex</button></div>
+          <div id="actorGrid" class="actor-grid"></div>
+          <div class="more-row"><button class="secondary-button" id="loadMore" hidden>Load more performers ↓</button></div>
+        </section>
+      </main>
+      <footer>PLEX CAST EXPLORER <span class="footer-dot">•</span> YOUR CROSS-LIBRARY CAST DIRECTORY<br><span class="provider-credit">This application uses TMDB and the TMDB APIs but is not endorsed, certified, or otherwise approved by TMDB. <a href="https://www.themoviedb.org" target="_blank" rel="noopener noreferrer">TMDB</a></span></footer>
+    </div>
+  </div>
+  <div class="modal-overlay" id="settingsOverlay" hidden><section class="modal settings-modal" role="dialog" aria-modal="true" aria-labelledby="settingsTitle"><button class="modal-close" id="settingsClose" aria-label="Close">×</button><div class="eyebrow">CONNECTION</div><h2 id="settingsTitle">Connect to Plex</h2><p>Connect to your existing Plex Media Server. All movie and TV libraries are indexed together. Your token stays on this computer.</p><form id="settingsForm"><label>Plex server URL<input required id="plexUrl" type="url" placeholder="http://127.0.0.1:32400" spellcheck="false"></label><label>Plex X-Plex-Token<input id="plexToken" type="password" placeholder="Paste your token, or leave blank to keep saved token" spellcheck="false" autocomplete="off"></label><div id="settingsError" class="error-message" role="alert"></div><div class="modal-actions"><button type="button" class="secondary-button" id="settingsCancel">Cancel</button><button type="submit" class="primary-button">Save &amp; index</button></div></form>
+    <div class="provider-setup"><div class="eyebrow">PORTRAIT PROVIDERS</div><h3>Find missing actor images</h3><p>Add API credentials to search TMDB and ThePornDB for missing portraits. Wikimedia Commons does not need a key. Cast Explorer keeps your credentials on this server only.</p>
+    <form id="artSettingsForm"><label>TMDB API Read Access Token<input id="tmdbToken" type="password" placeholder="Leave blank to keep existing token" autocomplete="off"></label>
+    <label>ThePornDB API Token<input id="tpdbToken" type="password" placeholder="Leave blank to keep existing token" autocomplete="off"></label><div id="artSettingsStatus" class="note" role="status"></div><button type="submit" class="secondary-button">Save artwork providers</button></form>
+    </div>
+    <div class="provider-setup" id="enrichmentSetup">
+      <div class="eyebrow">AUTOMATIC ARTWORK ENRICHMENT</div>
+      <h3>Match portraits using your movie and show credits</h3>
+      <p>Find missing images across all Plex libraries. Automatic matches now include single unique candidates with an exact performer name and corroborating production credit, provided there are no role conflicts or provider errors. One search result alone is not enough. Ambiguous results wait here for review. Open each candidate to compare the full portrait against your Plex credits before saving. Your Plex metadata is never changed.</p>
+      <div class="enrich-actions">
+        <button class="primary-button" type="button" id="enrichStart">Start / resume enrichment</button>
+        <button class="secondary-button" type="button" id="enrichPause">Pause</button>
+        <button class="secondary-button" type="button" id="enrichReload">Refresh results</button>
+        <button class="secondary-button" type="button" id="enrichRetry">Retry failed lookups</button>
+        <button class="secondary-button" type="button" id="enrichAcceptUnique">Auto-accept queued single matches</button>
+      </div>
+      <div class="note" id="enrichBatchSummary" role="status" hidden></div>
+      <div class="note" id="enrichSummary" role="status">Status will appear here.</div>
+      <div class="progress"><div id="enrichProgress" style="width:0%"></div></div>
+      <h3>Portraits to review</h3>
+      <div class="note" id="enrichReviewCount">Ambiguous results will appear below.</div>
+      <div id="enrichReviewList" class="enrich-review-list"></div>
+    </div><p class="note">Find your token using <a href="https://support.plex.tv/articles/204059436-finding-an-authentication-token-x-plex-token/" target="_blank" rel="noopener noreferrer">Plex's official guide</a>. Do not share your token publicly. Initial indexing can take a while for large collections.</p></section></div>
+  <div class="modal-overlay" id="actorOverlay" hidden><section class="modal actor-modal" role="dialog" aria-modal="true" aria-labelledby="actorName"><button class="modal-close" id="actorClose" aria-label="Close">×</button><div id="actorDetail"><p>Loading performer…</p></div></section></div>
+  <div class="modal-overlay review-overlay" id="reviewOverlay" hidden><section class="modal review-modal" role="dialog" aria-modal="true" aria-labelledby="reviewTitle"><button class="modal-close" id="reviewClose" type="button" aria-label="Return to review queue">×</button><div class="eyebrow">IDENTITY VERIFICATION</div><h2 id="reviewTitle">Compare portrait</h2><div id="reviewBody"></div></section></div>
+  <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+  <script src="/static/app.js"></script>
+</body></html>

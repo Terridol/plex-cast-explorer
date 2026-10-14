@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark"><title>Sign in · Plex Cast Explorer</title>
+<style>
+  :root{font:16px/1.5 system-ui,-apple-system,"Segoe UI",Arial,sans-serif;color:#eee;background:#101218}
+  body{min-height:100vh;margin:0;display:grid;place-items:center;padding:20px;box-sizing:border-box}
+  main{max-width:390px;width:100%;background:#1b1e27;border:1px solid #393b44;border-radius:14px;padding:32px;box-shadow:0 24px 60px #0006}
+  h1{font-size:1.4rem;margin:0 0 6px}p{color:#aeb2c1;margin:0 0 24px}label{display:block;font-size:.9rem;margin:0 0 8px}
+  input{box-sizing:border-box;width:100%;background:#0e1118;border:1px solid #505463;border-radius:8px;color:white;padding:14px;font:inherit}
+  button{border:0;border-radius:8px;background:#dca956;font:inherit;color:#17130f;font-weight:650;padding:13px;width:100%;margin-top:16px;cursor:pointer}
+  button:disabled{opacity:.6}#error{margin:12px 0 0;color:#ff9e9e;min-height:20px;font-size:.9rem}small{color:#818794;display:block;margin-top:20px}
+  code{color:#e6b966}
+</style>
+</head>
+<body>
+<main>
+<h1>Cast Explorer</h1>
+<p>Sign in to browse your Plex cast directory.</p>
+<div id="setup" hidden><p>LAN access is locked until the server administrator sets a gallery password. On the Plex server, run <code>set_password_windows.bat</code>.</p></div>
+<form id="form">
+<label for="password">Gallery password</label>
+<input id="password" type="password" autocomplete="current-password" required autofocus>
+<button type="submit" id="submit">Sign in</button><p id="error" role="alert"></p>
+</form>
+<small>Designed for trusted home networks. Do not expose port 8765 to the public internet.</small>
+</main>
+<script>
+(async()=>{const res=await fetch('/api/session');const s=await res.json();if(s.logged_in){location.assign('/');return;}if(!s.password_set){document.getElementById('form').hidden=true;document.getElementById('setup').hidden=false;}})().catch(()=>{});
+document.getElementById('form').addEventListener('submit',async e=>{e.preventDefault();const b=document.getElementById('submit');const error=document.getElementById('error');b.disabled=true;error.textContent='';try{const r=await fetch('/api/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({password:document.getElementById('password').value})});const data=await r.json();if(!r.ok)throw Error(data.error||'Unable to sign in');location.assign('/');}catch(e){error.textContent=e.message;b.disabled=false;}});
+</script>
+</body></html>
