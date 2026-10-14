@@ -17,7 +17,7 @@ if ($Channel -eq 'Default') {
     }
     $Channel = if ($selectedBeta) { 'Beta' } else { 'Stable' }
 }
-$installed = '0.4.6-beta'
+$installed = '0.4.7-beta'
 $localExe = Join-Path $PSScriptRoot 'PlexCastExplorer.exe'
 if (!(Test-Path $localExe)) { throw "Missing application executable: $localExe" }
 
@@ -40,7 +40,7 @@ function Compare-Version($a,$b) {
 
 Write-Host "Plex Cast Explorer $installed | Update channel: $Channel"
 Write-Host 'Checking published releases (not development branch commits)...'
-$headers = @{ 'User-Agent'='PlexCastExplorer-UpdateCheck/0.4.6'; 'Accept'='application/vnd.github+json' }
+$headers = @{ 'User-Agent'='PlexCastExplorer-UpdateCheck/0.4.7'; 'Accept'='application/vnd.github+json' }
 try {
     $items = @(Invoke-RestMethod -Uri "https://api.github.com/repos/$repo/releases?per_page=30" -Headers $headers -TimeoutSec 15)
 } catch {
