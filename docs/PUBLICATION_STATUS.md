@@ -20,7 +20,7 @@
 - [x] Application backend, web interface, Windows startup scripts, and tests included.
 - [x] Local archive integrity verified and runtime credentials, databases, logs, and portrait cache excluded.
 - [x] 21 unit tests passed locally; JavaScript syntax and Python bytecode compilation passed.
-- [ ] Confirm a green GitHub Actions run for the published commit.
+- [x] GitHub Actions tests passed on the published source branch ([successful run](https://github.com/Terridol/plex-cast-explorer/actions/runs/38597503476)).
 
 ## Before a supported release
 
