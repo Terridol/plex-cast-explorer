@@ -40,8 +40,9 @@ PORTRAIT_DIR = ROOT / 'portraits'
 NETWORK_CONFIG_PATH = ROOT / 'network.json'
 HOST = os.getenv('CAST_EXPLORER_HOST', '0.0.0.0')
 PORT = int(os.getenv('CAST_EXPLORER_PORT', '8765'))
-VERSION = '0.4.3-beta'
+VERSION = '0.4.4-beta'
 SESSION_SECONDS = 14 * 24 * 60 * 60
+ARTWORK_MAX_AGE_SECONDS = 180 * 24 * 60 * 60  # Under any six-calendar-month window.
 LOGIN_LOCK = threading.Lock()
 LOGIN_ATTEMPTS = {}
 LOCAL_HOSTS = {'localhost', '127.0.0.1', '[::1]'}
@@ -187,6 +188,34 @@ def init_db():
         );
         CREATE INDEX IF NOT EXISTS idx_enrichment_status ON enrichment_results(status);
         ''')
+
+
+def prune_old_artwork(now=None):
+    """Remove stale external metadata, and TMDB portraits after 180 days.
+
+    This is an expiry safeguard, not permission to use a provider or its art.
+    Plex images and user-selected non-TMDB portraits are not deleted.
+    """
+    now = time.time() if now is None else float(now)
+    cutoff_ms = int((now - ARTWORK_MAX_AGE_SECONDS) * 1000)
+    cutoff_iso = datetime.fromtimestamp(now - ARTWORK_MAX_AGE_SECONDS, timezone.utc).isoformat()
+    with db_open() as db:
+        expired = db.execute(
+            "SELECT file FROM actor_art WHERE source='TMDB' AND version < ?", (cutoff_ms,)
+        ).fetchall()
+        db.execute("DELETE FROM actor_art WHERE source='TMDB' AND version < ?", (cutoff_ms,))
+        # Provider lookup records can include cached TMDB credits and images.
+        db.execute("DELETE FROM enrichment_results WHERE checked_at < ?", (cutoff_iso,))
+    for row in expired:
+        filename = row['file']
+        if re.fullmatch(r'[0-9a-f]{64}\.(jpg|png|webp)', filename):
+            try:
+                (PORTRAIT_DIR / filename).unlink(missing_ok=True)
+            except OSError as exc:
+                logging.warning('Could not expire an old artwork cache file: %s', exc)
+    if expired:
+        image_bytes.cache_clear()
+    return len(expired)
 
 
 def load_config():
@@ -1407,10 +1436,14 @@ class Handler(BaseHTTPRequestHandler):
         self.respond(302, b'', 'text/plain', extra_headers=(('Location', path),))
 
     def valid_origin(self):
-        # The browser's Origin must match the Host header used to reach this service.
+        """Deny cross-site browser writes, including requests omitting Origin."""
+        if self.headers.get('Sec-Fetch-Site', '').lower() in ('cross-site', 'same-site'):
+            return False
         origin = self.headers.get('Origin', '')
         if not origin:
-            return True  # non-browser clients; further checked by session auth
+            # Only JSON is accepted for POST, so browser forms and no-CORS
+            # cross-site fetches cannot use the missing-Origin exception.
+            return True
         target = urlsplit(origin)
         host = self.headers.get('Host', '').lower()
         return target.scheme in ('http', 'https') and target.netloc.lower() == host
@@ -1494,8 +1527,11 @@ class Handler(BaseHTTPRequestHandler):
             else:
                 self.respond(404, {'error': 'Not found'})
         except Exception as exc:
-            logging.warning('GET %s: %s', path, exc)
-            self.respond(404 if path == '/api/image' else 500, {'error': str(exc)})
+            logging.warning('GET %s failed (%s)', path, type(exc).__name__)
+            # Do not expose filesystem paths, provider URLs, or token-bearing
+            # library exception details to authenticated LAN browsers.
+            status = 404 if path == '/api/image' else 500
+            self.respond(status, {'error': 'Image unavailable' if status == 404 else 'Request failed'})
 
     def do_POST(self):
         if not self.valid_host():
@@ -1504,6 +1540,12 @@ class Handler(BaseHTTPRequestHandler):
         path = parts.path
         if not self.valid_origin():
             return self.respond(403, {'error': 'Cross-origin request rejected'})
+        # Require a non-simple browser content type to prevent CSRF via HTML
+        # forms and no-CORS requests, including loopback auto-admin sessions.
+        if self.headers.get('Content-Type', '').split(';', 1)[0].strip().lower() != 'application/json':
+            return self.respond(415, {'error': 'Use application/json for API requests'})
+        if self.headers.get('Transfer-Encoding'):
+            return self.respond(400, {'error': 'Chunked requests not supported'})
         if not self.logged_in() and path != '/api/login':
             return self.respond(401, {'error': 'Authentication required'})
         if path in ('/api/config', '/api/sync', '/api/art/config', '/api/art/apply', '/api/art/remove', '/api/enrich/start', '/api/enrich/stop', '/api/enrich/approve', '/api/enrich/skip', '/api/enrich/reject', '/api/enrich/retry-errors', '/api/enrich/accept-unique') and not self.is_local():
@@ -1597,13 +1639,14 @@ class Handler(BaseHTTPRequestHandler):
                 self.respond(200, {'ok': True, 'started': started})
             else:
                 self.respond(404, {'error': 'Not found'})
-        except Exception as exc:
+        except Exception:
             logging.exception('POST failed')
-            self.respond(500, {'error': str(exc)})
+            self.respond(500, {'error': 'Request failed'})
 
 
 def main():
     init_db()
+    prune_old_artwork()
     address = f'http://{HOST}:{PORT}'
     print(f'Plex Cast Explorer v{VERSION} — {address}', flush=True)
     print('LAN server listening. Access from other devices at http://SERVER-IP:' + str(PORT), flush=True)
@@ -1614,6 +1657,7 @@ def main():
     def background_refresh():
         interval = max(1, float(os.getenv('CAST_EXPLORER_SYNC_HOURS', '12'))) * 3600
         while True:
+            prune_old_artwork()
             if load_config()['url'] and load_config()['token']:
                 sync_start()
             time.sleep(interval)
