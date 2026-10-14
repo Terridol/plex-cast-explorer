@@ -1,4 +1,4 @@
-# Windows installer, upgrades and updates — v0.4.6-beta
+# Windows installer, upgrades and updates — v0.4.7-beta
 
 The new Windows wizard **replaces the manual service-migration process**. It is built with [Inno Setup 6](https://jrsoftware.org/isinfo.php) and installs Plex Cast Explorer as an Automatic (Delayed Start) Windows service under the restricted `LocalService` account. The compiled installer includes the PyInstaller application and a SHA-256-pinned WinSW service wrapper, so **end users do not need Python, PyInstaller or Inno Setup**.
 
@@ -8,7 +8,7 @@ The new Windows wizard **replaces the manual service-migration process**. It is 
 
 1. Extract the source kit into a clean directory. Use Windows 10/11 x64 with Python 3.10+ (3.13 tested).
 2. Double-click **`BUILD-INSTALLER.cmd`**. It calls `BUILD-EXE.cmd` if necessary, downloads or installs Inno Setup 6 if needed, and obtains the pinned WinSW service executable (preferring the verified copy from the existing installation).
-3. The produced installer is `output/PlexCastExplorer-Setup-0.4.6-beta-win-x64.exe` with a matching `.sha256` checksum file. Distribute the compiled installer and checksum, **not** any local ProgramData files.
+3. The produced installer is `output/PlexCastExplorer-Setup-0.4.7-beta-win-x64.exe` with a matching `.sha256` checksum file. Distribute the compiled installer and checksum, **not** any local ProgramData files.
 4. Scan the installer and review its digital signature before distribution. It is **not Authenticode-signed** until the maintainer signs it; do not advise disabling Windows SmartScreen or antivirus.
 
 Compiling is a local Windows operation; the process does **not run GitHub Actions**.
@@ -23,6 +23,8 @@ Run the Setup EXE as Administrator. The wizard offers:
 - Optional TMDB integration (default off; review its content and attribution restrictions).
 - Optional remote administration: allowlisted VPN client IP/CIDR (default off). Configure a **distinct** admin password with the installed Start Menu shortcut.
 - Stable or beta update channel and optional desktop shortcut.
+
+Setup starts the service **before the Finish screen** and waits for a successful localhost HTTP response from the expected application version. A failed service start or missing response is an installer error, not an apparent success.
 
 The service is configured to run under `NT AUTHORITY\LocalService`. Runtime files are stored in `C:\ProgramData\PlexCastExplorer`, with access restricted to Administrators, SYSTEM and the service identity. On a fresh install, use the **Set Gallery Password** shortcut in the Start Menu before accessing the gallery from LAN devices. The app does not yet have a first-run Plex token wizard; configure Plex through the browser on the server.
 
