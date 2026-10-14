@@ -1,5 +1,5 @@
 #define AppName "Plex Cast Explorer"
-#define AppVersion "0.4.6-beta"
+#define AppVersion "0.4.7-beta"
 #define Publisher "Terridol"
 #define AppExe "PlexCastExplorer.exe"
 
@@ -63,8 +63,8 @@ Name: "{group}\Uninstall Plex Cast Explorer"; Filename: "{uninstallexe}"
 Name: "{autodesktop}\Plex Cast Explorer"; Filename: "http://127.0.0.1:{code:GetPort}"; IconFilename: "{sys}\shell32.dll"; IconIndex: 220; Tasks: desktopicon
 
 [Run]
-; This runs locally on the user's Windows machine after files are installed.
-Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\configure_service.ps1"" -InstallDir ""{app}"" -Port {code:GetPort} -EnableTMDB {code:GetTMDB} -CreateFirewall {code:GetFirewall} -AllowBetaUpdates {code:GetBeta} -RemoteAdminCIDRs ""{code:GetRemoteCIDRs}"""; Flags: runhidden waituntilterminated; StatusMsg: "Configuring the Windows service, firewall and update settings..."
+; The service is started and health-checked in CurStepChanged(ssPostInstall),
+; before the Finish screen. Errors prevent a false 'successful' install.
 Filename: "http://127.0.0.1:{code:GetPort}"; Description: "Open Plex Cast Explorer"; Flags: shellexec postinstall skipifsilent nowait
 
 [UninstallRun]
@@ -155,4 +155,34 @@ begin
                  '', SW_HIDE, ewWaitUntilTerminated, ExitCode);
   if (not ExecOk) or (ExitCode <> 0) then
     Result := 'Unable to stop the existing PlexCastExplorer service. Close the app and retry.';
+end;
+
+ 
+// Installation is not complete until the expected application version responds.
+procedure CurStepChanged(CurStep: TSetupStep);
+var
+  ExitCode: Integer;
+  Args: String;
+  Started: Boolean;
+begin
+  if CurStep <> ssPostInstall then
+    Exit;
+
+  WizardForm.StatusLabel.Caption := 'Starting Plex Cast Explorer and verifying service readiness...';
+  Args := '-NoProfile -NonInteractive -ExecutionPolicy Bypass -File "' +
+    ExpandConstant('{app}\configure_service.ps1') + '" -InstallDir "' +
+    ExpandConstant('{app}') + '" -Port ' + GetPort('') +
+    ' -EnableTMDB ' + GetTMDB('') +
+    ' -CreateFirewall ' + GetFirewall('') +
+    ' -AllowBetaUpdates ' + GetBeta('') +
+    ' -ExpectedVersion "{#AppVersion}"' +
+    ' -RemoteAdminCIDRs "' + GetRemoteCIDRs('') + '"';
+
+  Started := Exec(ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe'),
+    Args, ExpandConstant('{app}'), SW_HIDE, ewWaitUntilTerminated, ExitCode);
+  if not Started then
+    RaiseException('Unable to start the Windows service configuration. Setup is incomplete.');
+  if ExitCode <> 0 then
+    RaiseException('Service startup or health check failed (exit code ' +
+      IntToStr(ExitCode) + '). Setup is incomplete. Check ProgramData\PlexCastExplorer\logs and Event Viewer.');
 end;
