@@ -20,7 +20,7 @@
   function modal(id,open){$(id).hidden=!open;document.body.style.overflow=(!$('settingsOverlay').hidden||!$('actorOverlay').hidden||!$('reviewOverlay').hidden)?'hidden':'';}
   async function openSettings(){
     if(!state.admin){notify('To change Plex settings, open Cast Explorer on the server at http://127.0.0.1:8765');return;}
-    try{const conf=await api('/api/config');$('plexUrl').value=conf.url;$('plexToken').value='';$('plexToken').placeholder=conf.token_set?'Already configured — leave blank to keep':'Paste your Plex authentication token';$('settingsError').textContent='';try{const a=await api('/api/art/config');$('artSettingsStatus').textContent='TMDB: '+(a.tmdb_set?'configured':'not configured')+' · ThePornDB: '+(a.theporndb_set?'configured':'not configured')+' · Wikimedia: available';}catch(e){$('artSettingsStatus').textContent=e.message}modal('settingsOverlay',true);$('plexUrl').focus();void refreshEnrichment(true);}catch(e){notify(e.message)}
+    try{const conf=await api('/api/config');$('plexUrl').value=conf.url;$('plexToken').value='';$('plexToken').placeholder=conf.token_set?'Already configured — leave blank to keep':'Paste your Plex authentication token';$('settingsError').textContent='';try{const a=await api('/api/art/config');$('artSettingsStatus').textContent='TMDB: '+(a.tmdb_enabled?'enabled':(a.tmdb_set?'disabled (opt-in required)':'not configured'))+' · ThePornDB: '+(a.theporndb_set?'configured':'not configured')+' · Wikimedia: '+(a.wikimedia_enabled?'enabled':'disabled by default');}catch(e){$('artSettingsStatus').textContent=e.message}modal('settingsOverlay',true);$('plexUrl').focus();void refreshEnrichment(true);}catch(e){notify(e.message)}
   }
   function buildAlphabet(){const bar=$('alphabet');bar.replaceChildren();for(const letter of alphabet){const btn=elt('button','alpha'+((state.letter||'ALL')===letter?' active':''),letter);btn.addEventListener('click',()=>{state.letter=letter==='ALL'?'':letter;buildAlphabet();loadActors(false);});bar.append(btn)}}
   function renderLibraries(){const nav=$('libraryNav');nav.replaceChildren();if(!state.stats.sections?.length){nav.append(elt('div','nav-muted','Your libraries will appear after the first index.'));return;}
@@ -295,11 +295,11 @@
   }catch(err){$('artSettingsStatus').textContent=err.message}}
   async function findArt(key){
     const picker=$('artPicker');if(!picker)return;
-    picker.replaceChildren(elt('p','note','Searching TMDB, ThePornDB and Wikimedia Commons…'));
+    picker.replaceChildren(elt('p','note','Searching your enabled portrait providers…'));
     try{const data=await api('/api/art/search?key='+encodeURIComponent(key));picker.replaceChildren();
       const h=elt('h3','','Choose a portrait for '+data.actor);picker.append(h);
       picker.append(elt('p','note','Matches are suggestions only. Confirm the image represents the right person before applying.'));
-      const providers=elt('p','note','TMDB: '+(data.configured.tmdb?'enabled':'add API token')+' · ThePornDB: '+(data.configured.theporndb?'enabled':'add API token')+' · Wikimedia: enabled');picker.append(providers);
+      const providers=elt('p','note','TMDB: '+(data.configured.tmdb?'enabled':'disabled or missing token')+' · ThePornDB: '+(data.configured.theporndb?'enabled':'add API token')+' · Wikimedia: '+(data.configured.wikimedia?'enabled':'disabled'));picker.append(providers);
       for(const warning of data.warnings){picker.append(elt('p','note',warning));}
       if(!data.results.length){picker.append(elt('p','note','No portraits found. Add provider keys in Settings or try again later.'));return;}
       const results=elt('div','art-choice-grid');
