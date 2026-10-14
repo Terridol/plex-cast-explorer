@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased — v0.4.3-beta (local validation only)
+
+- Reject unrecognized HTTP Host headers to reduce DNS-rebinding risk for localhost administration.
+- Require explicit opt-in for TMDB and Wikimedia providers. Existing credentials stay saved but do not silently activate these providers.
+- Update the portrait Settings screen to reflect whether each provider is actually enabled.
+- Extend regression tests covering provider opt-in and Host validation.
+- Work staged on a development branch. No GitHub-hosted workflows were run for these changes at the maintainer's request.
+
 ## Unreleased — noncommercial license adopted
 
 - Adopted a custom noncommercial, network-source-sharing license and plain-language usage guide.
