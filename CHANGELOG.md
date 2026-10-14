@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.4.6-beta — Windows installer and updates (testing candidate)
+
+- Add an interactive Inno Setup Windows installer with port, Private-LAN firewall, TMDB opt-in, VPN-only remote admin, beta update channel and shortcut options.
+- Add upgrade-in-place for the existing service without data migration; timestamped pre-upgrade backups and preserved ProgramData.
+- Add installer-managed firewall rule cleanup on upgrade and removal.
+- Add explicit user-initiated release checks and SHA-256 verification for download-and-install.
+- Windows installer compilation/service-upgrade smoke test pending; no production release has been tagged.
+
 ## Unreleased — v0.4.5-beta (Windows service / remote-admin prototype)
 
 - Package Windows EXE locally using PyInstaller and configure an Automatic (Delayed Start) WinSW service under LocalService.
