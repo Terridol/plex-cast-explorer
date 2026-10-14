@@ -2,7 +2,7 @@
 
 A self-hosted, cross-library performer directory for **Plex Media Server**. Browse an A–Z portrait gallery, search cast members, and see their movies and shows across every indexed library.
 
-**Development version:** v0.4.5-beta · **Python:** 3.10+ (standard library) · **Host:** Windows (primary); Linux/macOS launchers available
+**Development version:** v0.4.6-beta · **Python:** 3.10+ (standard library) · **Host:** Windows (primary); Linux/macOS launchers available
 
 **Licensing:** Public **source-available** project — all commercial use requires prior written authorization; qualifying modifications must share their source. [License summary](docs/LICENSING.md) · [Full terms](LICENSE). *These project-specific terms have not been independently legally reviewed.*
 
@@ -19,9 +19,13 @@ A self-hosted, cross-library performer directory for **Plex Media Server**. Brow
 - Local SQLite indexing, cached portrait overrides, incremental library sync, and Windows startup helpers.
 - LAN gallery password; administrative operations available only from the server's loopback connection.
 
-## Windows executable / automatic service
+## Windows Setup wizard / boot-start service / updates
 
-See [Windows service installation and migration](docs/WINDOWS_SERVICE.md) for a locally built executable, boot-start service running under LocalService, and opt-in VPN-only remote administration. The Windows executable installer has **not yet been tested on a Windows host**; back up before attempting migration.
+Windows installations use **[the new installer](docs/WINDOWS_INSTALLER.md)**. The Setup wizard offers install folder, port, a **Private-profile and local-subnet-restricted Windows Firewall rule**, TMDB opt-in, VPN-restricted remote administration, release channel, and shortcuts. It installs an automatic Windows service using the restricted LocalService identity and preserves `ProgramData` on upgrades and uninstall.
+
+**Build the real Setup.exe on Windows:** extract this source package and double-click `BUILD-INSTALLER.cmd`. The result is `output/PlexCastExplorer-Setup-0.4.6-beta-win-x64.exe`. End users of that resulting Setup.exe do **not** need Python or build tools. An offline Windows compiler/integration smoke test remains outstanding; do not treat the installer as production-certified yet.
+
+**Updating:** Choose **Start → Plex Cast Explorer → Check for Updates**. The updater checks published releases; a newer installer runs only after explicit user confirmation and digest verification. No background self-updater or GitHub Actions are used.
 
 ## Quick start (Windows)
 
@@ -49,7 +53,7 @@ See [Security](SECURITY.md) and [Privacy & data flow](docs/PRIVACY.md) for limit
 - [Contributing guide](CONTRIBUTING.md) · [Code of conduct](CODE_OF_CONDUCT.md) · [Support](SUPPORT.md)
 - [Architecture](docs/ARCHITECTURE.md) · [Maintainers](docs/MAINTAINERS.md) · [Release process](docs/RELEASE.md) · [Readiness audit](docs/PUBLICATION_STATUS.md) · [Changelog](CHANGELOG.md)
 - Run tests locally: `python -m unittest discover -s . -p 'test_*.py' -v`
-- GitHub Actions checks Python 3.10 and 3.13 on Windows and Ubuntu.
+- Local tests only; automatic GitHub Actions are disabled on `dev`.
 
 ## Third-party names, images and licensing
 
