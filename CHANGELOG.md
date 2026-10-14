@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.4.7-beta — Windows setup startup verification
+
+- Start and verify the Windows service before the installer Finish page appears.
+- Verify the actual application responds on localhost with the expected version; SCM/WinSW Running alone is insufficient.
+- Report service start and health-check failures clearly instead of presenting false success.
+- In-place upgrade continues to retain credentials, database, artwork, and managed Private-network firewall settings.
+- Local regression tests passed; clean-install, reboot and final Inno compilation must be verified on Windows.
+
 ## v0.4.6-beta — Windows installer and updates (testing candidate)
 
 - Add an interactive Inno Setup Windows installer with port, Private-LAN firewall, TMDB opt-in, VPN-only remote admin, beta update channel and shortcut options.
