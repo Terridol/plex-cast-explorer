@@ -2,24 +2,26 @@
 
 A self-hosted, cross-library performer directory for **Plex Media Server**. Browse an A–Z portrait gallery, search cast members, and see their movies and shows across every indexed library.
 
-**Development version:** v0.4.4-beta · **Python:** 3.10+ (standard library) · **Host:** Windows (primary); Linux/macOS launchers available
+**Development version:** v0.4.5-beta · **Python:** 3.10+ (standard library) · **Host:** Windows (primary); Linux/macOS launchers available
 
 **Licensing:** Public **source-available** project — all commercial use requires prior written authorization; qualifying modifications must share their source. [License summary](docs/LICENSING.md) · [Full terms](LICENSE). *These project-specific terms have not been independently legally reviewed.*
 
 > **Security:** Designed for use on a trusted local network only. The built-in web server uses HTTP, not HTTPS. **Never forward port 8765 to the Internet.**
 >
- > **Project status:** v0.4.4-beta is on `dev`, locally tested only. Live Plex interoperability, provider licensing/attribution, and security validation remain incomplete. Do not treat this as a certified production release.
+> **Project status:** Public development source; live interoperability, security, and provider-attribution verification remain incomplete. Do not treat this as a certified production release.
 
 ## Features
 
 - Cross-library actor directory with full-text name search, filters, and filmographies.
 - Local Plex title links on configured home subnets; hosted Plex links for remote visitors.
-- Plex-provided portraits, optional ThePornDB searches, and opt-in-only TMDB / Wikimedia integrations subject to third-party terms.
+- Plex-provided portraits plus optional TMDB, ThePornDB, and Wikimedia searches.
 - Credit-aware portrait enrichment, candidate review, and automated matching for eligible single candidates.
 - Local SQLite indexing, cached portrait overrides, incremental library sync, and Windows startup helpers.
 - LAN gallery password; administrative operations available only from the server's loopback connection.
 
-**Branch policy:** `main` (approved baseline) and `dev` (active work) only. GitHub-hosted workflows are not used. See [Branching policy](docs/BRANCHING.md).
+## Windows executable / automatic service
+
+See [Windows service installation and migration](docs/WINDOWS_SERVICE.md) for a locally built executable, boot-start service running under LocalService, and opt-in VPN-only remote administration. The Windows executable installer has **not yet been tested on a Windows host**; back up before attempting migration.
 
 ## Quick start (Windows)
 

@@ -1,22 +1,21 @@
 # Changelog
 
-## Unreleased — v0.4.4-beta (local tests only)
+## Unreleased — v0.4.5-beta (Windows service / remote-admin prototype)
 
-- Reject cross-site browser POSTs and require JSON request bodies, including for loopback administration.
-- Reject unsupported chunked POST requests and stop disclosing exception details to LAN clients.
-- Expire saved TMDB portraits and cached provider-match data after 180 days.
-- Extend tests for request validation and artwork expiry.
-- Remove the automatic GitHub-hosted tests workflow from `dev`.
-- Publish updated third-party, security, branching, and release procedures.
-- Public development source only; no tagged production release or live Plex-server integration verification.
+- Package Windows EXE locally using PyInstaller and configure an Automatic (Delayed Start) WinSW service under LocalService.
+- Separate runtime credentials and SQLite data from packaged static assets and application executable.
+- Add explicit VPN address allowlist, separate administrator password, and one-hour admin sessions for optional remote administration.
+- Keep gallery-only access for ordinary LAN clients; remote administration is disabled until configured.
+- Add Windows build, migration, service-install, uninstall, backup, and rollback instructions.
+- Windows executable/service installation remains **untested on Windows** pending host validation.
 
-## Unreleased — v0.4.3-beta (local validation only)
+## v0.4.4-beta — Security hardening (LAN-only)
 
-- Reject unrecognized HTTP Host headers to reduce DNS-rebinding risk for localhost administration.
-- Require explicit opt-in for TMDB and Wikimedia providers. Existing credentials stay saved but do not silently activate these providers.
-- Update the portrait Settings screen to reflect whether each provider is actually enabled.
-- Extend regression tests covering provider opt-in and Host validation.
-- Work staged on a development branch. No GitHub-hosted workflows were run for these changes at the maintainer's request.
+- Require JSON content type and reject cross-site browser POSTs.
+- Prevent internal server exception details from being sent to browsers.
+- Expire TMDB actor portraits and stale provider result records after 180 days.
+- Keep TMDB/Wikimedia disabled by default and prevent portrait redirects to untrusted hosts.
+- Development-only release; production interoperability and provider compliance remain unverified.
 
 ## Unreleased — noncommercial license adopted
 

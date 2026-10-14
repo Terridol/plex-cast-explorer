@@ -1,25 +1,28 @@
-"""Plex Cast Explorer local administrative commands."""
+"""Plex Cast Explorer local-only administrative commands (never exposed via HTTP)."""
 import getpass
 import sys
-from app import set_password
+from app import set_password, set_admin_password
 
 
 def main():
-    if sys.argv[1:] != ['set-password']:
-        print('Usage: python manage.py set-password')
+    commands = {'set-password': (set_password, 'gallery password', 12),
+                'set-admin-password': (set_admin_password, 'REMOTE ADMIN password', 16)}
+    if len(sys.argv) != 2 or sys.argv[1] not in commands:
+        print('Usage: python manage.py set-password | set-admin-password')
         return 2
-    print('Set a password for Cast Explorer LAN access. Minimum 12 characters.')
-    first = getpass.getpass('New gallery password: ')
-    second = getpass.getpass('Confirm password: ')
+    setter, label, minimum = commands[sys.argv[1]]
+    print(f'Set a {label} (minimum {minimum} characters).')
+    first = getpass.getpass(f'New {label}: ')
+    second = getpass.getpass('Confirm: ')
     if first != second:
-        print('Passwords did not match. Nothing changed.')
+        print('Passwords do not match. No changes were made.')
         return 1
     try:
-        set_password(first)
+        setter(first)
     except ValueError as exc:
         print(exc)
         return 1
-    print('Password updated. Existing browser sessions are now invalid. Restart is not required.')
+    print(f'{label.capitalize()} updated; prior sessions for this role are invalid.')
     return 0
 
 

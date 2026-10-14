@@ -1,6 +1,7 @@
 # Secrets and runtime configuration — never commit
 config.json
 auth.json
+admin_auth.json
 artwork_config.json
 network.json
 .env

@@ -22,6 +22,7 @@ import logging
 from logging.handlers import RotatingFileHandler
 import mimetypes
 import os
+import sys
 from pathlib import Path
 import sqlite3
 import threading
@@ -31,7 +32,10 @@ from urllib.parse import parse_qs, quote, urlencode, urlsplit
 from urllib.request import Request, urlopen, build_opener, HTTPRedirectHandler
 import xml.etree.ElementTree as ET
 
-ROOT = Path(__file__).resolve().parent
+ASSET_ROOT = Path(getattr(sys, '_MEIPASS', Path(__file__).resolve().parent))
+ROOT = Path(os.environ['CAST_EXPLORER_DATA_DIR']).expanduser().resolve() if os.getenv('CAST_EXPLORER_DATA_DIR') else Path(__file__).resolve().parent
+ROOT.mkdir(parents=True, exist_ok=True)
+ADMIN_AUTH_PATH = ROOT / 'admin_auth.json'
 DB_PATH = ROOT / 'cast_explorer.db'
 CONFIG_PATH = ROOT / 'config.json'
 AUTH_PATH = ROOT / 'auth.json'
@@ -40,8 +44,9 @@ PORTRAIT_DIR = ROOT / 'portraits'
 NETWORK_CONFIG_PATH = ROOT / 'network.json'
 HOST = os.getenv('CAST_EXPLORER_HOST', '0.0.0.0')
 PORT = int(os.getenv('CAST_EXPLORER_PORT', '8765'))
-VERSION = '0.4.4-beta'
+VERSION = '0.4.5-beta'
 SESSION_SECONDS = 14 * 24 * 60 * 60
+ADMIN_SESSION_SECONDS = 60 * 60
 ARTWORK_MAX_AGE_SECONDS = 180 * 24 * 60 * 60  # Under any six-calendar-month window.
 LOGIN_LOCK = threading.Lock()
 LOGIN_ATTEMPTS = {}
@@ -111,6 +116,67 @@ def valid_session(cookie):
                             f'{deadline}:{nonce}'.encode(), hashlib.sha256).hexdigest()
         return hmac.compare_digest(expected, signature)
     except (KeyError, ValueError, AttributeError):
+        return False
+
+
+def set_admin_password(password):
+    if len(password) < 16:
+        raise ValueError('Choose a distinct administrator password of at least 16 characters.')
+    salt = secrets.token_bytes(24)
+    digest = hashlib.pbkdf2_hmac('sha256', password.encode('utf-8'), salt, 360_000)
+    payload = {'salt': salt.hex(), 'hash': digest.hex(), 'session_secret': secrets.token_hex(32)}
+    tmp = ADMIN_AUTH_PATH.with_suffix('.tmp')
+    tmp.write_text(json.dumps(payload, indent=2), encoding='utf-8')
+    os.replace(tmp, ADMIN_AUTH_PATH)
+    if os.name != 'nt':
+        ADMIN_AUTH_PATH.chmod(0o600)
+
+
+def admin_auth():
+    try:
+        return json.loads(ADMIN_AUTH_PATH.read_text(encoding='utf-8'))
+    except (OSError, ValueError):
+        return {}
+
+
+def verify_admin_password(password):
+    data = admin_auth()
+    try:
+        actual = hashlib.pbkdf2_hmac('sha256', password.encode('utf-8'), bytes.fromhex(data['salt']), 360_000)
+        return hmac.compare_digest(actual, bytes.fromhex(data['hash']))
+    except (TypeError, KeyError, ValueError):
+        return False
+
+
+def make_admin_session():
+    deadline = int(time.time()) + ADMIN_SESSION_SECONDS
+    nonce = secrets.token_hex(16)
+    payload = f'{deadline}:{nonce}'
+    signature = hmac.new(bytes.fromhex(admin_auth()['session_secret']), payload.encode(), hashlib.sha256).hexdigest()
+    return f'{payload}:{signature}'
+
+
+def valid_admin_session(value):
+    try:
+        deadline, nonce, signature = value.split(':', 2)
+        if not deadline.isdigit() or int(deadline) < time.time() or len(nonce) != 32:
+            return False
+        expected = hmac.new(bytes.fromhex(admin_auth()['session_secret']), f'{deadline}:{nonce}'.encode(), hashlib.sha256).hexdigest()
+        return hmac.compare_digest(expected, signature)
+    except (ValueError, KeyError, TypeError, AttributeError):
+        return False
+
+
+def approved_admin_address(value):
+    """Never infer remote-admin permissions from proxy headers or HTTP Host."""
+    configured = os.getenv('CAST_EXPLORER_REMOTE_ADMIN_CIDRS', '').strip()
+    if not configured:
+        return False
+    try:
+        addr = ipaddress.ip_address(value)
+        return any(addr in ipaddress.ip_network(item.strip(), strict=False)
+                   for item in configured.split(',') if item.strip())
+    except ValueError:
         return False
 
 
@@ -1401,15 +1467,26 @@ class Handler(BaseHTTPRequestHandler):
         except (ValueError, AttributeError):
             return False
 
+    def cookie(self, key):
+        for entry in self.headers.get('Cookie', '').split(';'):
+            name, sep, value = entry.strip().partition('=')
+            if sep and name == key:
+                return value
+        return ''
+
+    def remote_admin_allowed(self):
+        return (not self.is_local() and approved_admin_address(self.client_address[0])
+                and bool(admin_auth().get('hash')))
+
+    def is_admin(self):
+        return self.is_local() or (self.remote_admin_allowed()
+                                   and self.logged_in()
+                                   and valid_admin_session(self.cookie('cast_admin_session')))
+
     def logged_in(self):
         if self.is_local():
             return True
-        cookie = self.headers.get('Cookie', '')
-        for pair in cookie.split(';'):
-            name, sep, value = pair.strip().partition('=')
-            if sep and name == 'cast_session':
-                return valid_session(value)
-        return False
+        return valid_session(self.cookie('cast_session'))
 
     def respond(self, status, data, content_type='application/json; charset=utf-8', cache='no-store', extra_headers=()):
         if isinstance(data, (dict, list)):
@@ -1456,55 +1533,63 @@ class Handler(BaseHTTPRequestHandler):
         if path == '/login':
             if self.logged_in():
                 return self.redirect('/')
-            return self.respond(200, (ROOT / 'static' / 'login.html').read_bytes(), 'text/html; charset=utf-8')
+            return self.respond(200, (ASSET_ROOT / 'static' / 'login.html').read_bytes(), 'text/html; charset=utf-8')
         if path == '/api/session':
-            return self.respond(200, {'logged_in': self.logged_in(), 'admin': self.is_local(),
+            return self.respond(200, {'logged_in': self.logged_in(), 'admin': self.is_admin(),
+                                      'admin_login_available': self.remote_admin_allowed(),
                                       'password_set': bool(load_auth().get('hash'))})
         if not self.logged_in():
             if path == '/' or path.startswith('/static/'):
                 return self.redirect('/login')
             return self.respond(401, {'error': 'Authentication required'})
         try:
+            if path == '/admin/login':
+                if not self.remote_admin_allowed():
+                    return self.respond(403, {'error': 'Remote administration unavailable'})
+                if self.is_admin():
+                    return self.redirect('/')
+                return self.respond(200, (ASSET_ROOT / 'static' / 'admin-login.html').read_bytes(), 'text/html; charset=utf-8')
             if path == '/':
-                self.respond(200, (ROOT / 'static' / 'index.html').read_bytes(), 'text/html; charset=utf-8')
+                self.respond(200, (ASSET_ROOT / 'static' / 'index.html').read_bytes(), 'text/html; charset=utf-8')
             elif path == '/static/app.js':
-                self.respond(200, (ROOT / 'static' / 'app.js').read_bytes(), 'text/javascript; charset=utf-8')
+                self.respond(200, (ASSET_ROOT / 'static' / 'app.js').read_bytes(), 'text/javascript; charset=utf-8')
             elif path == '/static/style.css':
-                self.respond(200, (ROOT / 'static' / 'style.css').read_bytes(), 'text/css; charset=utf-8')
+                self.respond(200, (ASSET_ROOT / 'static' / 'style.css').read_bytes(), 'text/css; charset=utf-8')
             elif path == '/api/config':
                 config = load_config()
                 # LAN clients can see that Plex is configured, but never the actual URL or secret.
-                self.respond(200, {'url': config['url'] if self.is_local() else '',
-                                   'admin': self.is_local(),
+                self.respond(200, {'url': config['url'] if self.is_admin() else '',
+                                   'admin': self.is_admin(),
+                                   'admin_login_available': self.remote_admin_allowed(),
                                    'token_set': bool(config['token']), 'version': VERSION})
             elif path == '/api/links':
                 server_ip = self.connection.getsockname()[0]
                 self.respond(200, plex_link_config(self.client_address[0], server_ip))
             elif path == '/api/art/config':
-                if not self.is_local():
+                if not self.is_admin():
                     return self.respond(403, {'error': 'Server-only settings'})
                 art_keys = artwork_keys()
                 self.respond(200, {'tmdb_set': bool(art_keys['tmdb']), 'tmdb_enabled': provider_enabled('tmdb'), 'theporndb_set': bool(art_keys['theporndb']), 'wikimedia_enabled': provider_enabled('wikimedia')})
             elif path == '/api/art/search':
-                if not self.is_local():
+                if not self.is_admin():
                     return self.respond(403, {'error': 'Art searches can be started only on the server'})
                 self.respond(200, find_art(params.get('key', [''])[0]))
             elif path == '/api/art/preview':
-                if not self.is_local():
+                if not self.is_admin():
                     return self.respond(403, {'error': 'Server-only artwork previews'})
                 entry = candidate(params.get('id', [''])[0])
                 raw, ext = external_image(entry['url'])
                 self.respond(200, raw, {'png':'image/png','jpg':'image/jpeg','webp':'image/webp'}[ext], 'private, max-age=300')
             elif path == '/api/enrich/status':
-                if not self.is_local():
+                if not self.is_admin():
                     return self.respond(403, {'error': 'Server-only artwork administration'})
                 self.respond(200, enrichment_status())
             elif path == '/api/enrich/review':
-                if not self.is_local():
+                if not self.is_admin():
                     return self.respond(403, {'error': 'Server-only artwork administration'})
                 self.respond(200, {'results': review_enrichment()})
             elif path == '/api/enrich/preview':
-                if not self.is_local():
+                if not self.is_admin():
                     return self.respond(403, {'error': 'Server-only artwork administration'})
                 raw, ext = get_enrichment_preview(params.get('key', [''])[0], int(params.get('i', ['-1'])[0]))
                 self.respond(200, raw, {'png':'image/png','jpg':'image/jpeg','webp':'image/webp'}[ext], 'private, max-age=120')
@@ -1548,7 +1633,7 @@ class Handler(BaseHTTPRequestHandler):
             return self.respond(400, {'error': 'Chunked requests not supported'})
         if not self.logged_in() and path != '/api/login':
             return self.respond(401, {'error': 'Authentication required'})
-        if path in ('/api/config', '/api/sync', '/api/art/config', '/api/art/apply', '/api/art/remove', '/api/enrich/start', '/api/enrich/stop', '/api/enrich/approve', '/api/enrich/skip', '/api/enrich/reject', '/api/enrich/retry-errors', '/api/enrich/accept-unique') and not self.is_local():
+        if path in ('/api/config', '/api/sync', '/api/art/config', '/api/art/apply', '/api/art/remove', '/api/enrich/start', '/api/enrich/stop', '/api/enrich/approve', '/api/enrich/skip', '/api/enrich/reject', '/api/enrich/retry-errors', '/api/enrich/accept-unique') and not self.is_admin():
             return self.respond(403, {'error': 'Server setup and indexing can only be initiated on the Plex server itself.'})
         try:
             length = int(self.headers.get('Content-Length', '0'))
@@ -1574,8 +1659,25 @@ class Handler(BaseHTTPRequestHandler):
                     'Set-Cookie', f'cast_session={session}; Path=/; HttpOnly; SameSite=Strict; Max-Age={SESSION_SECONDS}'
                 ),))
             elif path == '/api/logout':
+                self.respond(200, {'ok': True}, extra_headers=(
+                    ('Set-Cookie', 'cast_session=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0'),
+                    ('Set-Cookie', 'cast_admin_session=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0'),
+                ))
+            elif path == '/api/admin/login':
+                if not self.remote_admin_allowed():
+                    return self.respond(403, {'error': 'Remote administration unavailable'})
+                if not can_try_login('admin:' + self.client_address[0]):
+                    return self.respond(429, {'error': 'Too many failed attempts. Try again later.'})
+                password = data.get('password', '')
+                if not isinstance(password, str) or not verify_admin_password(password):
+                    record_failed_login('admin:' + self.client_address[0])
+                    return self.respond(401, {'error': 'Invalid administrator password'})
                 self.respond(200, {'ok': True}, extra_headers=((
-                    'Set-Cookie', 'cast_session=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0'
+                    'Set-Cookie', f'cast_admin_session={make_admin_session()}; Path=/; HttpOnly; SameSite=Strict; Max-Age={ADMIN_SESSION_SECONDS}'
+                ),))
+            elif path == '/api/admin/logout':
+                self.respond(200, {'ok': True}, extra_headers=((
+                    'Set-Cookie', 'cast_admin_session=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0'
                 ),))
             elif path == '/api/config':
                 url = str(data.get('url', '')).strip().rstrip('/')
@@ -1671,4 +1773,16 @@ def main():
 
 
 if __name__ == '__main__':
-    main()
+    if sys.argv[1:] in (['--set-admin-password'], ['--set-password']):
+        import getpass
+        admin_mode = sys.argv[1] == '--set-admin-password'
+        first = getpass.getpass('New ' + ('administrator' if admin_mode else 'gallery') + ' password: ')
+        confirm = getpass.getpass('Confirm password: ')
+        if first != confirm:
+            raise SystemExit('Passwords do not match.')
+        (set_admin_password if admin_mode else set_password)(first)
+        print('Password updated; old sessions have been invalidated.')
+    elif len(sys.argv) > 1:
+        raise SystemExit('Usage: PlexCastExplorer.exe [--set-admin-password | --set-password]')
+    else:
+        main()
