@@ -35,6 +35,21 @@ class InstallerSpecTests(unittest.TestCase):
         self.assertNotIn('-Profile Public', setup)
         self.assertRegex(setup, r'WaitForStatus\(\'Running\'')
 
+    def test_service_is_running_before_setup_finish(self):
+        spec = self.read('PlexCastExplorer.iss')
+        setup = self.read('installer/configure_service.ps1')
+        self.assertIn('procedure CurStepChanged(CurStep: TSetupStep)', spec)
+        self.assertIn('if CurStep <> ssPostInstall then', spec)
+        self.assertIn('ewWaitUntilTerminated', spec)
+        self.assertIn('if ExitCode <> 0 then', spec)
+        self.assertIn('RaiseException(', spec)
+        self.assertIn("-ExpectedVersion ", spec)
+        self.assertNotIn('configure_service.ps1', spec.split('[Run]', 1)[1].split('[UninstallRun]', 1)[0])
+        self.assertIn("WaitForStatus('Running'", setup)
+        self.assertIn('http://127.0.0.1:$Port/api/config', setup)
+        self.assertIn('$health.version -eq $ExpectedVersion', setup)
+        self.assertIn('if (-not $ready)', setup)
+
     def test_upgrade_does_not_delete_local_data(self):
         setup = self.read('installer/configure_service.ps1')
         uninstall = self.read('installer/uninstall_cleanup.ps1')
@@ -59,8 +74,8 @@ class InstallerSpecTests(unittest.TestCase):
         self.assertIn('BUILD-EXE.cmd', self.read('build_installer_windows.ps1'))
         self.assertIn('WinSW-x64.exe', self.read('build_installer_windows.ps1'))
         self.assertIn('ISCC.exe', self.read('build_installer_windows.ps1'))
-        self.assertIn('PlexCastExplorer-Setup-0.4.6-beta-win-x64.exe', self.read('build_installer_windows.ps1'))
-        self.assertEqual(re.search(r"^VERSION = '([^']+)'", self.read('app.py'), re.M).group(1), '0.4.6-beta')
+        self.assertIn('PlexCastExplorer-Setup-0.4.7-beta-win-x64.exe', self.read('build_installer_windows.ps1'))
+        self.assertEqual(re.search(r"^VERSION = '([^']+)'", self.read('app.py'), re.M).group(1), '0.4.7-beta')
 
 
 if __name__ == '__main__':
