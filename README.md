@@ -1,43 +1,56 @@
 # Plex Cast Explorer
 
-**Status: Public development repository · v0.4.2 source staging (not a certified or production release)**
+A self-hosted, cross-library performer directory for **Plex Media Server**. Browse an A–Z portrait gallery, search cast members, and see their movies and shows across every indexed library.
 
-Plex Cast Explorer is a self-hosted web application for browsing performers across movie and TV libraries on one Plex Media Server. Its goals include a searchable cross-library cast gallery, credit-aware portrait matching, a review queue, and LAN-aware links to Plex.
+**Development version:** v0.4.2 · **Python:** 3.10+ (standard library) · **Host:** Windows (primary); Linux/macOS launchers available
+
+**Licensing:** Public **source-available** project — all commercial use requires prior written authorization; qualifying modifications must share their source. [License summary](docs/LICENSING.md) · [Full terms](LICENSE). *These project-specific terms have not been independently legally reviewed.*
+
+> **Security:** Designed for use on a trusted local network only. The built-in web server uses HTTP, not HTTPS. **Never forward port 8765 to the Internet.**
+>
+> **Project status:** Public development source; live interoperability, security, and provider-attribution verification remain incomplete. Do not treat this as a certified production release.
 
 ## Features
 
-- Unified actor and actress gallery and cross-library filmographies
-- Actor search, filtering, and links to local Plex or app.plex.tv
-- Optional portrait lookup via Plex and third-party metadata providers
-- Credit-aware enrichment and review of uncertain matches
-- Locally stored index and portrait overrides, without altering your Plex media
+- Cross-library actor directory with full-text name search, filters, and filmographies.
+- Local Plex title links on configured home subnets; hosted Plex links for remote visitors.
+- Plex-provided portraits plus optional TMDB, ThePornDB, and Wikimedia searches.
+- Credit-aware portrait enrichment, candidate review, and automated matching for eligible single candidates.
+- Local SQLite indexing, cached portrait overrides, incremental library sync, and Windows startup helpers.
+- LAN gallery password; administrative operations available only from the server's loopback connection.
 
-## Licensing
+## Quick start (Windows)
 
-**Plex Cast Explorer is source-available, not OSI-approved open source.** It is licensed under the [Plex Cast Explorer Noncommercial Network Source-Share License 1.0](LICENSE).
+1. Install **Python 3.10+**, ensuring `python --version` works in a new terminal.
+2. Download the source ZIP from the repository (or a published release archive when available) and extract it to a permanent directory (for example `C:\Apps\plex-cast-explorer`).
+3. Run `set_password_windows.bat` to configure the gallery password.
+4. Run `start_windows.bat`.
+5. On the **server itself**, visit `http://127.0.0.1:8765`, enter the Plex URL (usually `http://127.0.0.1:32400`) and authentication token, then index your libraries.
+6. On another trusted LAN device, open `http://<SERVER-IP>:8765` and sign in using the gallery password.
 
-- **All commercial use requires prior written permission.** This also applies to internal deployment by for-profit organizations, even without a fee.
-- Permitted noncommercial use, modification, and distribution are subject to the full license.
-- Redistribution of modified copies requires their corresponding source under the same terms.
-- Providing a modified version to others over a network requires an accessible public source link in that version's interface.
-- Individual unpublished modifications used privately without distribution or network sharing do not have to be published.
+The Windows firewall may require an inbound rule for TCP 8765 on the appropriate **Private** profile. **UniFi port forwarding is not required** for local access.
 
-**The custom license has not been independently legally reviewed.** No claim is made that all provisions will be enforceable in every jurisdiction. No commercial rights are granted by repository visibility. For commercial permission, contact [@Terridol](https://github.com/Terridol).
+[Full installation & configuration](docs/INSTALLATION.md) · [Art and identity matching](docs/ARTWORK.md) · [Troubleshooting](docs/TROUBLESHOOTING.md)
 
-## Publication status
+## Data safety
 
-The repository is public, but **source publication and application release checks are separate**. Check [publication status](docs/PUBLICATION_STATUS.md) for remaining technical, security, licensing-rights, and third-party provider checks. The v0.4.2 source package remains in staging until it is committed; do not interpret this README as a published installer.
+The app **does not alter Plex media or Plex metadata**. Your Plex token, provider keys, indexed titles/performers, review decisions, and downloaded images remain **on your own host**; the external providers may receive search terms and movie/show-credit queries when enabled. These runtime files must never be committed:
 
-## Security and privacy
+`config.json` · `auth.json` · `artwork_config.json` · `network.json` · `cast_explorer.db*` · `portraits/` · `*.log`
 
-This application is designed for trusted local networks. Its built-in HTTP server is **not suitable for direct public-Internet exposure**. Do not forward its port from your router to the Internet. Use a secured private network or VPN.
+See [Security](SECURITY.md) and [Privacy & data flow](docs/PRIVACY.md) for limitations and handling details.
 
-Do not commit Plex tokens, API credentials, passwords, indexed library data, cached portraits, or local configuration. See [SECURITY.md](SECURITY.md).
+## For contributors
 
-## Third-party services and artwork
+- [Contributing guide](CONTRIBUTING.md) · [Code of conduct](CODE_OF_CONDUCT.md) · [Support](SUPPORT.md)
+- [Architecture](docs/ARCHITECTURE.md) · [Maintainers](docs/MAINTAINERS.md) · [Release process](docs/RELEASE.md) · [Readiness audit](docs/PUBLICATION_STATUS.md) · [Changelog](CHANGELOG.md)
+- Run tests locally: `python -m unittest discover -s . -p 'test_*.py' -v`
+- GitHub Actions checks Python 3.10 and 3.13 on Windows and Ubuntu.
 
-Plex Cast Explorer is independent of Plex, TMDB, ThePornDB, and Wikimedia. Metadata, images, APIs, and trademarks remain subject to each provider's terms. The project license does not grant rights to third-party content. Work remains to verify provider-specific attribution, caching, and use restrictions before release.
+## Third-party names, images and licensing
 
-## Contributing
+Plex Cast Explorer is an **independent community project**, not affiliated with or endorsed by Plex, TMDB, ThePornDB, or Wikimedia. Names, trademarks, cast metadata and portraits belong to their respective owners. An application source-code license does **not** grant rights to redistribute provider images.
 
-Project discussion and issue reports are welcome. **Please do not submit third-party copyrighted source code or images, or external code contributions that require unagreed licensing rights.** Contributor terms, technical checks, and release procedures will be documented as development progresses.
+**TMDB notice:** This application uses TMDB and the TMDB APIs but is not endorsed, certified, or otherwise approved by TMDB. See [Third-party credits and provider requirements](docs/THIRD_PARTY.md). An approved TMDB logo still needs to be included before claiming full compliance with TMDB branding terms.
+
+**License:** **Plex Cast Explorer Noncommercial Network Source-Share License 1.0**. Commercial use, including internal use by for-profit businesses, requires prior written permission. Noncommercial forks must preserve the license and applicable source-sharing requirements. The custom terms have **not** been independently reviewed; no guarantee of universal enforceability is made. See [Licensing](docs/LICENSING.md) · [License limitations](legal/LICENSING_REVIEW.md) · [Release checklist](docs/RELEASE.md).
