@@ -1,24 +1,23 @@
-# Branching policy
+# Branching and validation policy
 
-The project uses **only two maintained branches**:
+Plex Cast Explorer maintains exactly two branches:
 
 | Branch | Purpose |
 | --- | --- |
-| `main` | Stable, maintainer-approved source; do not push experimental work here. |
-| `dev` | Ongoing development, security fixes, and locally tested changes. |
+| `main` | Approved, stable development baseline |
+| `dev` | Active work and locally validated changes |
 
-## Workflow
+Changes are committed directly to `dev`. After successful local checks and explicit maintainer approval, `dev` can be promoted to `main`. No extra branches or pull requests are required.
 
-1. Make and test changes locally.
-2. Commit directly to `dev` after local validation.
-3. When the maintainer approves a promotion, update `main` from the tested `dev` state.
-4. Keep both branches; do not create feature, hotfix, release, or temporary branches.
-5. Do not publish a GitHub Release, deploy, or start GitHub-hosted execution without explicit permission.
+## No GitHub-hosted execution
 
-## GitHub-hosted execution
+The maintainer prohibits GitHub Actions, hosted builds, deployments, and other GitHub-run processes unless separately authorized. **The GitHub Actions workflow was removed from `dev`.** The older workflow may still exist on `main`; do not push to `main` until Actions have been disabled in repository settings or the automatic triggers can be safely removed without launching jobs.
 
-The maintainer has requested **no GitHub Actions or other GitHub-hosted execution**. The currently checked-in workflow has automatic triggers on `main` pushes, version tags, and pull requests. **Before any push or promotion to `main`**, disable that workflow or remove its automatic triggers without triggering an unwanted run. Commits to `dev` do not match its existing push trigger, and pull requests are not part of this project workflow.
+Run tests locally:
 
-## Obsolete branches
+```powershell
+python -m compileall -q app.py manage.py test_app.py test_security_images.py test_release_guardrails.py
+python -m unittest discover -s . -p "test_*.py" -v
+```
 
-The previous `release/0.4.3-beta-local-validation` and `security/portrait-redirect-validation` branches are obsolete. Their work is preserved in `dev` and/or `main`; they should be deleted after verification.
+Check JavaScript syntax locally using Node.js: `node --check static/app.js`. Do not publish stable release tags or deploy without explicit approval.
