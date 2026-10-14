@@ -1,26 +1,23 @@
-# Public release checklist
+# Release process (local execution only)
 
-This checklist is a project-level quality gate, **not a claim of compliance or security certification**.
+The repository publishes source code. A supported, installable public release requires the checks below; no paid legal review is required by the maintainer.
 
-## Checks before tagging a supported application release
+## 1. Local quality checks
 
-- [x] Publish the custom noncommercial/source-sharing `LICENSE` after owner approval. **No paid legal review required by the project; enforceability is not independently verified.**
-- [ ] Verify ownership or redistribution permission for all source files and bundled third-party assets; publish a contact for commercial permission.
-- [ ] Validate all files and Git history contain no credentials, personal library databases, logs, private images, or sensitive URLs; rotate any previously exposed secrets.
-- [ ] Complete TMDB-approved logo and attribution in the running UI; review provider licensing and restrictions, particularly for adult-oriented media.
-- [ ] Run automated tests on supported Python versions and Windows/Linux, plus a live smoke test on a real Plex server with test libraries.
-- [ ] Document any newly discovered security limitations; verify no known critical security issues are unresolved.
-- [ ] Enable GitHub secret scanning, push protection, Dependabot alerts (where applicable), and private vulnerability reporting.
-- [ ] Restrict repository write access; protect `main` with required passing checks and review for contributor changes.
+Run `python -m compileall -q app.py manage.py test_app.py test_security_images.py test_release_guardrails.py` followed by `python -m unittest discover -s . -p 'test_*.py' -v`, and run `node --check static/app.js` if Node.js is installed.
 
-- [ ] Finalize and operationalize the CLA for new contributions before accepting outside copyrighted patches.
+Test with a fresh, disposable local database; also test an upgrade with a backed-up existing database. Confirm galleries, portrait previews, sign-in/sign-out, library sync, job cancellation, and credits links.
 
-## For each release
+## 2. Security and privacy
 
-1. Update changelog and version string together; follow Semantic Versioning for version labels.
-2. Run `python -m unittest discover -s . -p 'test_*.py' -v` and compile checks.
-3. Test clean installation, gallery login, localhost administration, Plex sync, LAN/remote links, provider lookups, and upgrade with preserved settings.
-4. Tag `vX.Y.Z`, publish a GitHub Release, and publish source ZIP with a SHA-256 checksum. Never include local config, index, logs, or cached portraits.
-5. State supported release versions and known limitations in the release notes. Publish relevant security advisories or mitigations when appropriate.
+Verify the distribution contains **no** `auth.json`, `config.json`, `artwork_config.json`, `network.json`, SQLite files, tokens, logs, cached portraits, or local user data. Test incorrect Host, Origin, and Content-Type headers. The bundled HTTP server is for private LANs and VPNs only; **never forward port 8765 to the public Internet**.
 
-Review [OpenSSF OSPS Baseline](https://baseline.openssf.org/), [GitHub Community Standards](https://docs.github.com/en/communities/setting-up-your-project-for-healthy-contributions), and relevant provider terms regularly. **No full OWASP/penetration audit has been performed.**
+## 3. External provider permissions
+
+Providers' API keys, data, trademarks, and images have separate terms. Plex images belong to their upstream owners. TMDB is disabled by default and should not be enabled in prohibited contexts. Its optional enabled integration still needs an **approved TMDB logo** and other attribution requirements. Wikimedia image licenses are file-specific. ThePornDB usage must be verified by each operator.
+
+TMDB-derived portraits expire from local caching after 180 days. Provider opt-in alone does not grant rights.
+
+## 4. Publication
+
+Only use `dev` and `main`. The owner has prohibited GitHub-hosted jobs; verify Actions are disabled on `main` before publishing changes to it. After owner approval and real installation tests, promote validated source. Publish a clean archive with SHA-256 checksum and versioned release notes, **without executing GitHub-hosted build/release automation**. Never mark unverified checks complete.
