@@ -10,7 +10,7 @@ The application uses a user-provided Plex token to access the user's own Plex li
 
 > This application uses TMDB and the TMDB APIs but is not endorsed, certified, or otherwise approved by TMDB.
 
-[TMDB API terms](https://www.themoviedb.org/api-terms-of-use) require attribution and a correctly used **approved TMDB logo**. [Approved logos and brand guidelines](https://www.themoviedb.org/about/logos-attribution). The draft UI adds a text credit; **bundling and displaying the official approved logo is still a pre-release action**. Verify this requirement before any published application release. TMDB also limits some uses of its images and data; the maintainer must review any integration with adult-oriented libraries against the current provider terms.
+[TMDB API terms](https://www.themoviedb.org/api-terms-of-use) require attribution and a correctly used **approved TMDB logo**. [Approved logos and brand guidelines](https://www.themoviedb.org/about/logos-attribution). TMDB lookups are **disabled by default**, even when a token is saved. Enabling them requires `CAST_EXPLORER_ENABLE_TMDB=1` in the server process environment and compliance with TMDB's terms for the specific deployment. The existing text attribution alone does **not** satisfy the approved-logo requirement. Do not enable this integration for prohibited uses. No provider affiliation is implied. TMDB also limits some uses of its images and data; the maintainer must review any integration with adult-oriented libraries against the current provider terms.
 
 ## ThePornDB
 
