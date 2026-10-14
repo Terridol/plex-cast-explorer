@@ -1,25 +1,22 @@
-# Publication status — 2026-10-14
+# Publication status
 
-**Public source:** `main` contains v0.4.2; `dev` contains the in-progress v0.4.4-beta security update. There is **no supported production release**. Being public on GitHub does not mean the LAN web service is safe to expose to the Internet.
+**2026-10-14: v0.4.2 public source development build; not a production-ready release.**
 
-## Verified so far
+| Area | Status | Notes |
+| --- | --- | --- |
+| License | **Adopted, unreviewed** | Custom noncommercial network source-share license; no required paid legal review |
+| Tests | 21 passed locally | Synthetic tests; live provider integration unverified |
+| Secrets/runtime files | Excluded from source archive | Recheck every Git commit and distribution |
+| Contributor rights | Pending workflow | Do not merge external copyrighted contributions without permission sufficient for commercial exceptions |
+| Third-party providers | **Not fully verified** | Confirm trademark attribution, cache policy, and permitted use |
+| Security | **Not independently audited** | HTTP LAN service; no WAN exposure |
+| Windows + Linux smoke tests | Pending | Clean installation and live providers |
+| GitHub CI / branch protections | Pending | Configure after source upload |
 
-- [x] Source is public under a project-specific noncommercial network source-sharing license (not OSI-approved; independently unreviewed).
-- [x] Exactly `main` and `dev` are maintained.
-- [x] Browser POST requests must use JSON and reject cross-site fetch metadata.
-- [x] Artwork URL and redirect checks include HTTPS/allowed host/standard TLS port validation.
-- [x] TMDB and Wikimedia lookups are disabled by default; existing saved credentials do not automatically enable them.
-- [x] TMDB artwork older than 180 days and old provider-match cache records are removed during startup and scheduled refresh.
-- [x] Local Python, HTTP, and JavaScript syntax checks have been run for the development update.
-- [x] Hosted Actions workflow removed from `dev` without launching hosted jobs.
+**License notice:** The owner chose to publish without buying legal review. This is a custom, non-OSI license; its enforceability has not been independently evaluated. This is not a legal or industry-compliance certification.
 
-## Checks that remain open
+**Release principle:** Publishing development source does not automatically mean a tagged stable release is ready. For releases, complete the remaining engineering and provider checks described in [RELEASE.md](RELEASE.md).
 
-- [ ] **Real Windows/Plex smoke test:** validate existing database upgrade, server/LAN browser access, passwords, indexing, artwork previews, background enrichment, and local/remote Plex links.
-- [ ] **Provider permissions:** TMDB explicitly restricts pornographic-associated applications and requires an approved logo if enabled; its text attribution alone is inadequate. Per-image Wikimedia licensing and ThePornDB terms need a deployment-specific check.
-- [ ] Confirm authorized redistribution of all included source/assets and establish contributor licensing acceptance.
-- [ ] Review private-vulnerability reporting, secret-scanning, and branch permissions in GitHub Settings.
-- [ ] Verify no secrets or private data were ever included in earlier git history.
-- [ ] Obtain maintainer approval before tagging or promoting a supported release.
+## Installer preview
 
-Local validation cannot substitute for testing against the user's actual Plex server. The application still serves HTTP and is intended for a trusted LAN or secured private VPN, **not a public WAN port forward**.
+The `dev` branch includes the source for a Windows Inno Setup installer with upgrade preservation and an on-demand update checker. Windows compilation, firewall verification and in-place upgrade testing are pending. Do not call this a production-validated release.
