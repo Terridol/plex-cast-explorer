@@ -1,0 +1,33 @@
+name: Bug report
+description: Report a reproducible issue (do not include secrets or personal library data).
+title: "[Bug]: "
+labels: [bug]
+body:
+  - type: input
+    id: version
+    attributes:
+      label: Cast Explorer version
+      placeholder: v0.4.2
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: Environment
+      description: OS and Python version (do not include personal IP addresses).
+      placeholder: Windows 11 / Python 3.13
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce
+      description: Use fictional media names and redact all credentials.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected and actual results
+    validations:
+      required: true
