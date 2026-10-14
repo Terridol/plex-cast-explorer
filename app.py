@@ -493,9 +493,11 @@ def image_bytes(kind, key):
             raise ValueError('Unsupported image URL')
         if target.hostname == source.hostname and target.port == source.port:
             raw = request_plex(target.path + ('?' + target.query if target.query else ''), timeout=12)
-        elif target.hostname in ALLOWED_REMOTE_IMAGES:
-            # Important: do not send a Plex token to an external image host.
-            with urlopen(Request(thumb, headers={'User-Agent': 'PlexCastExplorer/0.1'}), timeout=12) as response:
+        elif allowed_https_image_url(thumb, ALLOWED_REMOTE_IMAGES):
+            # Restrict both the original URL and *every redirect*. The Plex token
+            # is never included in this request or sent to external image hosts.
+            req = Request(thumb, headers={'User-Agent': 'PlexCastExplorer/0.4'})
+            with build_opener(ArtworkRedirects(ALLOWED_REMOTE_IMAGES)).open(req, timeout=12) as response:
                 raw = response.read(4_000_001)
         else:
             raise ValueError('External image source not allowed')
@@ -616,18 +618,30 @@ def save_artwork_keys(tmdb, tpdb):
         ART_CONFIG_PATH.chmod(0o600)
 
 
+def allowed_https_image_url(url, allowed_hosts):
+    """Only permit HTTPS artwork URLs on trusted hosts and standard TLS ports."""
+    try:
+        parsed = urlsplit(url)
+        return (parsed.scheme == 'https' and parsed.hostname in allowed_hosts
+                and parsed.username is None and parsed.password is None
+                and parsed.port in (None, 443))
+    except ValueError:  # E.g. malformed port, invalid URL brackets.
+        return False
+
+
 class ArtworkRedirects(HTTPRedirectHandler):
-    """Redirects remain HTTPS to an explicit artwork host allowlist."""
+    """Apply the approved image host/port checks to *every* HTTP redirect."""
+    def __init__(self, allowed_hosts=None):
+        self.allowed_hosts = IMAGE_HOSTS if allowed_hosts is None else allowed_hosts
+
     def redirect_request(self, req, fp, code, msg, headers, newurl):
-        parsed = urlsplit(newurl)
-        if parsed.scheme != 'https' or parsed.hostname not in IMAGE_HOSTS:
+        if not allowed_https_image_url(newurl, self.allowed_hosts):
             raise ValueError('Untrusted image redirect')
         return super().redirect_request(req, fp, code, msg, headers, newurl)
 
 
 def external_image(url):
-    parsed = urlsplit(url)
-    if parsed.scheme != 'https' or parsed.hostname not in IMAGE_HOSTS or parsed.username or parsed.password or parsed.port not in (None, 443):
+    if not allowed_https_image_url(url, IMAGE_HOSTS):
         raise ValueError('Image host not permitted')
     request = Request(url, headers={'User-Agent': 'PlexCastExplorer/0.4 (home library artwork browser)',
                                     'Accept': 'image/jpeg,image/png,image/webp'})
