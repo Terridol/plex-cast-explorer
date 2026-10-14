@@ -1,44 +1,25 @@
-# Publication status
+# Publication status — 2026-10-14
 
-**As of 2026-10-14: v0.4.2 source published on the public `main` branch.** This is a development-source publication, **not a supported production release or a security certification**. No tagged release has been published.
+**Public source:** `main` contains v0.4.2; `dev` contains the in-progress v0.4.4-beta security update. There is **no supported production release**. Being public on GitHub does not mean the LAN web service is safe to expose to the Internet.
 
-## Licensing
+## Verified so far
 
-- [x] Adopt the [Plex Cast Explorer Noncommercial Network Source-Share License 1.0](../LICENSE).
-- [x] Prohibit commercial use without prior written authorization, including internal use by for-profit organizations.
-- [x] Require corresponding source sharing for qualifying distributed or network-served modified versions.
-- [x] Publish clear terms in the [licensing guide](LICENSING.md).
-- [x] Record the maintainer's decision to **proceed without paid legal review**.
-- [ ] Establish a formal contributor-rights acceptance process before merging external copyrighted code.
+- [x] Source is public under a project-specific noncommercial network source-sharing license (not OSI-approved; independently unreviewed).
+- [x] Exactly `main` and `dev` are maintained.
+- [x] Browser POST requests must use JSON and reject cross-site fetch metadata.
+- [x] Artwork URL and redirect checks include HTTPS/allowed host/standard TLS port validation.
+- [x] TMDB and Wikimedia lookups are disabled by default; existing saved credentials do not automatically enable them.
+- [x] TMDB artwork older than 180 days and old provider-match cache records are removed during startup and scheduled refresh.
+- [x] Local Python, HTTP, and JavaScript syntax checks have been run for the development update.
+- [x] Hosted Actions workflow removed from `dev` without launching hosted jobs.
 
-**Notice:** The license is custom and not OSI-approved. Its enforceability has not been independently evaluated. Legal review is **not a project release requirement**.
+## Checks that remain open
 
-## Source publication
+- [ ] **Real Windows/Plex smoke test:** validate existing database upgrade, server/LAN browser access, passwords, indexing, artwork previews, background enrichment, and local/remote Plex links.
+- [ ] **Provider permissions:** TMDB explicitly restricts pornographic-associated applications and requires an approved logo if enabled; its text attribution alone is inadequate. Per-image Wikimedia licensing and ThePornDB terms need a deployment-specific check.
+- [ ] Confirm authorized redistribution of all included source/assets and establish contributor licensing acceptance.
+- [ ] Review private-vulnerability reporting, secret-scanning, and branch permissions in GitHub Settings.
+- [ ] Verify no secrets or private data were ever included in earlier git history.
+- [ ] Obtain maintainer approval before tagging or promoting a supported release.
 
-- [x] Public GitHub repository: `Terridol/plex-cast-explorer`.
-- [x] Complete 42-file source baseline committed, with the latest licensing documents preserved.
-- [x] Application backend, web interface, Windows startup scripts, and tests included.
-- [x] Local archive integrity verified and runtime credentials, databases, logs, and portrait cache excluded.
-- [x] 21 unit tests passed locally; JavaScript syntax and Python bytecode compilation passed.
-- [x] GitHub Actions tests passed on the published source branch ([successful run](https://github.com/Terridol/plex-cast-explorer/actions/runs/38597503476)).
-
-## Staged security update — v0.4.3-beta
-
-- [x] Development branch: `release/0.4.3-beta-local-validation`.
-- [x] Default-off TMDB and Wikimedia calls, with explicit environment opt-in and updated Settings messaging.
-- [x] Reject HTTP Host headers that are not recognized for the receiving interface.
-- [x] Added three regression tests, for **27 tests passing locally**.
-- [x] JavaScript syntax check and Python bytecode compilation passed locally.
-- [ ] **Hosted execution deliberately not performed**: no GitHub Actions, pull request, tag, or deployment for this branch, per maintainer instruction.
-- [ ] Real Plex-server smoke test and provider permissions/attribution verification remain outstanding.
-
-## Before a supported release
-
-- [ ] Review third-party metadata/image terms, caching and attribution (including TMDB branding).
-- [ ] Assess token handling, admin access, authentication, LAN/remote behavior, and outbound image requests for security risks.
-- [ ] Test a fresh Windows installation against a real Plex server and enabled provider APIs.
-- [ ] Verify redistribution rights in any additional bundled assets and establish contributor consent.
-- [ ] Configure applicable repository security protections and review CI results.
-- [ ] Record explicit maintainer sign-off for a tagged software release.
-
-A public codebase is not proof of fitness for deployment. Keep the application restricted to a trusted LAN or secured VPN; do not expose its HTTP server directly to the Internet.
+Local validation cannot substitute for testing against the user's actual Plex server. The application still serves HTTP and is intended for a trusted LAN or secured private VPN, **not a public WAN port forward**.
