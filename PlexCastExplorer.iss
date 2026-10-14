@@ -68,7 +68,7 @@ Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-NoProfile
 Filename: "http://127.0.0.1:{code:GetPort}"; Description: "Open Plex Cast Explorer"; Flags: shellexec postinstall skipifsilent nowait
 
 [UninstallRun]
-Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\uninstall_cleanup.ps1"""; Flags: runhidden waituntilterminated
+Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\uninstall_cleanup.ps1"""; Flags: runhidden waituntilterminated; RunOnceId: "PlexCastExplorerServiceCleanup"
 
 [Code]
 var
@@ -82,23 +82,23 @@ end;
 function GetRemoteCIDRs(Param: String): String;
 begin
   Result := '';
-  if (NetworkPage <> nil) and IsTaskSelected('remoteadmin') then
+  if (NetworkPage <> nil) and WizardIsTaskSelected('remoteadmin') then
     Result := Trim(NetworkPage.Values[1]);
 end;
 
 function GetTMDB(Param: String): String;
 begin
-  if IsTaskSelected('tmdb') then Result := '1' else Result := '0';
+  if WizardIsTaskSelected('tmdb') then Result := '1' else Result := '0';
 end;
 
 function GetFirewall(Param: String): String;
 begin
-  if IsTaskSelected('firewall') then Result := '1' else Result := '0';
+  if WizardIsTaskSelected('firewall') then Result := '1' else Result := '0';
 end;
 
 function GetBeta(Param: String): String;
 begin
-  if IsTaskSelected('beta') then Result := '1' else Result := '0';
+  if WizardIsTaskSelected('beta') then Result := '1' else Result := '0';
 end;
 
 procedure InitializeWizard();
@@ -130,7 +130,7 @@ begin
       exit;
     end;
     CIDRs := Trim(NetworkPage.Values[1]);
-    if IsTaskSelected('remoteadmin') and (CIDRs = '') then begin
+    if WizardIsTaskSelected('remoteadmin') and (CIDRs = '') then begin
       MsgBox('Enter at least one VPN client CIDR, such as 10.20.30.4/32, or disable remote administration.', mbError, MB_OK);
       Result := False;
       exit;
