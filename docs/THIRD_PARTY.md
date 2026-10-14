@@ -1,25 +1,25 @@
-# Third-party sources and attribution
+# Third-party providers: permitted-use considerations
 
-Plex Cast Explorer is an independent community tool. **Plex**, **TMDB**, **ThePornDB**, and **Wikimedia** are separate services. Their logos, names, API responses, and images are not automatically licensed under this source-code project's license.
+Plex Cast Explorer is independently developed and is not affiliated with Plex, TMDB, ThePornDB, or Wikimedia. The source-code license **does not license any provider's data, artwork, or trademarks**.
 
 ## Plex
 
-The application uses a user-provided Plex token to access the user's own Plex library metadata. It is not affiliated with or endorsed by Plex. Follow [Plex support documentation](https://support.plex.tv/) and keep tokens out of source control.
+Users supply their own Plex tokens. Plex metadata and upstream images remain subject to Plex and underlying rights-holder terms. Keep all tokens out of commits, exports, logs and URLs sent to external providers.
 
-## TMDB
+## TMDB — OFF by default
 
-> This application uses TMDB and the TMDB APIs but is not endorsed, certified, or otherwise approved by TMDB.
+TMDB's [API Terms](https://www.themoviedb.org/api-terms-of-use) prohibit API use in applications connected with pornographic content as TMDB determines, limit cached API content to **no more than six months**, and require the approved TMDB logo and prescribed attribution notice when the API is used. See [TMDB's logos and attribution guidance](https://www.themoviedb.org/about/logos-attribution). A saved token **does not** enable TMDB. The optional `CAST_EXPLORER_ENABLE_TMDB=1` flag must not be used unless the individual deployment and complete app attribution are compliant. The present text-only footer is **not** enough to satisfy the logo rule.
 
-[TMDB API terms](https://www.themoviedb.org/api-terms-of-use) require attribution and a correctly used **approved TMDB logo**. [Approved logos and brand guidelines](https://www.themoviedb.org/about/logos-attribution). TMDB lookups are **disabled by default**, even when a token is saved. Enabling them requires `CAST_EXPLORER_ENABLE_TMDB=1` in the server process environment and compliance with TMDB's terms for the specific deployment. The existing text attribution alone does **not** satisfy the approved-logo requirement. Do not enable this integration for prohibited uses. No provider affiliation is implied. TMDB also limits some uses of its images and data; the maintainer must review any integration with adult-oriented libraries against the current provider terms.
+The application removes TMDB-source portrait overrides after 180 days and expires old lookup result records. This helps with cache duration but does not address every possible TMDB usage restriction.
 
-## ThePornDB
+## ThePornDB — optional API token
 
-Uses optional API credentials. Review provider permission, acceptable use, image licensing, and rate limits before use or redistribution; don't assume downloaded media are free to republish. No provider approval is implied.
+Use only under the provider's currently applicable conditions. The maintainers have **not independently verified** any general right to redistribute provider images or use API responses for commercial deployment.
 
-## Wikimedia Commons
+## Wikimedia Commons — OFF by default
 
-Image licenses vary **per file** and can require attribution and share-alike. Follow each original file's metadata/licensing, not merely the presence of the image on Commons.
+Media files use **individual licenses**. Verify the image's file page, photographer/author credit, applicable license, any share-alike requirements, and appropriate attribution before reuse. See [Wikimedia reuse guidance](https://www.mediawiki.org/wiki/Wikimedia_APIs/Content_reuse). The optional `CAST_EXPLORER_ENABLE_WIKIMEDIA=1` flag does not bypass these obligations.
 
-## Source distributions
+## Public repository
 
-**Never commit or distribute** user `portraits/`, local Plex library databases, or provider API responses containing personal data in application source archives. Licensed app code and third-party artwork are separate categories.
+Never publish users' indexed media lists, portrait downloads, API keys, secrets, or provider data in source archives. A project license cannot grant third-party image rights.
