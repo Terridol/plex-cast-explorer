@@ -75,7 +75,7 @@ try {
     $compilerExit = $LASTEXITCODE
 } finally { $ErrorActionPreference = $oldPref }
 if ($compilerExit -ne 0) { throw "Inno Setup compiler failed (exit $compilerExit)." }
-$installer = Join-Path $root 'output\PlexCastExplorer-Setup-0.4.6-beta-win-x64.exe'
+$installer = Join-Path $root 'output\PlexCastExplorer-Setup-0.4.7-beta-win-x64.exe'
 if (-not (Test-Path -LiteralPath $installer -PathType Leaf)) { throw 'Installer compilation reported success but expected output was absent.' }
 $hash = (Get-FileHash -LiteralPath $installer -Algorithm SHA256).Hash.ToLowerInvariant()
 Set-Content -LiteralPath ($installer + '.sha256') -Value ($hash + '  ' + [IO.Path]::GetFileName($installer)) -Encoding ASCII
