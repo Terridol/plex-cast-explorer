@@ -1,4 +1,4 @@
-Plex Cast Explorer v0.4.6-beta: Windows Installer Build Kit
+Plex Cast Explorer v0.4.7-beta: Windows Installer Build Kit
 ============================================================
 
 Windows users building the public installer:
@@ -6,7 +6,7 @@ Windows users building the public installer:
   2. Double-click BUILD-INSTALLER.cmd.
   3. The script builds the Python EXE, verifies WinSW and compiles
      a full-featured Windows Setup wizard using Inno Setup 6.
-  4. Find PlexCastExplorer-Setup-0.4.6-beta-win-x64.exe in output\.
+  4. Find PlexCastExplorer-Setup-0.4.7-beta-win-x64.exe in output\.
   5. Back up C:\ProgramData\PlexCastExplorer and run the wizard.
      Existing service installs are upgraded in place; no migration.
 
