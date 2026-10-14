@@ -44,7 +44,7 @@ PORTRAIT_DIR = ROOT / 'portraits'
 NETWORK_CONFIG_PATH = ROOT / 'network.json'
 HOST = os.getenv('CAST_EXPLORER_HOST', '0.0.0.0')
 PORT = int(os.getenv('CAST_EXPLORER_PORT', '8765'))
-VERSION = '0.4.5-beta'
+VERSION = '0.4.6-beta'
 SESSION_SECONDS = 14 * 24 * 60 * 60
 ADMIN_SESSION_SECONDS = 60 * 60
 ARTWORK_MAX_AGE_SECONDS = 180 * 24 * 60 * 60  # Under any six-calendar-month window.
@@ -1773,7 +1773,9 @@ def main():
 
 
 if __name__ == '__main__':
-    if sys.argv[1:] in (['--set-admin-password'], ['--set-password']):
+    if sys.argv[1:] == ['--version']:
+        print(VERSION)
+    elif sys.argv[1:] in (['--set-admin-password'], ['--set-password']):
         import getpass
         admin_mode = sys.argv[1] == '--set-admin-password'
         first = getpass.getpass('New ' + ('administrator' if admin_mode else 'gallery') + ' password: ')
