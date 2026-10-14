@@ -1,0 +1,53 @@
+# Plex Cast Explorer runtime configuration — do not commit
+config.json
+auth.json
+artwork_config.json
+network.json
+.env
+.env.*
+!.env.example
+*token*.json
+*secret*.json
+
+# Local library indexes and metadata
+*.db
+*.db-*
+*.sqlite
+*.sqlite3
+*.sqlite-*
+*.db-wal
+*.db-shm
+*.db-journal
+
+# Downloaded media and operational state
+portraits/
+cache/
+server.log
+*.log
+*.log.*
+
+# Build/test caches
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.coverage
+htmlcov/
+.venv/
+venv/
+build/
+dist/
+*.zip
+
+# Secrets and backups
+*.pem
+*.key
+*.p12
+*.bak
+*.backup
+*.tmp
+
+# Editors and OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
