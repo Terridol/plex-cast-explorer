@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased — v0.4.4-beta (local tests only)
+
+- Reject cross-site browser POSTs and require JSON request bodies, including for loopback administration.
+- Reject unsupported chunked POST requests and stop disclosing exception details to LAN clients.
+- Expire saved TMDB portraits and cached provider-match data after 180 days.
+- Extend tests for request validation and artwork expiry.
+- Remove the automatic GitHub-hosted tests workflow from `dev`.
+- Publish updated third-party, security, branching, and release procedures.
+- Public development source only; no tagged production release or live Plex-server integration verification.
+
 ## Unreleased — v0.4.3-beta (local validation only)
 
 - Reject unrecognized HTTP Host headers to reduce DNS-rebinding risk for localhost administration.
