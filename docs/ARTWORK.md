@@ -2,6 +2,16 @@
 
 Cast Explorer first uses portrait metadata supplied by Plex. Optional third-party sources include **TMDB** (token required), **ThePornDB** (token required), and **Wikimedia Commons**. Use Settings from the server's loopback address to configure providers.
 
+## Provider defaults and explicit opt-in
+
+- **Plex portraits** are used by default.
+- **ThePornDB** is optional and requires the user's own API token; its provider terms and rate limits still apply.
+- **TMDB** is **disabled by default**, even if a token was saved in an earlier version. Its provider terms restrict use involving pornographic content. Only enable it if the actual deployment is permitted by those terms: set `CAST_EXPLORER_ENABLE_TMDB=1` in the **Cast Explorer server process environment**, and restart. A saved token alone does not activate TMDB.
+- **Wikimedia Commons** is **disabled by default** until individual image licensing and attribution are checked. Enable with `CAST_EXPLORER_ENABLE_WIKIMEDIA=1` only if the operator has a process for verifying image-specific rights.
+- With either opt-in flag unset, the corresponding provider is not contacted. These settings do not grant permission to use third-party images.
+
+On Windows PowerShell for a single manual launch, set `$env:CAST_EXPLORER_ENABLE_TMDB='1'` before launching `start_windows.bat`. Scheduled startup needs separate per-task environment configuration. Do not set machine-wide values merely for convenience.
+
 ## Matching logic
 
 1. Index performers and their movie/TV credits from the selected Plex libraries.
