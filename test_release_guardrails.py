@@ -1,7 +1,10 @@
 """LAN host validation and metadata provider opt-in checks."""
 import os
+import tempfile
+import time
 import threading
 import unittest
+from pathlib import Path
 from urllib.request import Request, urlopen
 from urllib.error import HTTPError
 from unittest.mock import patch
@@ -47,6 +50,65 @@ class ReleaseGuardrailTests(unittest.TestCase):
             server.server_close()
             worker.join(timeout=5)
             app.PORT = old_port
+
+
+    def test_csrf_and_post_content_type_guards(self):
+        server = ThreadingHTTPServer(('127.0.0.1', 0), app.Handler)
+        old_port = app.PORT
+        app.PORT = server.server_port
+        worker = threading.Thread(target=server.serve_forever, daemon=True)
+        worker.start()
+        try:
+            base = f'http://127.0.0.1:{server.server_port}/api/login'
+            for headers, expected in (
+                ({'Content-Type': 'text/plain'}, 415),
+                ({'Content-Type': 'application/json', 'Sec-Fetch-Site': 'cross-site'}, 403),
+                ({'Content-Type': 'application/json', 'Transfer-Encoding': 'chunked'}, 400),
+            ):
+                with self.subTest(headers=headers):
+                    request = Request(base, method='POST', data=b'{}', headers=headers)
+                    with self.assertRaises(HTTPError) as error:
+                        urlopen(request, timeout=3)
+                    self.assertEqual(error.exception.code, expected)
+            with urlopen(Request(base, method='POST', data=b'{}',
+                                 headers={'Content-Type': 'application/json'}), timeout=3) as response:
+                self.assertEqual(response.status, 200)
+        finally:
+            server.shutdown()
+            server.server_close()
+            worker.join(timeout=5)
+            app.PORT = old_port
+
+    def test_tmdb_cache_expires_but_other_portraits_remain(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            old_db, old_dir = app.DB_PATH, app.PORTRAIT_DIR
+            app.DB_PATH = Path(tmpdir) / 'cache.db'
+            app.PORTRAIT_DIR = Path(tmpdir) / 'portraits'
+            app.PORTRAIT_DIR.mkdir()
+            try:
+                app.init_db()
+                now = time.time()
+                old_timestamp = int((now - 181 * 86400) * 1000)
+                images = [('tmdb-old', 'TMDB', old_timestamp),
+                          ('tmdb-new', 'TMDB', int(now * 1000)),
+                          ('plex-file', 'Plex', old_timestamp)]
+                with app.db_open() as db:
+                    for key, source, timestamp in images:
+                        file = key.encode().hex().ljust(64, '0') + '.jpg'
+                        (app.PORTRAIT_DIR / file).write_bytes(b'portrait')
+                        db.execute('INSERT INTO actor_art(actor_key,file,source,version) VALUES(?,?,?,?)',
+                                   (key, file, source, timestamp))
+                    db.execute('INSERT INTO enrichment_results(actor_key,status,checked_at) VALUES(?,?,?)',
+                               ('expired', 'review', '2025-01-01T00:00:00+00:00'))
+                self.assertEqual(app.prune_old_artwork(now), 1)
+                with app.db_open() as db:
+                    rows = db.execute('SELECT actor_key FROM actor_art ORDER BY actor_key').fetchall()
+                    self.assertEqual([row[0] for row in rows], ['plex-file', 'tmdb-new'])
+                    self.assertEqual(db.execute('SELECT count(*) FROM enrichment_results').fetchone()[0], 0)
+                self.assertEqual(len(list(app.PORTRAIT_DIR.glob('*.jpg'))), 2)
+            finally:
+                app.DB_PATH, app.PORTRAIT_DIR = old_db, old_dir
+                app.image_bytes.cache_clear()
 
 
 if __name__ == '__main__':
