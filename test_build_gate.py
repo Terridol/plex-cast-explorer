@@ -27,6 +27,15 @@ class BuildGateRegressionTests(unittest.TestCase):
         self.assert_mutation_blocked('build_installer_windows.ps1',
                                      'Python-LICENSE.txt', 'missing-python-license.txt')
 
+    def test_powershell_native_argument_quoting_cannot_break_license_check(self):
+        # Older code passed a quoted filename through Windows PowerShell 5.1
+        # to py.exe, which stripped the quotes and caused NameError.
+        self.assert_mutation_blocked(
+            'build_installer_windows.ps1',
+            "-c 'import sys; print(sys.base_prefix)'",
+            "-c 'import pathlib,sys; print(pathlib.Path(sys.base_prefix) / \"LICENSE.txt\")'"
+        )
+
     def test_missing_project_notice_is_fatal(self):
         self.assert_mutation_blocked('PlexCastExplorer.iss',
                                      'Source: "NOTICE"; DestDir: "{app}"',
