@@ -1,5 +1,7 @@
 """Run with: python -m unittest test_app.py -v"""
 import tempfile
+import io
+import json
 import os
 import ipaddress
 import unittest
@@ -78,6 +80,33 @@ class PlexCastExplorerTests(unittest.TestCase):
             self.assertEqual(app.status_snapshot()['phase'], 'Finished')
             self.assertEqual(mock_plex.call_count - count, 4)  # root, sections, 2 paged lists; no detail requests
 
+
+    def test_provider_json_reads_large_valid_credit_payload_without_truncating(self):
+        # Regression: ThePornDB sometimes returns scene-credit JSON larger
+        # than 1,000,001 bytes; older code truncated it mid-string.
+        payload = {'data': [{'title': 'Scene ' + ('x' * 1_050_000)}]}
+        body = json.dumps(payload).encode('utf-8')
+        self.assertGreater(len(body), 1_000_001)
+        self.assertLess(len(body), app.MAX_PROVIDER_JSON_BYTES)
+        with patch.object(app, 'build_opener') as opener:
+            opener.return_value.open.return_value = io.BytesIO(body)
+            actual = app.provider_json('https://api.theporndb.net/performers/123/scenes?page=1&per_page=100', 'sample-token')
+        self.assertEqual(actual, payload)
+
+    def test_provider_json_rejects_oversized_payload_before_parsing(self):
+        # Reject huge/malicious metadata rather than parsing an incomplete
+        # buffer and reporting a confusing JSON error.
+        oversized = b'x' * (app.MAX_PROVIDER_JSON_BYTES + 1)
+        with patch.object(app, 'build_opener') as opener:
+            opener.return_value.open.return_value = io.BytesIO(oversized)
+            with self.assertRaisesRegex(ValueError, '8 MiB safety limit'):
+                app.provider_json('https://api.theporndb.net/performers/123/scenes?page=1&per_page=100', 'sample-token')
+
+    def test_provider_json_rejects_empty_metadata_response(self):
+        with patch.object(app, 'build_opener') as opener:
+            opener.return_value.open.return_value = io.BytesIO(b'')
+            with self.assertRaisesRegex(ValueError, 'empty response'):
+                app.provider_json('https://api.theporndb.net/performers?q=sample', 'sample-token')
 
     def test_local_and_remote_links(self):
         known = (ipaddress.ip_network('10.44.10.0/24'), ipaddress.ip_network('192.168.77.0/24'))

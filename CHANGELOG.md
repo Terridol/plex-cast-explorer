@@ -2,6 +2,8 @@
 
 ## v1.0.0-rc.1 — Feature-freeze release candidate (NOT general availability)
 
+- Fixed oversized ThePornDB performer-credit responses: metadata reads are now bounded at 8 MiB, larger valid JSON is parsed completely, and truly oversized payloads fail with an explicit size error instead of misleading 'Unterminated string' errors. Added regression coverage.
+
 - Added a guarded opt-in stable installer build path (final semver, clean approved `main` only), while retaining the existing unique-ID development builder.
 - Bundled the required upstream WinSW MIT license notice with the service wrapper and added fail-closed source contract tests.
 - Verified current tracked files contain no build binaries, databases, logs or cached portraits; full Git history and final packaged release still require checks.

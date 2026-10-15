@@ -11,3 +11,7 @@
 **Provider lookups fail.** Verify provider credentials, HTTP errors, API quotas and DNS. Pause enrichment during outages; use Retry failed lookups afterward.
 
 **New version doesn't appear.** Pull `dev` through GitHub Desktop, run `BUILD-INSTALLER.cmd`, and run the resulting uniquely named Setup EXE as Administrator. Setup stops and restarts the Windows service, retains `ProgramData`, and checks the HTTP version before Finish. If Setup fails, inspect `C:\ProgramData\PlexCastExplorer\logs\installer-last-error.txt` and the service wrapper log; do not delete your database or credentials.
+
+## Artwork enrichment reports “Unterminated string” at byte 1,000,000
+
+Older builds read only 1,000,001 bytes of provider JSON, which could truncate large ThePornDB scene-credit responses. The 1.0 release candidate now allows bounded complete JSON responses up to **8 MiB**, with a clear size error for larger responses. Pull and build the updated release candidate, then **pause the enrichment run** before selecting **Retry failed lookups** and **Start / resume enrichment**. Retrying clears only saved error records; previously accepted portraits and unmatched results are retained. If the provider still exceeds 8 MiB, inspect the warning and report it without exposing API tokens or private Plex metadata. Do not disable provider response bounds.

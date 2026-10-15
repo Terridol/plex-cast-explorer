@@ -46,6 +46,7 @@ VERSION = '1.0.0-rc.1'
 SESSION_SECONDS = 14 * 24 * 60 * 60
 ADMIN_SESSION_SECONDS = 60 * 60
 ARTWORK_MAX_AGE_SECONDS = 180 * 24 * 60 * 60  # Under any six-calendar-month window.
+MAX_PROVIDER_JSON_BYTES = 8 * 1024 * 1024  # Bound metadata downloads; large credit pages exceed 1 MiB.
 LOGIN_LOCK = threading.Lock()
 LOGIN_ATTEMPTS = {}
 ALLOWED_REMOTE_IMAGES = {'metadata-static.plex.tv', 'image.tmdb.org', 'assets.plex.tv', 'metadata.provider.plex.tv'}
@@ -774,7 +775,16 @@ def provider_json(url, bearer=None):
     req = Request(url, headers=headers)
     # Metadata host may not redirect, to avoid forwarding a bearer token.
     with build_opener(SameOriginRedirects(f'https://{host}')).open(req, timeout=13) as res:
-        return json.loads(res.read(1_000_001))
+        # A 1 MiB read truncated valid ThePornDB performer-scene pages and
+        # produced misleading JSONDecodeError: Unterminated string. Read at
+        # most one byte past the bounded limit to distinguish an oversized
+        # complete response from malformed JSON. Never parse truncated bytes.
+        payload = res.read(MAX_PROVIDER_JSON_BYTES + 1)
+    if len(payload) > MAX_PROVIDER_JSON_BYTES:
+        raise ValueError('Metadata provider response exceeds the 8 MiB safety limit')
+    if not payload:
+        raise ValueError('Metadata provider returned an empty response')
+    return json.loads(payload)
 
 
 def new_art_candidate(actor_key, name, url, source, reference, credit):
