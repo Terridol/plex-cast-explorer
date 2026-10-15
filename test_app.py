@@ -107,6 +107,19 @@ class PlexCastExplorerTests(unittest.TestCase):
                 self.assertEqual(app.status_snapshot()['phase'], 'Finished')
                 self.assertEqual(app.get_actor('second actor')['image'], '')
 
+    def test_sync_repairs_corrupt_plex_actor_cache(self):
+        with patch.dict(os.environ, {'PLEX_URL': '', 'PLEX_TOKEN': ''}):
+            app.save_config('http://127.0.0.1:32400', 'example-token')
+            path = app.plex_portrait_cache_path('/portrait/sample')
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(b'not an image')
+            with patch.object(app, 'plex_xml', side_effect=self.fake_xml), \
+                 patch.object(app, 'request_plex', return_value=b'\xff\xd8\xffRecovered') as image_request:
+                app.sync_all(force=True)
+                image_request.assert_called_once()
+                self.assertEqual(path.read_bytes(), b'\xff\xd8\xffRecovered')
+                self.assertEqual(app.status_snapshot()['phase'], 'Finished')
+
     def test_plex_sync_portrait_download_failure_is_non_destructive_and_retryable(self):
         with patch.dict(os.environ, {'PLEX_URL': '', 'PLEX_TOKEN': ''}):
             app.save_config('http://127.0.0.1:32400', 'example-token')
