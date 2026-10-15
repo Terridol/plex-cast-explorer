@@ -65,6 +65,22 @@ function Invoke-Python([string[]]$Arguments, [string]$Description) {
     if ($exitCode -ne 0) { throw "$Description failed (exit code $exitCode)." }
 }
 Invoke-Python @('-c','import sys; sys.exit(0 if sys.version_info >= (3,10) else 1)') 'Python 3.10+ verification'
+# Verify availability of the exact CPython runtime license BEFORE pip and
+# PyInstaller, not after the expensive EXE smoke gate.
+# Windows PowerShell 5.1 can strip nested quotes from native -c arguments:
+# Python then evaluates LICENSE.txt as a variable, causing NameError.
+# Ask Python only for sys.base_prefix (no nested quotes) and construct the
+# license path with PowerShell. Keep the same Python -3 selection as PyInstaller.
+$pythonPrefix = @(& $py.Source -3 -c 'import sys; print(sys.base_prefix)')
+if ($LASTEXITCODE -ne 0 -or $pythonPrefix.Count -ne 1 -or
+    [string]::IsNullOrWhiteSpace($pythonPrefix[0])) {
+    throw 'Cannot determine the CPython build interpreter directory.'
+}
+$runtimeLicense = Join-Path -Path $pythonPrefix[0].Trim() -ChildPath 'LICENSE.txt'
+if (-not (Test-Path -LiteralPath $runtimeLicense -PathType Leaf)) {
+    throw "CPython license not found in the build interpreter: $runtimeLicense"
+}
+
 $pythonPip = @('-m', 'pip', '--version')
 $oldPreference = $ErrorActionPreference
 try {
@@ -92,20 +108,6 @@ if (-not (Test-Path -LiteralPath $exe -PathType Leaf)) {
 }
 Invoke-LocalGate 'exe'
 
-# Preserve the license from the exact CPython runtime used by PyInstaller.
-# Windows PowerShell 5.1 can strip nested quotes from native -c arguments:
-# Python then evaluates LICENSE.txt as a variable, causing NameError.
-# Ask Python only for sys.base_prefix (no nested quotes) and construct the
-# license path with PowerShell. Keep the same Python -3 selection as PyInstaller.
-$pythonPrefix = @(& $py.Source -3 -c 'import sys; print(sys.base_prefix)')
-if ($LASTEXITCODE -ne 0 -or $pythonPrefix.Count -ne 1 -or
-    [string]::IsNullOrWhiteSpace($pythonPrefix[0])) {
-    throw 'Cannot determine the CPython build interpreter directory.'
-}
-$runtimeLicense = Join-Path -Path $pythonPrefix[0].Trim() -ChildPath 'LICENSE.txt'
-if (-not (Test-Path -LiteralPath $runtimeLicense -PathType Leaf)) {
-    throw "CPython license not found in the build interpreter: $runtimeLicense"
-}
 $bundledLicenses = Join-Path $root 'dist\PlexCastExplorer\licenses'
 New-Item -ItemType Directory -Path $bundledLicenses -Force | Out-Null
 Copy-Item -LiteralPath $runtimeLicense -Destination (Join-Path $bundledLicenses 'Python-LICENSE.txt') -Force -ErrorAction Stop
