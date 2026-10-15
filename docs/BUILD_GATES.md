@@ -29,3 +29,9 @@ If Node.js is absent, the build prints a prominent message that JavaScript synta
 ## Unique development installer versions
 
 Every local `dev` installer receives a build ID in the form `dev-YYYYMMDD-HHMMSSmmm-g<8-char-Git-SHA>`, or `dev-YYYYMMDD-HHMMSSmmm-s<8-char-source-fingerprint>` when Git is not available on PATH. Inno Setup requires this ID at compile time, embeds it into the displayed application version, and uses it in the setup filename. Example: `PlexCastExplorer-Setup-0.4.7-beta-dev-20261014-203512123-g23a496e7-win-x64.exe`. The installer artifact gate requires the exact generated name and checksum. All previous output builds remain available for comparison; no build is deployed automatically. The stable installer `AppId` is **never changed** by a build ID.
+
+## Repository workflow and promotion
+
+Use GitHub Desktop to clone `Terridol/plex-cast-explorer`, select **`dev`**, then **Fetch origin → Pull origin** before running `BUILD-INSTALLER.cmd`. The local builder does not depend on any GitHub-hosted CI.
+
+Keep exactly `dev` (active work) and `main` (maintainer-approved stable baseline). Do not create extra branches or automatically merge pull requests. Promotion into `main` requires explicit maintainer approval. `main` still has a legacy GitHub Actions workflow; confirm Actions are disabled in repository settings before pushing to it or publishing tags.
