@@ -66,6 +66,13 @@ def check_install_contract(root: Path) -> str:
             'Python-LICENSE.txt' in build and
             'runtimeLicense' in build,
             'Windows installer must include CPython runtime license and project NOTICE')
+    # PowerShell 5.1 passes quoted Python source to native commands
+    # differently from Python/Unix shells. Nested "LICENSE.txt" quotes
+    # previously disappeared, producing NameError after the EXE smoke gate.
+    require("-c 'import sys; print(sys.base_prefix)'" in build and
+            "Join-Path -Path $pythonPrefix[0].Trim() -ChildPath 'LICENSE.txt'" in build and
+            'Copy-Item -LiteralPath $runtimeLicense -Destination' in build,
+            'CPython license discovery must avoid nested quotes in native Python arguments')
     require('Name: "tmdb"' in spec and
             "WizardIsTaskSelected('tmdb')" in spec and
             "if ($EnableTMDB -eq 1)" in service and
