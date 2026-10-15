@@ -13,6 +13,7 @@ import hmac
 import secrets
 import time
 import ipaddress
+import socket
 import subprocess
 import re
 from functools import lru_cache
@@ -335,6 +336,53 @@ def plex_portrait_cache_path(thumb: str, plex_url: str | None = None) -> Path:
     return PLEX_PORTRAIT_DIR / (digest + '.img')
 
 
+def public_custom_plex_thumb(url: str) -> bool:
+    """Gate custom-scraper URLs before allowing Plex to resolve an image.
+
+    Plex's photo transcoder can fetch a remote source URL. Never feed it
+    loopback/LAN, metadata-service, literal-IP, or unresolvable addresses.
+    Modern Plex also applies its own destination checks at fetch time.
+    This is not a general-purpose authenticated image proxy.
+    """
+    if len(url) > 2048 or any(ord(char) < 32 for char in url):
+        return False
+    try:
+        target = urlsplit(url)
+        host = (target.hostname or '').rstrip('.').lower()
+        if (target.scheme != 'https' or target.port not in (None, 443) or
+                not host or not target.path.startswith('/') or
+                target.username is not None or target.password is not None or
+                target.fragment or host.endswith('.') or
+                '.' not in host or not re.fullmatch(r'[a-z0-9.-]+', host)):
+            return False
+        if host.split('.')[-1] in {'local', 'localhost', 'internal', 'lan',
+                                   'test', 'invalid', 'example', 'arpa', 'onion'}:
+            return False
+        try:
+            ipaddress.ip_address(host)
+            return False
+        except ValueError:
+            pass
+        addresses = socket.getaddrinfo(host, 443, type=socket.SOCK_STREAM)
+        return bool(addresses) and all(
+            ipaddress.ip_address(result[4][0]).is_global for result in addresses)
+    except (ValueError, OSError, IndexError):
+        return False
+
+
+def plex_transcoded_image(url: str) -> bytes:
+    """Resolve custom provider images through Plex without leaking its token."""
+    if not public_custom_plex_thumb(url):
+        raise ValueError('Custom Plex artwork must use a public HTTPS image host')
+    # The image URL is sourced from Plex metadata, not browser-supplied input.
+    # Only an authenticated request to our configured Plex origin contains the
+    # Plex token. Never put that token in the transcoder's source URL.
+    path = '/photo/:/transcode?' + urlencode({
+        'url': url, 'width': 300, 'height': 450, 'format': 'jpeg',
+    })
+    return request_plex(path, timeout=15, max_bytes=MAX_PLEX_IMAGE_BYTES)
+
+
 def plex_image_bytes(thumb: str) -> bytes:
     """Fetch an image Plex advertises; never forward its token to other hosts."""
     if thumb.startswith('/') and not thumb.startswith('//'):
@@ -352,7 +400,10 @@ def plex_image_bytes(thumb: str) -> bytes:
             with build_opener(ArtworkRedirects(ALLOWED_REMOTE_IMAGES)).open(req, timeout=12) as response:
                 raw = response.read(MAX_PLEX_IMAGE_BYTES + 1)
         else:
-            raise ValueError('External Plex image source not allowed')
+            # A custom scraper may advertise an HTTPS portrait host Plex
+            # knows about but that is absent from our hardcoded CDN list.
+            # Let Plex transcode it only after a strict public-origin check.
+            raw = plex_transcoded_image(thumb)
     if len(raw) > MAX_PLEX_IMAGE_BYTES:
         raise ValueError('Plex portrait exceeds 4 MB safety limit')
     if not valid_plex_image(raw):
