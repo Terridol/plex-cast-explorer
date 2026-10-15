@@ -8,7 +8,7 @@ This checklist is a project-level quality gate, **not a claim of compliance or s
 - [ ] Verify ownership or redistribution permission for all source files and bundled third-party assets; publish a contact for commercial permission.
 - [ ] Validate all files and Git history contain no credentials, personal library databases, logs, private images, or sensitive URLs; rotate any previously exposed secrets.
 - [ ] Complete TMDB-approved logo and attribution in the running UI; review provider licensing and restrictions, particularly for adult-oriented media.
-- [ ] Run automated tests on supported Python versions and Windows/Linux, plus a live smoke test on a real Plex server with test libraries.
+- [ ] Run automated tests on supported Python versions and Windows, plus a live smoke test on a real Plex server with test libraries.
 - [ ] Document any newly discovered security limitations; verify no known critical security issues are unresolved.
 - [ ] Enable GitHub secret scanning, push protection, Dependabot alerts (where applicable), and private vulnerability reporting.
 - [ ] Restrict repository write access; protect `main` with required passing checks and review for contributor changes.
@@ -27,4 +27,4 @@ Review [OpenSSF OSPS Baseline](https://baseline.openssf.org/), [GitHub Community
 
 ## Windows installer releases
 
-Compile `BUILD-INSTALLER.cmd` on Windows, test upgrading an existing installed service with a database backup and validate firewall scopes. Publish the compiled `PlexCastExplorer-Setup-<version>-win-x64.exe` with SHA-256 checksum as a GitHub Release asset, without running GitHub-hosted jobs. Verify GitHub exposes the asset SHA-256 digest before using the automatic downloader. The updater is explicitly user-initiated and does not install software unattended.
+Compile `BUILD-INSTALLER.cmd` on Windows, test upgrading an existing installed service with a database backup and validate firewall scopes. Publish the compiled uniquely identified `PlexCastExplorer-Setup-<version>-dev-<UTC-build-ID>-<revision>-win-x64.exe` with SHA-256 checksum as a GitHub Release asset, without running GitHub-hosted jobs. Verify GitHub exposes the asset SHA-256 digest before using the automatic downloader. The updater is explicitly user-initiated and does not install software unattended.
