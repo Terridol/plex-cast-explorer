@@ -165,6 +165,7 @@ var
   Args: String;
   Started: Boolean;
   FailureReason: String;
+  FailureRaw: AnsiString;
   FailurePath: String;
 begin
   if CurStep <> ssPostInstall then
@@ -187,8 +188,9 @@ begin
   if ExitCode <> 0 then begin
     FailurePath := ExpandConstant('{commonappdata}\PlexCastExplorer\logs\installer-last-error.txt');
     FailureReason := '';
-    if LoadStringFromFile(FailurePath, FailureReason) then
-      FailureReason := Trim(FailureReason);
+    FailureRaw := '';
+    if LoadStringFromFile(FailurePath, FailureRaw) then
+      FailureReason := Trim(FailureRaw);
     if Length(FailureReason) > 300 then
       FailureReason := Copy(FailureReason, 1, 300) + '...';
     if FailureReason = '' then
