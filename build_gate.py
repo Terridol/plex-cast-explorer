@@ -135,6 +135,18 @@ def check_install_contract(root: Path) -> str:
             "$gitHead[-1] -match '^[0-9a-fA-F]{8}$'" in build and
             "$buildId -notmatch '^dev-[0-9]{8}-[0-9]{9}-[gs][0-9a-f]{8}$'" in build,
             'Windows build script has duplicated sections or corrupt build-ID regex')
+    # Each build replaces the output directory contents, instead of accumulating
+    # dev IDs or leaving a stale release installer behind. Keep cleanup inside
+    # the repository and reject junctions/symlinks before recursive deletion.
+    require("$outputDir = Join-Path $root 'output'" in build and
+            "Get-ChildItem -LiteralPath $outputDir -Recurse -Force -ErrorAction Stop" in build and
+            "Refusing to clear output: junction or symbolic link found" in build and
+            "Get-ChildItem -LiteralPath $outputDir -Force -ErrorAction Stop |\n        Remove-Item -Force -Recurse -ErrorAction Stop" in build and
+            "Output cleanup failed; refusing to write an installer into a nonempty output folder." in build and
+            "Keep older build IDs in the output folder" not in build and
+            0 <= build.find("$outputDir = Join-Path $root 'output'") <
+                 build.find('Write-Host "Compiling Setup.exe'),
+            'Build must safely empty only repo/output before every installer compile')
     require('PlexCastExplorer-Setup-$appVersion-$buildId-win-x64.exe' in build and
             "$appVersionMatch.Groups['version'].Value" in build and
             "'/DDevBuildId=' + $buildId" in build and
