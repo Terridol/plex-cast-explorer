@@ -73,7 +73,30 @@ if (!$DownloadAndInstall) {
     Write-Host '  powershell -NoProfile -ExecutionPolicy Bypass -File .\check_updates.ps1 -DownloadAndInstall'
     exit 0
 }
-$asset = @($release.assets) | Where-Object { $_.name -match '^PlexCastExplorer-Setup-v?\d+\.\d+\.\d+(?:[-.][A-Za-z0-9.]+)?-win-x64\.exe$' } | Select-Object -First 1
+$asset = @($release.assets) | Where-Object { $_.name -match '^PlexCastExplorer-Setup-v?\d+\.\d+\.\d+(?:-[A-Za-z0-9.]+(?:-[A-Za-z0-9.]+)*)?-win-x64\.exe } | Select-Object -First 1
+if (!$asset) { throw "No Windows installer attached to $($release.tag_name). Open $($release.html_url)" }
+# Release-asset digest comes from GitHub's asset metadata. If absent, require
+# a manual download; never silently execute a package without verification.
+if ([string]$asset.digest -notmatch '^sha256:([0-9a-fA-F]{64})$') {
+    throw "Release asset has no GitHub-published SHA-256 digest. Download manually from $($release.html_url)"
+}
+$expectedHash = $Matches[1].ToLowerInvariant()
+$location = Join-Path $env:TEMP 'PlexCastExplorerUpdates'
+New-Item -ItemType Directory -Path $location -Force | Out-Null
+$installer = Join-Path $location $asset.name
+Write-Host "Downloading $($asset.name)..."
+Invoke-WebRequest -Uri $asset.browser_download_url -OutFile $installer -UseBasicParsing -TimeoutSec 120
+$actualHash = (Get-FileHash -LiteralPath $installer -Algorithm SHA256).Hash.ToLowerInvariant()
+if ($expectedHash -ne $actualHash) {
+    Remove-Item -LiteralPath $installer -Force
+    throw 'Downloaded installer failed checksum verification. Nothing was installed.'
+}
+Write-Host 'Checksum verified against GitHub release metadata. Opening the installer...'
+Write-Warning 'Verify the publisher and installer options before proceeding. This is not Authenticode validation.'
+$answer = Read-Host 'Run the Windows installer now? Type YES'
+if ($answer -cne 'YES') { Write-Host "Installer saved at $installer"; exit 0 }
+Start-Process -FilePath $installer -Verb RunAs -Wait
+ } | Select-Object -First 1
 if (!$asset) { throw "No Windows installer attached to $($release.tag_name). Open $($release.html_url)" }
 # Release-asset digest comes from GitHub's asset metadata. If absent, require
 # a manual download; never silently execute a package without verification.
