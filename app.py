@@ -6,7 +6,6 @@ from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
-import base64
 import hashlib
 import hmac
 import secrets
@@ -20,7 +19,6 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
 import logging
 from logging.handlers import RotatingFileHandler
-import mimetypes
 import os
 import sys
 from pathlib import Path
