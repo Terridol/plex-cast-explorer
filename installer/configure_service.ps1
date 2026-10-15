@@ -141,8 +141,27 @@ if ($service) {
     if ($registeredPath -ne $wrapper -and $registeredPath -ne ('"' + $wrapper + '"')) {
         throw "Existing service runs a different executable: $registeredPath. Refusing to modify another service."
     }
-    if ($registered.StartName -notin @('NT AUTHORITY\LocalService', 'LocalService')) {
-        throw "Existing service account is not LocalService: $($registered.StartName). Review service permissions before upgrade."
+    # Older pre-Inno installations may have registered WinSW under
+    # LocalSystem even though the current XML requests LocalService. Upgrade
+    # that known legacy identity in place: never delete/recreate the service
+    # or broaden permissions, and never take over a custom service account.
+    $registeredAccount = ([string]$registered.StartName).Trim()
+    if ($registeredAccount -in @('LocalSystem', '.\LocalSystem', 'NT AUTHORITY\SYSTEM')) {
+        Write-Host 'Migrating legacy Plex Cast Explorer service from LocalSystem to LocalService...'
+        # Start-Process receives an explicit command line so the required
+        # empty password is preserved by Windows PowerShell 5.1.
+        $scPath = Join-Path $env:WINDIR 'System32\sc.exe'
+        $scArguments = 'config "{0}" obj= "NT AUTHORITY\LocalService" password= ""' -f $serviceName
+        $migration = Start-Process -FilePath $scPath -ArgumentList $scArguments -PassThru -Wait -WindowStyle Hidden -ErrorAction Stop
+        if ($migration.ExitCode -ne 0) {
+            throw "Could not migrate service to LocalService (sc.exe exit code $($migration.ExitCode)). Existing registration was preserved."
+        }
+        $registered = Get-CimInstance -ClassName Win32_Service -Filter "Name='$serviceName'" -ErrorAction Stop
+        if (-not $registered) { throw 'Service registration missing after account migration.' }
+        $registeredAccount = ([string]$registered.StartName).Trim()
+    }
+    if ($registeredAccount -notin @('NT AUTHORITY\LocalService', 'LocalService')) {
+        throw "Existing service account is not LocalService: $registeredAccount. Refusing to modify an unrecognized service identity."
     }
     # Reapply automatic delayed startup using the Windows SCM's supported
     # configuration command; WinSW reads the new XML on the subsequent start.
