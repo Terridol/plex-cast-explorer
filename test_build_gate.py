@@ -23,6 +23,15 @@ class BuildGateRegressionTests(unittest.TestCase):
             with self.assertRaises(build_gate.GateFailure):
                 build_gate.check_install_contract(root)
 
+    def test_missing_cpython_license_packaging_is_fatal(self):
+        self.assert_mutation_blocked('build_installer_windows.ps1',
+                                     'Python-LICENSE.txt', 'missing-python-license.txt')
+
+    def test_missing_project_notice_is_fatal(self):
+        self.assert_mutation_blocked('PlexCastExplorer.iss',
+                                     'Source: "NOTICE"; DestDir: "{app}"',
+                                     'Source: "NOT_A_NOTICE"; DestDir: "{app}"')
+
     def test_version_drift_is_fatal(self):
         self.assert_mutation_blocked('PlexCastExplorer.iss',
                                     '#define AppVersion "1.0.0"',
