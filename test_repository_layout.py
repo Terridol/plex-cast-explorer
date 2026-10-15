@@ -18,6 +18,10 @@ OBSOLETE = (
     "docs/INSTALLATION.md",
     "docs/WINDOWS_SERVICE.md",
     "docs/PUBLICATION_STATUS.md",
+    "docs/BRANCHING.md",
+    "docs/RELEASE.md",
+    "docs/MAINTAINERS.md",
+    "legal/CONTRIBUTOR_LICENSE_AGREEMENT_PROPOSAL.md",
     ".github/PULL_REQUEST_TEMPLATE.md",
     ".github/CODEOWNERS",
 )
@@ -57,11 +61,30 @@ class RepositoryLayoutTests(unittest.TestCase):
                     if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef))
                 ]
                 self.assertEqual(len(names), len(set(names)), "Duplicate Python module definition")
+                for node in tree.body:
+                    if isinstance(node, ast.ClassDef):
+                        methods = [
+                            child.name for child in node.body
+                            if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef))
+                        ]
+                        self.assertEqual(len(methods), len(set(methods)),
+                                         f"Duplicate method in {node.name}")
+                main_guards = [
+                    node for node in tree.body
+                    if isinstance(node, ast.If)
+                    and isinstance(node.test, ast.Compare)
+                    and isinstance(node.test.left, ast.Name)
+                    and node.test.left.id == "__name__"
+                ]
+                self.assertLessEqual(len(main_guards), 1,
+                                     "Duplicate Python __main__ block")
 
     def test_local_markdown_links_resolve(self):
         # Internal doc links cannot refer to files removed by cleanup.
         pattern = re.compile(r"\]\(([^)]+)\)")
-        for path in list(ROOT.glob("*.md")) + list((ROOT / "docs").rglob("*.md")):
+        for path in (list(ROOT.glob("*.md")) +
+                     list((ROOT / "docs").rglob("*.md")) +
+                     list((ROOT / "legal").rglob("*.md"))):
             text = path.read_text(encoding="utf-8-sig")
             for raw in pattern.findall(text):
                 target = raw.split("#", 1)[0].strip().strip("<>")
