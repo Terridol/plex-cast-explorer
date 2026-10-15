@@ -5,7 +5,9 @@ import json
 import os
 import ipaddress
 import unittest
+import socket
 from pathlib import Path
+from urllib.parse import parse_qs, urlsplit
 from unittest.mock import patch
 import xml.etree.ElementTree as ET
 import app
@@ -157,10 +159,69 @@ class PlexCastExplorerTests(unittest.TestCase):
                              b'\xff\xd8\xffimage')
             request.assert_called_once_with('/portrait/2', timeout=12,
                                              max_bytes=app.MAX_PLEX_IMAGE_BYTES)
-            with self.assertRaisesRegex(ValueError, 'not allowed'):
+            with self.assertRaisesRegex(ValueError, 'public HTTPS'):
                 app.plex_image_bytes('https://untrusted.example/portrait.jpg')
-            with self.assertRaisesRegex(ValueError, 'not allowed'):
+            with self.assertRaisesRegex(ValueError, 'public HTTPS'):
                 app.plex_image_bytes('http://untrusted.example/portrait.jpg')
+
+    def test_custom_scraper_https_role_thumb_is_fetched_through_plex(self):
+        custom_url = 'https://cdn.custom-actor-images.org/actors/sample.jpg'
+        def custom_xml(path):
+            item = self.fake_xml(path)
+            if path == '/library/metadata/101':
+                item.find('Role').set('thumb', custom_url)
+            return item
+        resolved = [(socket.AF_INET, socket.SOCK_STREAM, 6, '',
+                     ('93.184.216.34', 443))]
+        with patch.dict(os.environ, {'PLEX_URL': '', 'PLEX_TOKEN': ''}):
+            app.save_config('http://127.0.0.1:32400', 'example-token')
+            with patch.object(app, 'plex_xml', side_effect=custom_xml), \
+                 patch.object(app.socket, 'getaddrinfo', return_value=resolved) as dns, \
+                 patch.object(app, 'request_plex',
+                              return_value=b'\xff\xd8\xffCustom') as plex:
+                app.sync_all(force=True)
+                self.assertEqual(app.status_snapshot()['phase'], 'Finished')
+                self.assertEqual(plex.call_count, 1)
+                proxied = plex.call_args.args[0]
+                self.assertTrue(proxied.startswith('/photo/:/transcode?'))
+                self.assertEqual(parse_qs(urlsplit(proxied).query)['url'], [custom_url])
+                self.assertNotIn('X-Plex-Token', proxied)
+                dns.assert_called_once_with('cdn.custom-actor-images.org', 443,
+                                            type=socket.SOCK_STREAM)
+                app.image_bytes.cache_clear()
+                self.assertEqual(app.image_bytes('actor', 'sample actor'),
+                                 b'\xff\xd8\xffCustom')
+                self.assertEqual(plex.call_count, 1)
+
+    def test_private_custom_scraper_image_is_not_proxied_through_plex(self):
+        urls = ('http://192.168.1.20:3000/actors/a.jpg',
+                'https://127.0.0.1/photo.jpg',
+                'https://actor-images.local/photo.jpg',
+                'https://actor-images.example/photo.jpg',
+                'https://user:password@cdn.example.org/actor.jpg')
+        with patch.object(app, 'request_plex') as plex:
+            for url in urls:
+                with self.subTest(url=url):
+                    with self.assertRaisesRegex(ValueError, 'public HTTPS'):
+                        app.plex_image_bytes(url)
+            plex.assert_not_called()
+
+    def test_custom_scraper_dns_must_resolve_only_public_addresses(self):
+        url = 'https://cdn.custom-actor-images.org/actors/sample.jpg'
+        cases = (
+            [('192.168.1.50', 443)],
+            [('93.184.216.34', 443), ('10.0.0.9', 443)],
+            [('::1', 443)],
+        )
+        for targets in cases:
+            resolved = [(socket.AF_INET6 if ':' in addr else socket.AF_INET,
+                         socket.SOCK_STREAM, 6, '', (addr, port)) for addr, port in targets]
+            with self.subTest(targets=targets), \
+                 patch.object(app.socket, 'getaddrinfo', return_value=resolved), \
+                 patch.object(app, 'request_plex') as plex:
+                with self.assertRaisesRegex(ValueError, 'public HTTPS'):
+                    app.plex_image_bytes(url)
+                plex.assert_not_called()
 
     def test_provider_json_reads_large_valid_credit_payload_without_truncating(self):
         # Regression: ThePornDB sometimes returns scene-credit JSON larger
