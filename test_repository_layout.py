@@ -8,6 +8,7 @@ ROOT = Path(__file__).resolve().parent
 
 OBSOLETE = (
     "manage.py",
+    "BUILD-EXE.cmd",
     "build_windows_exe.ps1",
     "installer/stop_for_upgrade.ps1",
     "start_windows.bat",
@@ -24,7 +25,6 @@ REQUIRED = (
     "app.py",
     "PlexCastExplorer.iss",
     "BUILD-INSTALLER.cmd",
-    "BUILD-EXE.cmd",
     "build_installer_windows.ps1",
     "build_gate.py",
     "scripts/validate_powershell.ps1",
