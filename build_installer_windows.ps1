@@ -93,15 +93,22 @@ if (-not (Test-Path -LiteralPath $exe -PathType Leaf)) {
 Invoke-LocalGate 'exe'
 
 # Preserve the license from the exact CPython runtime used by PyInstaller.
-# Windows Python installations generally include LICENSE.txt in sys.base_prefix.
-$runtimeLicense = @(& $py.Source -3 -c 'import pathlib,sys; print(pathlib.Path(sys.base_prefix) / "LICENSE.txt")')
-if ($LASTEXITCODE -ne 0 -or $runtimeLicense.Count -ne 1 -or
-    !(Test-Path -LiteralPath $runtimeLicense[0] -PathType Leaf)) {
-    throw 'CPython LICENSE.txt is missing from the build interpreter; cannot produce a compliant installer.'
+# Windows PowerShell 5.1 can strip nested quotes from native -c arguments:
+# Python then evaluates LICENSE.txt as a variable, causing NameError.
+# Ask Python only for sys.base_prefix (no nested quotes) and construct the
+# license path with PowerShell. Keep the same Python -3 selection as PyInstaller.
+$pythonPrefix = @(& $py.Source -3 -c 'import sys; print(sys.base_prefix)')
+if ($LASTEXITCODE -ne 0 -or $pythonPrefix.Count -ne 1 -or
+    [string]::IsNullOrWhiteSpace($pythonPrefix[0])) {
+    throw 'Cannot determine the CPython build interpreter directory.'
+}
+$runtimeLicense = Join-Path -Path $pythonPrefix[0].Trim() -ChildPath 'LICENSE.txt'
+if (-not (Test-Path -LiteralPath $runtimeLicense -PathType Leaf)) {
+    throw "CPython license not found in the build interpreter: $runtimeLicense"
 }
 $bundledLicenses = Join-Path $root 'dist\PlexCastExplorer\licenses'
 New-Item -ItemType Directory -Path $bundledLicenses -Force | Out-Null
-Copy-Item -LiteralPath $runtimeLicense[0] -Destination (Join-Path $bundledLicenses 'Python-LICENSE.txt') -Force -ErrorAction Stop
+Copy-Item -LiteralPath $runtimeLicense -Destination (Join-Path $bundledLicenses 'Python-LICENSE.txt') -Force -ErrorAction Stop
 Write-Host 'Included CPython runtime license alongside the bundled interpreter.'
 
 $winswDir = Join-Path $root 'installer-assets'
