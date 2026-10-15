@@ -197,16 +197,40 @@ if (-not $iscc) {
     $iscc = Get-ISCC
     if (-not $iscc) { throw 'Inno Setup installed but ISCC.exe was not found. Reopen PowerShell and retry.' }
 }
-# Delete an old artifact first: a failed compile must never look like success.
-$installer = if ($Release) {
-    Join-Path $root ("output\PlexCastExplorer-Setup-$appVersion-win-x64.exe")
+# Delete an old artifact first: every build must have a clean output folder.
+# Scope cleanup ONLY to this repository's output directory, never ProgramData,
+# the installed application, dist, build, or source files. Refuse filesystem
+# redirection (junctions/symlinks) rather than risking recursive deletion
+# outside output. Run just before Inno Setup so early build failures do not
+# destroy the last successful installer unnecessarily.
+$outputDir = Join-Path $root 'output'
+if (Test-Path -LiteralPath $outputDir) {
+    $outputItem = Get-Item -LiteralPath $outputDir -Force -ErrorAction Stop
+    if (-not $outputItem.PSIsContainer -or
+        (($outputItem.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0)) {
+        throw 'Refusing to clear output: expected a real directory, not a file or reparse point.'
+    }
+    $linkedEntry = Get-ChildItem -LiteralPath $outputDir -Recurse -Force -ErrorAction Stop |
+        Where-Object { ($_.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0 } |
+        Select-Object -First 1
+    if ($linkedEntry) {
+        throw "Refusing to clear output: junction or symbolic link found at $($linkedEntry.FullName)."
+    }
+    Get-ChildItem -LiteralPath $outputDir -Force -ErrorAction Stop |
+        Remove-Item -Force -Recurse -ErrorAction Stop
 } else {
-    Join-Path $root ("output\PlexCastExplorer-Setup-$appVersion-$buildId-win-x64.exe")
+    New-Item -ItemType Directory -Path $outputDir -Force -ErrorAction Stop | Out-Null
+}
+if (@(Get-ChildItem -LiteralPath $outputDir -Force -ErrorAction Stop).Count -ne 0) {
+    throw 'Output cleanup failed; refusing to write an installer into a nonempty output folder.'
+}
+Write-Host '[CLEAN] Cleared installer output folder before packaging.'
+$installer = if ($Release) {
+    Join-Path $outputDir ("PlexCastExplorer-Setup-$appVersion-win-x64.exe")
+} else {
+    Join-Path $outputDir ("PlexCastExplorer-Setup-$appVersion-$buildId-win-x64.exe")
 }
 $checksum = $installer + '.sha256'
-# Keep older build IDs in the output folder for side-by-side comparison.
-# Delete only the current ID's artifact to avoid reporting a stale result.
-Remove-Item -LiteralPath $installer,$checksum -Force -ErrorAction SilentlyContinue
 Write-Host "Compiling Setup.exe with $iscc"
 $oldPref = $ErrorActionPreference
 try {
