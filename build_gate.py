@@ -69,6 +69,13 @@ def check_install_contract(root: Path) -> str:
     require('ewWaitUntilTerminated' in spec and 'if ExitCode <> 0 then' in spec and
             'RaiseException(' in spec and '-ExpectedVersion ' in spec,
             'Installer must block Finish when service startup/readiness fails')
+    require('installer-last-error.txt' in service and
+            'installer-error-details.log' in service and
+            'trap {' in service and 'exit 1' in service and
+            'LoadStringFromFile(FailurePath, FailureRaw)' in spec and
+            'FailureRaw: AnsiString' in spec and
+            'FailureReason := Trim(FailureRaw)' in spec,
+            'Installer must record and display the real PowerShell startup failure')
     run_section = spec.split('[Run]', 1)[-1].split('[UninstallRun]', 1)[0]
     require('configure_service.ps1' not in run_section,
             'Service start must not be hidden as a normal [Run] action')
