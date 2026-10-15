@@ -434,7 +434,9 @@ def cache_plex_portraits() -> int:
                     failures += 1
                     if failures <= 3:
                         logging.warning('Plex portrait download failed (%s)', type(exc).__name__)
-                        state_update(last_error='Plex portraits: ' + str(exc)[:150])
+                        # Do not expose provider URLs or token-bearing query strings
+                        # through the browser-visible sync status endpoint.
+                        state_update(last_error='Plex portrait retrieval failed (' + type(exc).__name__ + ')')
                 processed += 1
                 state_update(current=processed)
             if failures >= MAX_PLEX_PORTRAIT_ERRORS_PER_SYNC:
