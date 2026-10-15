@@ -47,7 +47,7 @@ class RepositoryLayoutTests(unittest.TestCase):
 
     def test_python_files_parse_without_duplicate_module_functions(self):
         for path in ROOT.rglob("*.py"):
-            if any(part in {"build", "dist", "output", ".venv"} for part in path.parts):
+            if any(part in {"build", "dist", "output", ".venv", "venv", "__pycache__", ".git", "installer-assets"} for part in path.parts):
                 continue
             with self.subTest(source=str(path.relative_to(ROOT))):
                 tree = ast.parse(path.read_text(encoding="utf-8-sig"), filename=str(path))
