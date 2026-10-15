@@ -121,7 +121,7 @@ class PlexCastExplorerTests(unittest.TestCase):
                              {'mode':'remote','base':'https://app.plex.tv/desktop/'})
             self.assertEqual(app.plex_link_config('10.10.20.45', '10.44.10.30')['mode'], 'remote')
 
-    @patch.object(app, 'provider_enabled', side_effect=lambda name: name in ('tmdb', 'wikimedia'))
+    @patch.object(app, 'provider_enabled', new=lambda name: name in ('tmdb', 'wikimedia'))
     def test_artwork_search_matches_exact_name_and_multiple_providers(self):
         with patch.object(app, 'plex_xml', side_effect=self.fake_xml):
             app.sync_all(force=True)
@@ -241,7 +241,7 @@ class PlexCastExplorerTests(unittest.TestCase):
         self.assertEqual(app.enrichment_status()['single_batch']['skipped'], 1)
         self.assertEqual(app.enrichment_status()['review_waiting'], 1)
 
-    @patch.object(app, 'provider_enabled', side_effect=lambda name: name in ('tmdb', 'wikimedia'))
+    @patch.object(app, 'provider_enabled', new=lambda name: name in ('tmdb', 'wikimedia'))
     def test_provider_verification_uses_both_movie_and_tv_credits(self):
         with patch.object(app, 'plex_xml', side_effect=self.fake_xml):
             app.sync_all(force=True)
@@ -336,7 +336,7 @@ class PlexCastExplorerTests(unittest.TestCase):
         self.assertEqual(app.provider_other_credits(local, remote+[{'title':'Different Project','year':2020}]),
                          [{'title':'Different Project','year':2020}])
 
-    @patch.object(app, 'provider_enabled', side_effect=lambda name: name in ('tmdb', 'wikimedia'))
+    @patch.object(app, 'provider_enabled', new=lambda name: name in ('tmdb', 'wikimedia'))
     def test_unmatched_is_not_automatically_assigned(self):
         with patch.object(app, 'plex_xml', side_effect=self.fake_xml):
             app.sync_all(force=True)
