@@ -85,6 +85,16 @@ class BuildGateRegressionTests(unittest.TestCase):
                                     'Get-CimInstance -ClassName Win32_Service',
                                     'Get-Service -Name $serviceName')
 
+    def test_corrupted_git_revision_regex_is_fatal(self):
+        self.assert_mutation_blocked('build_installer_windows.ps1',
+                                    "$gitHead[-1] -match '^[0-9a-fA-F]{8}$'",
+                                    "$gitHead[-1] -match '^[0-9a-fA-F]{8}")
+
+    def test_duplicated_build_body_is_fatal(self):
+        self.assert_mutation_blocked('build_installer_windows.ps1',
+                                    "# Delete an old artifact first:",
+                                    "# Delete an old artifact first: duplicated\\n# Delete an old artifact first:")
+
     def test_missing_windows_powershell_parse_preflight_is_fatal(self):
         self.assert_mutation_blocked('BUILD-INSTALLER.cmd',
                                     'scripts\\validate_powershell.ps1',
