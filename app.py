@@ -355,19 +355,24 @@ def plex_image_bytes(thumb: str) -> bytes:
             raise ValueError('External Plex image source not allowed')
     if len(raw) > MAX_PLEX_IMAGE_BYTES:
         raise ValueError('Plex portrait exceeds 4 MB safety limit')
-    if not (raw.startswith(b'\xff\xd8\xff') or raw.startswith(b'\x89PNG\r\n\x1a\n') or
-            (raw.startswith(b'RIFF') and raw[8:12] == b'WEBP')):
+    if not valid_plex_image(raw):
         raise ValueError('Plex image is not JPEG, PNG, or WebP')
     return raw
+
+
+def valid_plex_image(raw: bytes) -> bool:
+    return bool(raw) and (raw.startswith(b'\xff\xd8\xff') or
+                          raw.startswith(b'\x89PNG\r\n\x1a\n') or
+                          (raw.startswith(b'RIFF') and raw[8:12] == b'WEBP'))
 
 
 def cached_plex_portrait(thumb: str) -> bytes:
     """Cache verified Plex thumbnails without changing manual artwork overrides."""
     path = plex_portrait_cache_path(thumb)
     try:
-        if path.is_file():
+        if path.is_file() and not path.is_symlink():
             raw = path.read_bytes()
-            if raw and len(raw) <= MAX_PLEX_IMAGE_BYTES:
+            if len(raw) <= MAX_PLEX_IMAGE_BYTES and valid_plex_image(raw):
                 return raw
     except OSError:
         pass  # A damaged cache must not prevent a fresh Plex image request.
@@ -382,7 +387,10 @@ def cached_plex_portrait(thumb: str) -> bytes:
         logging.warning('Could not save Plex portrait cache (%s)', type(exc).__name__)
     finally:
         if temp_path is not None:
-            temp_path.unlink(missing_ok=True)
+            try:
+                temp_path.unlink(missing_ok=True)
+            except OSError:
+                pass
     return raw
 
 
@@ -396,8 +404,15 @@ def cache_plex_portraits() -> int:
             WHERE a.thumb != '' AND NOT EXISTS (
                 SELECT 1 FROM actor_art art WHERE art.actor_key = a.actor_key)
             GROUP BY a.thumb""").fetchall()
-    pending = [r['thumb'] for r in rows
-               if not plex_portrait_cache_path(r['thumb'], config['url']).is_file()]
+    def needs_download(thumb):
+        path = plex_portrait_cache_path(thumb, config['url'])
+        try:
+            return (not path.is_file() or path.is_symlink() or
+                    not 0 < path.stat().st_size <= MAX_PLEX_IMAGE_BYTES)
+        except OSError:
+            return True
+
+    pending = [r['thumb'] for r in rows if needs_download(r['thumb'])]
     if not pending:
         return 0
     state_update(phase='Caching Plex actor portraits', current=0, total=len(pending))
