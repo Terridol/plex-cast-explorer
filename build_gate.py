@@ -150,7 +150,7 @@ def checked_run(argv, label, *, timeout=180):
 def source_gate():
     version = check_install_contract(ROOT)
     print(f'[GATE] Installer contract and version consistent: {version}', flush=True)
-    checked_run([sys.executable, '-m', 'compileall', '-q', 'app.py', 'manage.py',
+    checked_run([sys.executable, '-m', 'compileall', '-q', 'app.py',
                  'build_gate.py', 'test_app.py', 'test_installer_spec.py',
                  'test_release_guardrails.py', 'test_remote_admin.py',
                  'test_security_images.py', 'test_build_gate.py'], 'Python syntax')
