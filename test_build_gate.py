@@ -1,7 +1,5 @@
 """Mutation/regression tests: invalid installer edits MUST block local builds."""
-import tempfile
 import unittest
-from pathlib import Path
 from unittest.mock import patch
 
 import build_gate
