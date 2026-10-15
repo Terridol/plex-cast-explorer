@@ -2,12 +2,12 @@
 
 The new Windows wizard **replaces the manual service-migration process**. It is built with [Inno Setup 6](https://jrsoftware.org/isinfo.php) and installs Plex Cast Explorer as an Automatic (Delayed Start) Windows service under the restricted `LocalService` account. The compiled installer includes the PyInstaller application and a SHA-256-pinned WinSW service wrapper, so **end users do not need Python, PyInstaller or Inno Setup**.
 
-> **Build status:** Source and application tests passed locally, but the Windows Inno compiler and Windows-service integration have **not yet been exercised** in this environment. Build and test the installer on Windows before promoting to `main`.
+> **Build status:** A developer has compiled Windows installers and exercised upgrades on Windows; earlier builds failed from an unsupported WinSW command and PowerShell syntax errors. These failures are covered by new regression checks but a successful clean-install/upgrade/reboot test is **still required** before a public beta. Build and test the installer on Windows before promoting to `main`.
 
 ## Build one real Setup.exe on Windows
 
-1. Extract the source kit into a clean directory. Use Windows 10/11 x64 with Python 3.10+ (3.13 tested).
-2. Double-click **`BUILD-INSTALLER.cmd`**. It calls `BUILD-EXE.cmd` if necessary, downloads or installs Inno Setup 6 if needed, and obtains the pinned WinSW service executable (preferring the verified copy from the existing installation).
+1. Clone `dev` in GitHub Desktop and pull the latest commits. Use Windows 10/11 x64 with Python 3.10+ on the build machine (3.13 tested).
+2. Double-click **`BUILD-INSTALLER.cmd`**. It validates every active PowerShell script **before** building, runs source/negative regression checks, calls its internal `BUILD-EXE.cmd` helper, downloads or installs Inno Setup 6 if needed, and obtains the pinned WinSW service executable (preferring the verified copy from the existing installation).
 3. Each local `dev` build gets a unique installer ID including **UTC date/time (milliseconds)** and a short **Git commit** (or source fingerprint fallback), such as `output/PlexCastExplorer-Setup-0.4.7-beta-dev-20261014-203512123-g23a496e7-win-x64.exe`. The build ID is also displayed in Setup and in Windows Installed Apps, while the stable `AppId` stays unchanged for in-place upgrades. A matching `.sha256` accompanies the EXE. Older installers are retained in `output`. Distribute only the compiled installer and checksum, **not** local ProgramData.
 4. Scan the installer and review its digital signature before distribution. It is **not Authenticode-signed** until the maintainer signs it; do not advise disabling Windows SmartScreen or antivirus.
 
