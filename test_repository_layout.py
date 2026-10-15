@@ -49,6 +49,29 @@ class RepositoryLayoutTests(unittest.TestCase):
             with self.subTest(required=path):
                 self.assertTrue((ROOT / path).is_file(), f"Required Windows file missing: {path}")
 
+    def test_no_redundant_windows_launchers_or_unvalidated_scripts(self):
+        # The Windows service/installer distribution intentionally has one
+        # CMD entry point and exactly six purpose-specific PowerShell files.
+        batch = {p.relative_to(ROOT).as_posix()
+                 for p in list(ROOT.glob('*.cmd')) + list(ROOT.glob('*.bat'))}
+        self.assertEqual(batch, {'BUILD-INSTALLER.cmd'})
+        powershell = {p.relative_to(ROOT).as_posix()
+                      for folder in (ROOT, ROOT / 'installer', ROOT / 'scripts')
+                      for p in folder.glob('*.ps1')}
+        self.assertEqual(powershell, {
+            'build_installer_windows.ps1',
+            'installer/check_updates.ps1',
+            'installer/configure_password.ps1',
+            'installer/configure_service.ps1',
+            'installer/uninstall_cleanup.ps1',
+            'scripts/validate_powershell.ps1',
+        })
+        parser = (ROOT / 'scripts/validate_powershell.ps1').read_text(encoding='utf-8')
+        self.assertIn("Get-ChildItem -LiteralPath $directory -Filter '*.ps1' -File", parser)
+        self.assertIn("Join-Path $root 'installer'", parser)
+        self.assertIn("Join-Path $root 'scripts'", parser)
+        self.assertIn('[System.Management.Automation.Language.Parser]::ParseFile(', parser)
+
     def test_python_files_parse_without_duplicate_module_functions(self):
         for path in ROOT.rglob("*.py"):
             if any(part in {"build", "dist", "output", ".venv", "venv", "__pycache__", ".git", "installer-assets"} for part in path.parts):
