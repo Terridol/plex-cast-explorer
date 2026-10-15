@@ -30,6 +30,26 @@ class BuildGateRegressionTests(unittest.TestCase):
                                     '#define AppVersion "0.4.7-beta"',
                                     '#define AppVersion "9.0.0"')
 
+    def test_powershell_version_regex_double_escaping_is_fatal(self):
+        # This passed older string-only checks, then failed AFTER the EXE
+        # gate because PowerShell preserves backslashes in double quotes.
+        self.assertLess(
+            (build_gate.ROOT / 'build_installer_windows.ps1').read_text(
+                encoding='utf-8-sig').index('$appVersionMatch = [regex]::Match'),
+            (build_gate.ROOT / 'build_installer_windows.ps1').read_text(
+                encoding='utf-8-sig').index("Invoke-Python @('-c'")
+        )
+
+    def test_updater_version_mismatch_is_fatal(self):
+        self.assert_mutation_blocked('installer/check_updates.ps1',
+                                     "$installed = '0.4.7-beta'",
+                                     "$installed = '0.4.6-beta'")
+
+    def test_service_version_mismatch_is_fatal(self):
+        self.assert_mutation_blocked('installer/configure_service.ps1',
+                                     "$ExpectedVersion = '0.4.7-beta'",
+                                     "$ExpectedVersion = '0.4.6-beta'")
+
     def test_dev_build_id_has_strict_format(self):
         build_gate.validate_build_id('dev-20261014-203512123-g23a496e7')
         build_gate.validate_build_id('dev-20261014-203512123-s01234567')
