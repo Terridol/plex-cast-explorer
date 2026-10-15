@@ -13,6 +13,15 @@ Changes are committed directly to `dev`. After successful local checks and expli
 
 The maintainer prohibits GitHub Actions, hosted builds, deployments, and other GitHub-run processes unless separately authorized. **The GitHub Actions workflow was removed from `dev`.** The older workflow may still exist on `main`; do not push to `main` until Actions have been disabled in repository settings or the automatic triggers can be safely removed without launching jobs.
 
+## GitHub Desktop workflow
+
+1. Clone `Terridol/plex-cast-explorer` once in GitHub Desktop.
+2. Use **Current Branch → dev**. Click **Fetch origin** and **Pull origin** before building.
+3. In the checked-out repository folder, double-click `BUILD-INSTALLER.cmd` to run the mandatory local source, compiled EXE and installer artifact gates and build Setup.exe.
+4. Commit development updates only to `dev`; share installer files separately when a beta is approved. Do not commit `output/`, `dist/`, `build/`, `installer-assets/`, local database or credentials.
+
+The source/build gate is documented in [BUILD_GATES.md](BUILD_GATES.md). An installer that compiles is not proof that Windows installation or upgrade succeeded; test those in an isolated VM before a public release.
+
 Run tests locally:
 
 ```powershell
