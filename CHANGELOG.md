@@ -1,5 +1,16 @@
 # Changelog
 
+## dev — Windows installer and repository cleanup
+
+- Repaired `installer/check_updates.ps1`: restored its terminated filename pattern and removed a duplicated download block; added regression tests that reproduce both faults.
+- Repaired `build_gate.py` and `test_build_gate.py`: removed accidentally duplicated module/test sections and restored the updater-guard regular expression.
+- Kept one supported Windows installation entry point (`BUILD-INSTALLER.cmd`), retaining `BUILD-EXE.cmd` only as the internal executable build helper.
+- Removed obsolete direct-run launchers, redundant `manage.py`, unused standalone PyInstaller and service-migration scripts, obsolete installation documents, and unused PR metadata.
+- Reduced nested duplicate source-test execution; retained mandatory PowerShell syntax preflight, source regression and mutation tests, compiled EXE smoke, Inno Setup compilation, and installer artifact/digest check.
+- Updated all installation, contributor, provider, troubleshooting and release documents to match the Windows service deployment.
+- Kept application index, provider, authentication and cache logic unchanged except for retiring an outdated password instruction; preserve the existing Plex database, tokens and portraits during upgrades.
+- Real Windows clean-install, in-place upgrade, reboot and uninstall testing remains mandatory before publishing a public beta.
+
 ## v0.4.7-beta — Windows setup startup verification
 
 - Correct malformed PowerShell build script introduced by dev build-ID versioning: remove duplicated installer sections and restore complete Git revision/build-ID regex.
