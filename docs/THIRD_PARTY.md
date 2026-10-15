@@ -12,11 +12,13 @@ PyInstaller bundles Python and dependencies into the application executable. The
 
 Users supply their own Plex tokens. Plex metadata and upstream images remain subject to Plex and underlying rights-holder terms. Keep all tokens out of commits, exports, logs and URLs sent to external providers.
 
-## TMDB — BLOCKED in public v1.0
+## TMDB — primary opt-in provider
 
-TMDB's [API Terms](https://www.themoviedb.org/api-terms-of-use) prohibit connecting TMDB API/content to pornographic uses and require approved-logo attribution and notice for approved API integrations. See [official FAQ](https://developer.themoviedb.org/docs/faq). **The v1.0 distribution cannot initiate TMDB API calls or new TMDB image downloads**; saved tokens and previous environment flags cannot reenable the integration. We have **not** obtained written permission, so no TMDB brand logo or misleading active-API attribution is included in the release. Previously saved local artwork is left untouched to avoid destructive migrations; individual users must assess any required purge or removal.
+TMDB is the preferred provider when a Plex portrait is missing, but **disabled by default**. The operator reports permission for their intended use has been resolved; this statement is not an independent verification or a blanket license for anyone downloading the public installer. Each user remains responsible for meeting TMDB's [API Terms](https://www.themoviedb.org/api-terms-of-use), including restrictions on pornographic content and any separately granted authorization. Without permission to use TMDB for the specific deployment and its material, leave the TMDB installer task unchecked.
 
-The application removes TMDB-source portrait overrides after 180 days and expires old lookup result records. This helps with cache duration but does not address every possible TMDB usage restriction.
+The app provides one [official, unmodified TMDB logo](https://www.themoviedb.org/about/logos-attribution) in the gallery footer and About/Privacy page, linked to [TMDB](https://www.themoviedb.org), beneath the app's own branding. It displays TMDB's required notice: "This product uses TMDB and the TMDB APIs but is not endorsed, certified, or otherwise approved by TMDB." See TMDB's [FAQ](https://developer.themoviedb.org/docs/faq) and [logos policy](https://www.themoviedb.org/about/logos-attribution). The actual logo asset is loaded from TMDB's official site, unmodified, so browser access to that hostname is required to see it. Check its availability during real Windows acceptance testing.
+
+A saved API token does not activate TMDB; the installer sets the service opt-in. Provider credits and portrait overrides are cached locally; TMDB portrait overrides older than 180 days and old enrichment records are pruned. If TMDB permission is revoked or expires, stop enabling the provider and remove or expire TMDB content as applicable. The project source license does not license TMDB trademarks, images or API use.
 
 ## ThePornDB — optional API token
 

@@ -1,23 +1,28 @@
-# Artwork providers and rights — v1.0
+# Artwork providers and attribution — v1.0
 
-Plex Cast Explorer first uses portrait metadata from **your own Plex server**. Its installer does not ship downloaded actor portraits, provider API credentials, Plex media, or cached provider content.
+Plex Cast Explorer first uses actor portraits supplied by **your own Plex server**. It never bundles downloaded provider portraits or credentials inside Setup.
 
-## Available in 1.0
+## Provider priority
 
-- **Plex metadata and artwork:** Used by default through the operator's authenticated Plex Media Server, subject to Plex's terms and the underlying image rights.
-- **ThePornDB:** Optional, only after the operator configures their own API token. Confirm the provider's current API terms, image rights, privacy/publicity rights, and any applicable attribution before using portraits. The maintainers have not obtained or verified a general artwork redistribution license. External requests transmit performer names and filmography context to the provider.
+1. **Plex:** Use an existing Plex actor image without contacting a third party.
+2. **TMDB:** For actors lacking Plex portraits, query TMDB **only when enabled through the Windows installer** and a TMDB API token is configured. This is the preferred external artwork provider. Require a matching performer name, a nonempty profile image, and corroborating Plex credits for automatic enrichment. If no matching TMDB portrait is found, proceed to step 3.
+3. **ThePornDB:** Only queried as the fallback when TMDB yields no suitable image or is unavailable. Requires its own API token, independent of TMDB. Title/credit overlap is still required for automatic saving.
+4. **Review / unmatched:** Uncertain matches stay for manual review. A provider error blocks automatic assignment. Unmatched actors can be explicitly rescanned after improving provider settings. Successfully applied portraits, skipped/review decisions and Plex metadata are not reset by the unmatched-rescan action.
 
-## Disabled in 1.0
+TMDB lookups remain **disabled by default**: a saved token alone does not turn them on. Choose **Enable TMDB lookups** during Windows Setup and configure the API Read Access Token in Settings. The installer writes `CAST_EXPLORER_ENABLE_TMDB=1` to the WinSW service environment when selected. Prior installer settings may be remembered on upgrade. A valid authorization covering the actual media categories and distribution is necessary; the operator confirms this requirement has been resolved for their deployment. The project cannot independently certify third-party permission from a configuration toggle.
 
-- **TMDB:** No new API lookups, credential enrollment, automatic portrait matching, or portrait downloads. TMDB's [API terms](https://www.themoviedb.org/api-terms-of-use) restrict uses connected with pornographic content and require approved-logo attribution. This app supports adult-media libraries and has not obtained written authorization for that use. The old `CAST_EXPLORER_ENABLE_TMDB=1` flag and saved tokens cannot enable it. The setup wizard no longer offers the option.
-- **Wikimedia Commons:** No new lookups or Wikimedia image downloads. File-specific copyright/attribution obligations are not yet represented and verified by the app. The old `CAST_EXPLORER_ENABLE_WIKIMEDIA=1` flag cannot enable it.
+## TMDB attribution and conditions
 
-Existing locally saved portraits and SQLite records are **not purged by upgrading**. Previously cached artwork remains the operator's responsibility under the relevant rights and retention terms; local preservation is not proof of permission to publish, distribute, or display a third party's images. If a provider revokes rights, remove affected cached content as required by those terms.
+TMDB requires one of its **unmodified approved logos** and a prominent non-endorsement statement. The footer and <a href="/privacy">About & Credits</a> section of the application link to the official TMDB site and include the notice:
 
-## Matching and review
+> This product uses TMDB and the TMDB APIs but is not endorsed, certified, or otherwise approved by TMDB.
 
-ThePornDB candidates must match the normalized performer name and corroborating Plex titles, release years, and nonconflicting characters; ambiguous results require manual review. A matching title is not conclusive proof of identity. Automatic assignment is conservative and cannot change Plex metadata.
+Logo source: [TMDB's approved logo and attribution page](https://www.themoviedb.org/about/logos-attribution). Do not distort or recolor the linked official logo. TMDB terms restrict certain kinds of content and limit cached content to six months; application-side pruning keeps TMDB portrait overrides for at most 180 days, subject to the full agreement. Authorization should explicitly cover any adult-oriented deployments that use TMDB.
 
-## Distribution policy
+## Other providers and rights
 
-Never commit or publish personal Plex metadata, API tokens, cached portraits, artwork databases, exported performer data, or provider logos/assets without express rights. No public Internet forwarding of this HTTP application. See [third-party legal requirements](THIRD_PARTY.md), [privacy](PRIVACY.md) and the [1.0 release checklist](RELEASE_CHECKLIST.md).
+**ThePornDB** use requires the operator's own token and compliance with provider terms and individual image/performer rights. No general artwork-redistribution license has been verified. **Wikimedia Commons remains disabled** because file-specific author, share-alike and license obligations are not yet automated.
+
+All downloaded portrait overrides are stored locally under `portraits/`, with associated source metadata in SQLite. Plex metadata is read only and is not modified. Existing user portraits remain intact during upgrades, and scans do not overwrite actors who already have a portrait.
+
+Keep provider tokens, user library metadata and cached images out of Git, release assets and public support reports. See [Third-party providers](THIRD_PARTY.md), [Privacy](PRIVACY.md) and [1.0 release checklist](RELEASE_CHECKLIST.md).

@@ -8,12 +8,12 @@ Plex Cast Explorer is a self-hosted Windows cast explorer for Plex movie/TV libr
 
 - Windows x64 single installer and automatic WinSW service under `LocalService`, with optional Private-profile Windows Firewall rule.
 - Gallery authentication plus separate, VPN-allowlisted remote administration with a distinct administrator password.
-- Incremental Plex indexing, actor search and filters, detail/credit pages, portrait overrides and selective verified provider matching.
+- Incremental Plex indexing, actor search and filters, detail/credit pages, portrait overrides, TMDB-first/TPDB-fallback matching, and the ability to rescan previously unmatched performers without losing applied portraits.
 - In-place upgrade designed to preserve `C:\ProgramData\PlexCastExplorer` (SQLite index, configuration, credentials, artwork and backups).
 
 ## Security and licensing boundaries
 
-The built-in web server serves **HTTP only**: trusted LAN/private VPN, never public WAN forwarding. This project uses a custom noncommercial source-share license, **not** an OSI-approved open-source license. Provider content/images/trademarks have separate rights. TMDB and Wikimedia lookups are **unavailable** in v1.0 due to unresolved API/attribution rights; old opt-in flags do not reactivate them. Existing user artwork is not erased by upgrading. The public release installer must be checked for its final signature state; an unsigned installer must be clearly labeled as such.
+The built-in web server serves **HTTP only**: trusted LAN/private VPN, never public WAN forwarding. This project uses a custom noncommercial source-share license, **not** an OSI-approved open-source license. Provider content/images/trademarks have separate rights. Authorized TMDB lookups are available as the preferred external portrait provider, with an installer opt-in, user-supplied API token, official TMDB logo and required non-endorsement notice. ThePornDB is queried as a fallback only when TMDB has no matching portrait. Wikimedia remains disabled. Users must comply with the provider's actual API and media-use terms. Existing user artwork is not erased by upgrading. The public release installer must be checked for its final signature state; an unsigned installer must be clearly labeled as such.
 
 ## Upgrade and support
 
