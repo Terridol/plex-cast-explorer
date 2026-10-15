@@ -92,6 +92,18 @@ if (-not (Test-Path -LiteralPath $exe -PathType Leaf)) {
 }
 Invoke-LocalGate 'exe'
 
+# Preserve the license from the exact CPython runtime used by PyInstaller.
+# Windows Python installations generally include LICENSE.txt in sys.base_prefix.
+$runtimeLicense = @(& $py.Source -3 -c 'import pathlib,sys; print(pathlib.Path(sys.base_prefix) / "LICENSE.txt")')
+if ($LASTEXITCODE -ne 0 -or $runtimeLicense.Count -ne 1 -or
+    !(Test-Path -LiteralPath $runtimeLicense[0] -PathType Leaf)) {
+    throw 'CPython LICENSE.txt is missing from the build interpreter; cannot produce a compliant installer.'
+}
+$bundledLicenses = Join-Path $root 'dist\PlexCastExplorer\licenses'
+New-Item -ItemType Directory -Path $bundledLicenses -Force | Out-Null
+Copy-Item -LiteralPath $runtimeLicense[0] -Destination (Join-Path $bundledLicenses 'Python-LICENSE.txt') -Force -ErrorAction Stop
+Write-Host 'Included CPython runtime license alongside the bundled interpreter.'
+
 $winswDir = Join-Path $root 'installer-assets'
 $winsw = Join-Path $winswDir 'WinSW-x64.exe'
 New-Item -ItemType Directory -Force -Path $winswDir | Out-Null
