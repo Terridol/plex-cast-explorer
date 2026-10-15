@@ -2,6 +2,12 @@
 
 ## dev — Windows installer and repository cleanup
 
+- Repaired invalid `test_installer_spec.py` syntax and removed duplicated test case/footer, which would have prevented regression tests from starting.
+- Consolidated the Windows builder into `BUILD-INSTALLER.cmd` plus `build_installer_windows.ps1`; removed the redundant nested `BUILD-EXE.cmd`.
+- Merged overlapping branching, general release, and maintainer documentation into the build guide, beta checklist, and contribution guide.
+- Removed an unadopted contributor-agreement draft (the policy against accepting outside copyrighted patches remains in effect).
+- Extended repository hygiene tests to detect duplicate class methods, multiple entry-point guards, and broken legal-document links.
+- Verified one active batch launcher, six purpose-specific PowerShell scripts, and no redundant build or migration files remain on `dev`.
 - Repaired `installer/check_updates.ps1`: restored its terminated filename pattern and removed a duplicated download block; added regression tests that reproduce both faults.
 - Repaired `build_gate.py` and `test_build_gate.py`: removed accidentally duplicated module/test sections and restored the updater-guard regular expression.
 - Kept one supported Windows installation entry point (`BUILD-INSTALLER.cmd`), building the executable directly in the PowerShell orchestrator, without a second batch helper.
