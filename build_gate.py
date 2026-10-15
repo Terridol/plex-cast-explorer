@@ -90,9 +90,18 @@ def check_install_contract(root: Path) -> str:
             '-Profile Public' not in service,
             'Firewall must be private and scoped to approved LAN/VPN clients')
     require("'cast_explorer.db-wal'" in service and
-            '& $wrapper refresh' in service and
             'Remove-Item -Recurse -Force $dataDir' not in service,
             'Service upgrades must preserve runtime data and take a backup')
+    # WinSW 2.12 only implements install/uninstall/start/stop/restart/status.
+    # This exact unsupported command broke upgrades on a real Windows host.
+    require(not re.search(r'(?m)^\s*&\s*\$wrapper\s+refresh\b', service, re.I),
+            'Unsupported WinSW v2 refresh command would stop the service during upgrade')
+    require("Get-CimInstance -ClassName Win32_Service" in service and
+            '$registeredPath -ne $wrapper' in service and
+            '$registered.StartName -notin' in service and
+            '& sc.exe config $serviceName start= delayed-auto' in service and
+            '& $wrapper start' in service,
+            'Upgrades must validate the installed service and apply supported SCM settings')
     require('build_installer_windows.ps1' in runner,
             'BUILD-INSTALLER.cmd must use the gated local builder')
     require('build_gate.py' in build and "'source'" in build and
