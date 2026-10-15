@@ -87,11 +87,22 @@ class InstallerSpecTests(unittest.TestCase):
         self.assertIn("& sc.exe config $serviceName start= delayed-auto", setup)
         self.assertIn("& $wrapper start", setup)
         self.assertNotRegex(setup, r'(?m)^\s*&\s*\$wrapper\s+refresh\b')
-        self.assertIn("$registered.StartName -notin", setup)
+        self.assertIn("$registeredAccount -notin", setup)
         self.assertIn("$serviceName = 'PlexCastExplorer'", setup)
         self.assertNotIn('Remove-Item -Recurse -Force $dataDir', setup + uninstall)
         self.assertIn('Stop-Service', uninstall)
         self.assertIn('Remove-NetFirewallRule', uninstall)
+
+    def test_legacy_local_system_service_is_migrated_in_place(self):
+        setup = self.read('installer/configure_service.ps1')
+        self.assertIn("$registeredAccount -in @('LocalSystem', '.\\LocalSystem', 'NT AUTHORITY\\SYSTEM')", setup)
+        self.assertIn('obj= "NT AUTHORITY\\LocalService" password= ""', setup)
+        self.assertIn('Start-Process -FilePath $scPath -ArgumentList $scArguments', setup)
+        self.assertIn('$migration.ExitCode -ne 0', setup)
+        self.assertIn("Service registration missing after account migration.", setup)
+        self.assertIn("$registeredAccount -notin @('NT AUTHORITY\\LocalService', 'LocalService')", setup)
+        self.assertIn('Refusing to modify an unrecognized service identity.', setup)
+        self.assertNotRegex(setup, r'(?m)^\s*&\s*\$wrapper\s+(uninstall|refresh)\b')
 
     def test_updates_are_consented_and_hash_verified(self):
         checker = self.read('installer/check_updates.ps1')
