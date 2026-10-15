@@ -50,6 +50,18 @@ class InstallerSpecTests(unittest.TestCase):
         self.assertIn('$health.version -eq $ExpectedVersion', setup)
         self.assertIn('if (-not $ready)', setup)
 
+    def test_failed_setup_reports_root_cause(self):
+        spec = self.read('PlexCastExplorer.iss')
+        service = self.read('installer/configure_service.ps1')
+        self.assertIn('FailureRaw: AnsiString', spec)
+        self.assertIn('LoadStringFromFile(FailurePath, FailureRaw)', spec)
+        self.assertIn('FailureReason := Trim(FailureRaw)', spec)
+        self.assertIn('installer-last-error.txt', spec)
+        self.assertIn('installer-error-details.log', spec)
+        self.assertIn('trap {', service)
+        self.assertIn('exit 1', service)
+        self.assertIn('Set-Content -LiteralPath $installerErrorFile', service)
+
     def test_upgrade_does_not_delete_local_data(self):
         setup = self.read('installer/configure_service.ps1')
         uninstall = self.read('installer/uninstall_cleanup.ps1')
