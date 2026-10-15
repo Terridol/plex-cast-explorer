@@ -2,6 +2,10 @@
 
 ## v1.0.0-rc.1 — Feature-freeze release candidate (NOT general availability)
 
+- Added a guarded opt-in stable installer build path (final semver, clean approved `main` only), while retaining the existing unique-ID development builder.
+- Bundled the required upstream WinSW MIT license notice with the service wrapper and added fail-closed source contract tests.
+- Verified current tracked files contain no build binaries, databases, logs or cached portraits; full Git history and final packaged release still require checks.
+
 - Freeze existing Plex cast indexing, actor gallery, authentication, artwork review, and Windows installer/service features for v1.
 - Preserve the Windows product AppId, service name, ProgramData index, tokens, artwork and upgrade compatibility.
 - Align app, Setup, updater, service and regression tests to `1.0.0-rc.1`, with a consolidated general-release gate and draft notes.
