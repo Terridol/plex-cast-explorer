@@ -10,7 +10,7 @@ Cast Explorer first uses portrait metadata supplied by Plex. Optional third-part
 - **Wikimedia Commons** is **disabled by default** until individual image licensing and attribution are checked. Enable with `CAST_EXPLORER_ENABLE_WIKIMEDIA=1` only if the operator has a process for verifying image-specific rights.
 - With either opt-in flag unset, the corresponding provider is not contacted. These settings do not grant permission to use third-party images.
 
-On Windows PowerShell for a single manual launch, set `$env:CAST_EXPLORER_ENABLE_TMDB='1'` before launching `start_windows.bat`. Scheduled startup needs separate per-task environment configuration. Do not set machine-wide values merely for convenience.
+For the supported Windows service installation, select the TMDB opt-in during the Setup wizard (only where the provider terms permit it). This writes the corresponding environment setting into the WinSW service configuration and applies it when the service restarts. Do not use obsolete manual-launch scripts or machine-wide provider switches.
 
 ## Matching logic
 
