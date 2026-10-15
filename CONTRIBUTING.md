@@ -12,8 +12,8 @@ Do not run GitHub Actions, hosted CI, or cloud build/deployment jobs. Do not com
 
 Changes to authentication, provider rights, service upgrades, firewall rules, or the installer require appropriate regression tests and documentation updates. A green source build does not prove that a Windows service upgrade worked; the public release checklist requires a disposable Windows VM test.
 
-See [LICENSE](LICENSE), [project licensing](docs/LICENSING.md), and [contributor-rights proposal](legal/CONTRIBUTOR_LICENSE_AGREEMENT_PROPOSAL.md) for legal limitations. Security reports follow [SECURITY.md](SECURITY.md).
+See [LICENSE](LICENSE), [project licensing](docs/LICENSING.md), and [existing contributor restrictions](docs/LICENSING.md) for legal limitations. Security reports follow [SECURITY.md](SECURITY.md).
 
 ## Maintainer and contributor policy
 
-The repository owner and sole release maintainer is [@Terridol](https://github.com/Terridol). The owner controls releases, write permissions, secret handling, acceptance of outside submissions, and promotion from `dev` to `main`. There are no additional maintainers with release rights presently documented. Use GitHub issues for proposed features and bugs; do not assume unsolicited pull requests or patches will be merged. Commercial exceptions may require grants from all relevant copyright holders; read the [licensing terms](docs/LICENSING.md) and [contributor agreement proposal](legal/CONTRIBUTOR_LICENSE_AGREEMENT_PROPOSAL.md).
+The repository owner and sole release maintainer is [@Terridol](https://github.com/Terridol). The owner controls releases, write permissions, secret handling, acceptance of outside submissions, and promotion from `dev` to `main`. There are no additional maintainers with release rights presently documented. Use GitHub issues for proposed features and bugs; do not assume unsolicited pull requests or patches will be merged. Commercial exceptions may require grants from all relevant copyright holders; read the [licensing terms](docs/LICENSING.md) and [contribution restrictions](docs/LICENSING.md).
