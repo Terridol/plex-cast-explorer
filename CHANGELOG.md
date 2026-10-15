@@ -2,6 +2,8 @@
 
 ## v1.0.0 — Feature-locked release source (not yet published)
 
+- Fixed a Windows PowerShell 5.1 native-command quoting bug in CPython license discovery that caused `NameError: name 'LICENSE' is not defined` after the executable smoke gate. The builder now gets only `sys.base_prefix` from Python, constructs `LICENSE.txt` using PowerShell, and verifies the license before expensive packaging. Added source and regression guards.
+
 - Added an unauthenticated, locally served privacy and legal notice linked from the gallery and login pages; source includes a project copyright notice. Replaced an obsolete password-setup command in the sign-in help.
 
 - Added tests enforcing restricted provider credential enrollment, saved-token independence, no new legacy TMDB previews, and a fail-closed installer configuration for 1.0.
