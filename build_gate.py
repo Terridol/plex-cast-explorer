@@ -164,7 +164,8 @@ def source_gate():
     checked_run([sys.executable, '-m', 'compileall', '-q', 'app.py',
                  'build_gate.py', 'test_app.py', 'test_installer_spec.py',
                  'test_release_guardrails.py', 'test_remote_admin.py',
-                 'test_security_images.py', 'test_build_gate.py'], 'Python syntax')
+                 'test_security_images.py', 'test_build_gate.py',
+                 'test_repository_layout.py'], 'Python syntax')
     checked_run([sys.executable, '-m', 'unittest', 'discover', '-s', '.',
                  '-p', 'test_*.py', '-v'], 'Regression tests', timeout=300)
 
