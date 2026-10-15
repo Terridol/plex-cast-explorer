@@ -56,8 +56,17 @@ def check_install_contract(root: Path) -> str:
 
     require(f'#define AppVersion "{version}"' in spec,
             'Installer version differs from app.py VERSION')
-    require(f'PlexCastExplorer-Setup-{version}-win-x64.exe' in build,
-            'Expected compiled installer filename/version differs from app.py')
+    require('#ifndef DevBuildId' in spec and '#error DevBuildId must be provided' in spec,
+            'Development installer must require a build ID at compilation')
+    require('AppVersion={#AppVersion}-{#DevBuildId}' in spec and
+            'AppVerName={#AppName} {#AppVersion} ({#DevBuildId})' in spec and
+            'OutputBaseFilename=PlexCastExplorer-Setup-{#AppVersion}-{#DevBuildId}-win-x64' in spec,
+            'Setup identity, display version and filename must include unique build ID')
+    require(f'PlexCastExplorer-Setup-{version}-$buildId-win-x64.exe' in build and
+            "'/DDevBuildId=' + $buildId" in build and
+            "Invoke-LocalGate 'installer' -BuildId $buildId" in build and
+            'yyyyMMdd-HHmmssfff' in build and 'rev-parse --verify --short=8 HEAD' in build,
+            'Windows build script must create unique versioned output and pass build ID to Inno Setup and validation')
     require('AppId={{974DC3BB-C0AD-46E4-A920-053E710D988C}' in spec,
             'Product AppId changed: this would break in-place upgrades')
     require('UsePreviousAppDir=yes' in spec and 'UsePreviousTasks=yes' in spec,
@@ -228,10 +237,17 @@ def executable_gate():
                 proc.wait(timeout=5)
 
 
-def installer_gate():
+def validate_build_id(build_id: str) -> str:
+    require(bool(re.fullmatch(r'dev-[0-9]{8}-[0-9]{9}-[gs][0-9a-f]{8}', build_id or '')),
+            'Installer gate requires a valid unique dev build ID')
+    return build_id
+
+
+def installer_gate(build_id: str):
     version = check_install_contract(ROOT)
+    build_id = validate_build_id(build_id)
     out_dir = ROOT / 'output'
-    exe = out_dir / f'PlexCastExplorer-Setup-{version}-win-x64.exe'
+    exe = out_dir / f'PlexCastExplorer-Setup-{version}-{build_id}-win-x64.exe'
     require(exe.is_file(), f'Expected installer is missing: {exe}')
     size = exe.stat().st_size
     require(size >= 1024 * 1024, f'Installer looks truncated: {size} bytes')
@@ -255,9 +271,13 @@ def installer_gate():
 def main():
     parser = argparse.ArgumentParser(description='Plex Cast Explorer build regression gate')
     parser.add_argument('stage', choices=['source', 'exe', 'installer'])
+    parser.add_argument('--build-id', default='', help='Exact dev build ID for the compiled installer')
     args = parser.parse_args()
     try:
-        {'source': source_gate, 'exe': executable_gate, 'installer': installer_gate}[args.stage]()
+        if args.stage == 'installer':
+            installer_gate(args.build_id)
+        else:
+            {'source': source_gate, 'exe': executable_gate}[args.stage]()
     except (GateFailure, OSError, subprocess.TimeoutExpired) as exc:
         print(f'\n[BUILD BLOCKED] {exc}', file=sys.stderr, flush=True)
         return 1
