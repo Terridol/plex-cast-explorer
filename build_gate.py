@@ -63,6 +63,17 @@ def check_install_contract(root: Path) -> str:
             'AppVerName={#AppName} {#AppVersion} ({#DevBuildId})' in spec and
             'OutputBaseFilename=PlexCastExplorer-Setup-{#AppVersion}-{#DevBuildId}-win-x64' in spec,
             'Setup identity, display version and filename must include unique build ID')
+    # Regression: a string replacement involving the regex end anchor ('$')
+    # once duplicated the entire installer tail inside a PowerShell string.
+    # This structural check protects non-Windows source reviews as well as
+    # the Windows AST parsing performed before build_installer_windows.ps1 runs.
+    require(build.count('function Get-ISCC {') == 1 and
+            build.count('# Delete an old artifact first:') == 1 and
+            build.count("Invoke-LocalGate 'installer' -BuildId $buildId") == 1 and
+            build.count("Write-Host 'Installer not yet smoke-tested;") == 1 and
+            "$gitHead[-1] -match '^[0-9a-fA-F]{8}$'" in build and
+            "$buildId -notmatch '^dev-[0-9]{8}-[0-9]{9}-[gs][0-9a-f]{8}$'" in build,
+            'Windows build script has duplicated sections or corrupt build-ID regex')
     require('PlexCastExplorer-Setup-$appVersion-$buildId-win-x64.exe' in build and
             "$appVersionMatch.Groups['version'].Value" in build and
             "'/DDevBuildId=' + $buildId" in build and
