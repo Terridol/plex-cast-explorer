@@ -6,7 +6,7 @@ Plex Cast Explorer is independently developed and is not affiliated with Plex, T
 
 The Windows installer includes **WinSW v2.12.0** as the service wrapper. WinSW is licensed under the MIT License; its upstream copyright and permission notice is retained in [`legal/WinSW-LICENSE.txt`](../legal/WinSW-LICENSE.txt) and bundled beside the installed application under `licenses/`. The builder verifies the published WinSW binary with a pinned SHA-256.
 
-PyInstaller bundles Python and dependencies into the application executable. PyInstaller documents its GPL-with-bootloader-exception terms permitting distribution of generated bundles subject to the bundled dependencies' own licenses. Review the actual installed Python/PyInstaller versions, package license notices and any binary dependencies before general release.
+PyInstaller bundles Python and dependencies into the application executable. The Windows builder copies `LICENSE.txt` from the exact CPython runtime used for packaging into the installed `licenses/Python-LICENSE.txt`; absence of this license blocks the build. The project `NOTICE` is also installed. PyInstaller documents its GPL-with-bootloader-exception terms permitting distribution of generated bundles subject to the bundled dependencies' own licenses. Review the actual installed Python/PyInstaller versions, package license notices and any binary dependencies before general release.
 
 ## Plex
 
