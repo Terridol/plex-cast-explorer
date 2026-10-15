@@ -2,7 +2,7 @@
 
 **Policy:** No GitHub-hosted builds, Actions, deployments or automatic tests. Maintain only `dev` and `main` branches.
 
-Double-click `BUILD-INSTALLER.cmd`. **A discovery-based PowerShell parse preflight (all six production scripts, including its own validator) and all three gate stages are mandatory** and return a failing exit code if any required check fails. The builder keeps previous uniquely named installers in `output/`; it deletes any stale artifact for the current build ID before compiling and removes that build's installer/checksum if the final check fails.
+Double-click `BUILD-INSTALLER.cmd`. **A discovery-based PowerShell parse preflight (all six production scripts, including its own validator) and all three gate stages are mandatory** and return a failing exit code if any required check fails. Before every Inno Setup compilation (development or stable), the builder **empties the entire repository `output/` directory**, including older installers, checksum sidecars, and nested files. It refuses to follow symlinks or junctions and aborts if the directory cannot be emptied. Cleanup occurs after prerequisites and EXE validation, so an earlier build failure does not erase the previous installer. If the final artifact check fails, that build's installer/checksum is also removed.
 
 | Stage | When | What blocks the build |
 |---|---|---|
