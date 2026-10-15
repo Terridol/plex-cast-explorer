@@ -97,7 +97,19 @@ if ($gitCommand) {
     } finally {
         $ErrorActionPreference = $savedPreference
     }
-    if ($gitExit -eq 0 -and $gitHead.Count -gt 0 -and $gitHead[-1] -match '^[0-9a-fA-F]{8}if (-not $iscc) {
+    if ($gitExit -eq 0 -and $gitHead.Count -gt 0 -and $gitHead[-1] -match '^[0-9a-fA-F]{8}$') {
+        $revision = 'g' + $gitHead[-1].ToLowerInvariant()
+    }
+}
+$buildId = 'dev-' + $utcBuildStamp + '-' + $revision
+if ($buildId -notmatch '^dev-[0-9]{8}-[0-9]{9}-[gs][0-9a-f]{8}$') {
+    throw "Invalid development build identifier: $buildId"
+}
+Write-Host "DEV BUILD ID: $buildId"
+Write-Host 'The complete build ID will appear in Setup, Installed Apps and the output filename.'
+
+$iscc = Get-ISCC
+if (-not $iscc) {
     $winget = Get-Command 'winget.exe' -ErrorAction SilentlyContinue
     if (-not $winget) { throw 'Inno Setup 6 is required. Install it from jrsoftware.org/isinfo.php and retry.' }
     Write-Host 'Installing Inno Setup 6 using winget (a Windows package manager)...'
@@ -111,7 +123,6 @@ if ($gitCommand) {
     $iscc = Get-ISCC
     if (-not $iscc) { throw 'Inno Setup installed but ISCC.exe was not found. Reopen PowerShell and retry.' }
 }
-
 # Delete an old artifact first: a failed compile must never look like success.
 $installer = Join-Path $root ("output\PlexCastExplorer-Setup-$appVersion-$buildId-win-x64.exe")
 $checksum = $installer + '.sha256'
@@ -133,96 +144,6 @@ Write-Host "SUCCESS: $installer"
 Write-Host "SHA-256: $hash"
 try {
     Invoke-LocalGate 'installer' -BuildId $buildId
-} catch {
-    Remove-Item -LiteralPath $installer,$checksum -Force -ErrorAction SilentlyContinue
-    throw
-}
-Write-Host 'LOCAL BUILD GATE PASSED: source tests, EXE smoke, compiler and installer artifact checks.'
-Write-Host 'Installer not yet smoke-tested; back up your current data before running the upgrade.') {
-        $revision = 'g' + $gitHead[-1].ToLowerInvariant()
-    }
-}
-$buildId = 'dev-' + $utcBuildStamp + '-' + $revision
-if ($buildId -notmatch '^dev-[0-9]{8}-[0-9]{9}-[gs][0-9a-f]{8}if (-not $iscc) {
-    $winget = Get-Command 'winget.exe' -ErrorAction SilentlyContinue
-    if (-not $winget) { throw 'Inno Setup 6 is required. Install it from jrsoftware.org/isinfo.php and retry.' }
-    Write-Host 'Installing Inno Setup 6 using winget (a Windows package manager)...'
-    $oldPref = $ErrorActionPreference
-    try {
-        $ErrorActionPreference = 'Continue'
-        & $winget.Source install --id JRSoftware.InnoSetup --exact --accept-source-agreements --accept-package-agreements
-        $installExit = $LASTEXITCODE
-    } finally { $ErrorActionPreference = $oldPref }
-    if ($installExit -ne 0) { throw 'Inno Setup install failed or was cancelled. Retry after installing Inno Setup 6.' }
-    $iscc = Get-ISCC
-    if (-not $iscc) { throw 'Inno Setup installed but ISCC.exe was not found. Reopen PowerShell and retry.' }
-}
-
-# Delete an old artifact first: a failed compile must never look like success.
-$installer = Join-Path $root 'output\PlexCastExplorer-Setup-0.4.7-beta-win-x64.exe'
-$checksum = $installer + '.sha256'
-Remove-Item -LiteralPath $installer,$checksum -Force -ErrorAction SilentlyContinue
-Write-Host "Compiling Setup.exe with $iscc"
-$oldPref = $ErrorActionPreference
-try {
-    $ErrorActionPreference = 'Continue'
-    & $iscc (Join-Path $root 'PlexCastExplorer.iss')
-    $compilerExit = $LASTEXITCODE
-} finally { $ErrorActionPreference = $oldPref }
-if ($compilerExit -ne 0) { throw "Inno Setup compiler failed (exit $compilerExit)." }
-if (-not (Test-Path -LiteralPath $installer -PathType Leaf)) { throw 'Installer compilation reported success but expected output was absent.' }
-$hash = (Get-FileHash -LiteralPath $installer -Algorithm SHA256).Hash.ToLowerInvariant()
-Set-Content -LiteralPath ($installer + '.sha256') -Value ($hash + '  ' + [IO.Path]::GetFileName($installer)) -Encoding ASCII
-Write-Host "SUCCESS: $installer"
-Write-Host "SHA-256: $hash"
-try {
-    Invoke-LocalGate 'installer'
-} catch {
-    Remove-Item -LiteralPath $installer,$checksum -Force -ErrorAction SilentlyContinue
-    throw
-}
-Write-Host 'LOCAL BUILD GATE PASSED: source tests, EXE smoke, compiler and installer artifact checks.'
-Write-Host 'Installer not yet smoke-tested; back up your current data before running the upgrade.') {
-    throw "Invalid development build identifier: $buildId"
-}
-Write-Host "DEV BUILD ID: $buildId"
-Write-Host 'The complete build ID will appear in Setup, Installed Apps and the output filename.'
-
-$iscc = Get-ISCC
-if (-not $iscc) {
-    $winget = Get-Command 'winget.exe' -ErrorAction SilentlyContinue
-    if (-not $winget) { throw 'Inno Setup 6 is required. Install it from jrsoftware.org/isinfo.php and retry.' }
-    Write-Host 'Installing Inno Setup 6 using winget (a Windows package manager)...'
-    $oldPref = $ErrorActionPreference
-    try {
-        $ErrorActionPreference = 'Continue'
-        & $winget.Source install --id JRSoftware.InnoSetup --exact --accept-source-agreements --accept-package-agreements
-        $installExit = $LASTEXITCODE
-    } finally { $ErrorActionPreference = $oldPref }
-    if ($installExit -ne 0) { throw 'Inno Setup install failed or was cancelled. Retry after installing Inno Setup 6.' }
-    $iscc = Get-ISCC
-    if (-not $iscc) { throw 'Inno Setup installed but ISCC.exe was not found. Reopen PowerShell and retry.' }
-}
-
-# Delete an old artifact first: a failed compile must never look like success.
-$installer = Join-Path $root 'output\PlexCastExplorer-Setup-0.4.7-beta-win-x64.exe'
-$checksum = $installer + '.sha256'
-Remove-Item -LiteralPath $installer,$checksum -Force -ErrorAction SilentlyContinue
-Write-Host "Compiling Setup.exe with $iscc"
-$oldPref = $ErrorActionPreference
-try {
-    $ErrorActionPreference = 'Continue'
-    & $iscc (Join-Path $root 'PlexCastExplorer.iss')
-    $compilerExit = $LASTEXITCODE
-} finally { $ErrorActionPreference = $oldPref }
-if ($compilerExit -ne 0) { throw "Inno Setup compiler failed (exit $compilerExit)." }
-if (-not (Test-Path -LiteralPath $installer -PathType Leaf)) { throw 'Installer compilation reported success but expected output was absent.' }
-$hash = (Get-FileHash -LiteralPath $installer -Algorithm SHA256).Hash.ToLowerInvariant()
-Set-Content -LiteralPath ($installer + '.sha256') -Value ($hash + '  ' + [IO.Path]::GetFileName($installer)) -Encoding ASCII
-Write-Host "SUCCESS: $installer"
-Write-Host "SHA-256: $hash"
-try {
-    Invoke-LocalGate 'installer'
 } catch {
     Remove-Item -LiteralPath $installer,$checksum -Force -ErrorAction SilentlyContinue
     throw
