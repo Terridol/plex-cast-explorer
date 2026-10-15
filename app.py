@@ -41,6 +41,7 @@ CONFIG_PATH = ROOT / 'config.json'
 AUTH_PATH = ROOT / 'auth.json'
 ART_CONFIG_PATH = ROOT / 'artwork_config.json'
 PORTRAIT_DIR = ROOT / 'portraits'
+PLEX_PORTRAIT_DIR = ROOT / 'plex-portraits'
 NETWORK_CONFIG_PATH = ROOT / 'network.json'
 HOST = os.getenv('CAST_EXPLORER_HOST', '0.0.0.0')
 PORT = int(os.getenv('CAST_EXPLORER_PORT', '8765'))
@@ -49,6 +50,8 @@ SESSION_SECONDS = 14 * 24 * 60 * 60
 ADMIN_SESSION_SECONDS = 60 * 60
 ARTWORK_MAX_AGE_SECONDS = 180 * 24 * 60 * 60  # Under any six-calendar-month window.
 MAX_PROVIDER_JSON_BYTES = 8 * 1024 * 1024  # Bound metadata downloads; large credit pages exceed 1 MiB.
+MAX_PLEX_IMAGE_BYTES = 4_000_000
+MAX_PLEX_PORTRAIT_ERRORS_PER_SYNC = 20  # Fail fast when a Plex image service is unavailable.
 LOGIN_LOCK = threading.Lock()
 LOGIN_ATTEMPTS = {}
 ALLOWED_REMOTE_IMAGES = {'metadata-static.plex.tv', 'image.tmdb.org', 'assets.plex.tv', 'metadata.provider.plex.tv'}
@@ -309,7 +312,7 @@ def save_config(url: str, token: str | None):
     image_bytes.cache_clear()
 
 
-def request_plex(path: str, timeout=20) -> bytes:
+def request_plex(path: str, timeout=20, max_bytes=None) -> bytes:
     config = load_config()
     if not config['url'] or not config['token']:
         raise ValueError('Set your Plex URL and token in Settings first.')
@@ -321,7 +324,106 @@ def request_plex(path: str, timeout=20) -> bytes:
         'Accept': 'application/xml',
     })
     with build_opener(SameOriginRedirects(config['url'])).open(req, timeout=timeout) as response:
-        return response.read()
+        return response.read(max_bytes + 1) if max_bytes is not None else response.read()
+
+
+def plex_portrait_cache_path(thumb: str, plex_url: str | None = None) -> Path:
+    """Opaque filename scoped to this Plex server and its metadata-image URL."""
+    if plex_url is None:
+        plex_url = load_config()['url']
+    digest = hashlib.sha256((plex_url + '\n' + thumb).encode('utf-8')).hexdigest()
+    return PLEX_PORTRAIT_DIR / (digest + '.img')
+
+
+def plex_image_bytes(thumb: str) -> bytes:
+    """Fetch an image Plex advertises; never forward its token to other hosts."""
+    if thumb.startswith('/') and not thumb.startswith('//'):
+        raw = request_plex(thumb, timeout=12, max_bytes=MAX_PLEX_IMAGE_BYTES)
+    else:
+        target = urlsplit(thumb)
+        source = urlsplit(load_config()['url'])
+        if (target.scheme in ('http', 'https') and target.scheme == source.scheme and
+                target.hostname == source.hostname and target.port == source.port and
+                not target.username and not target.password):
+            raw = request_plex(target.path + ('?' + target.query if target.query else ''),
+                               timeout=12, max_bytes=MAX_PLEX_IMAGE_BYTES)
+        elif allowed_https_image_url(thumb, ALLOWED_REMOTE_IMAGES):
+            req = Request(thumb, headers={'User-Agent': 'PlexCastExplorer/1.0'})
+            with build_opener(ArtworkRedirects(ALLOWED_REMOTE_IMAGES)).open(req, timeout=12) as response:
+                raw = response.read(MAX_PLEX_IMAGE_BYTES + 1)
+        else:
+            raise ValueError('External Plex image source not allowed')
+    if len(raw) > MAX_PLEX_IMAGE_BYTES:
+        raise ValueError('Plex portrait exceeds 4 MB safety limit')
+    if not (raw.startswith(b'\xff\xd8\xff') or raw.startswith(b'\x89PNG\r\n\x1a\n') or
+            (raw.startswith(b'RIFF') and raw[8:12] == b'WEBP')):
+        raise ValueError('Plex image is not JPEG, PNG, or WebP')
+    return raw
+
+
+def cached_plex_portrait(thumb: str) -> bytes:
+    """Cache verified Plex thumbnails without changing manual artwork overrides."""
+    path = plex_portrait_cache_path(thumb)
+    try:
+        if path.is_file():
+            raw = path.read_bytes()
+            if raw and len(raw) <= MAX_PLEX_IMAGE_BYTES:
+                return raw
+    except OSError:
+        pass  # A damaged cache must not prevent a fresh Plex image request.
+    raw = plex_image_bytes(thumb)
+    temp_path = None
+    try:
+        PLEX_PORTRAIT_DIR.mkdir(parents=True, exist_ok=True)
+        temp_path = path.with_name(path.name + '.' + secrets.token_hex(6) + '.tmp')
+        temp_path.write_bytes(raw)
+        os.replace(temp_path, path)
+    except OSError as exc:
+        logging.warning('Could not save Plex portrait cache (%s)', type(exc).__name__)
+    finally:
+        if temp_path is not None:
+            temp_path.unlink(missing_ok=True)
+    return raw
+
+
+def cache_plex_portraits() -> int:
+    """Backfill missing Plex photos even when no title's updatedAt has changed."""
+    config = load_config()
+    if not config['url'] or not config['token']:
+        return 0
+    with db_open() as db:
+        rows = db.execute("""SELECT a.thumb FROM actors a
+            WHERE a.thumb != '' AND NOT EXISTS (
+                SELECT 1 FROM actor_art art WHERE art.actor_key = a.actor_key)
+            GROUP BY a.thumb""").fetchall()
+    pending = [r['thumb'] for r in rows
+               if not plex_portrait_cache_path(r['thumb'], config['url']).is_file()]
+    if not pending:
+        return 0
+    state_update(phase='Caching Plex actor portraits', current=0, total=len(pending))
+    failures = 0
+    processed = 0
+    # Small batches avoid queueing thousands of requests if Plex or its
+    # artwork service becomes unavailable. Keep images as a bounded, best-effort
+    # post-indexing task rather than corrupting or discarding library metadata.
+    with ThreadPoolExecutor(max_workers=5) as pool:
+        for start in range(0, len(pending), 25):
+            futures = {pool.submit(cached_plex_portrait, thumb): thumb
+                       for thumb in pending[start:start + 25]}
+            for future in as_completed(futures):
+                try:
+                    future.result()
+                except Exception as exc:
+                    failures += 1
+                    if failures <= 3:
+                        logging.warning('Plex portrait download failed (%s)', type(exc).__name__)
+                        state_update(last_error='Plex portraits: ' + str(exc)[:150])
+                processed += 1
+                state_update(current=processed)
+            if failures >= MAX_PLEX_PORTRAIT_ERRORS_PER_SYNC:
+                state_update(last_error='Plex portrait downloads paused after repeated errors; retry Sync later.')
+                break
+    return failures
 
 
 def plex_xml(path: str):
@@ -453,7 +555,12 @@ def sync_all(force=False):
 
             db.execute('DELETE FROM actors WHERE actor_key NOT IN (SELECT actor_key FROM credits)')
             db.commit()
-        state_update(phase='Finished' if not errors else 'Finished with warnings')
+        # A title can be unchanged even though its actor portrait was never
+        # downloaded. Recheck the entire indexed Plex thumbnail set on every
+        # sync, but fetch only missing cache entries and never replace overrides.
+        image_bytes.cache_clear()
+        errors += cache_plex_portraits()
+        state_update(errors=errors, phase='Finished' if not errors else 'Finished with warnings')
     except Exception as exc:
         logging.exception('Sync failed')
         state_update(phase='Sync failed', last_error=str(exc), errors=errors + 1)
@@ -579,26 +686,9 @@ def image_bytes(kind, key):
     if not row or not row['thumb']:
         raise ValueError('No portrait available')
     thumb = row['thumb']
-    if thumb.startswith('/') and not thumb.startswith('//'):
-        raw = request_plex(thumb, timeout=12)
-    else:
-        target = urlsplit(thumb)
-        source = urlsplit(load_config()['url'])
-        if target.scheme != 'https' or not target.hostname:
-            raise ValueError('Unsupported image URL')
-        if target.hostname == source.hostname and target.port == source.port:
-            raw = request_plex(target.path + ('?' + target.query if target.query else ''), timeout=12)
-        elif allowed_https_image_url(thumb, ALLOWED_REMOTE_IMAGES):
-            # Restrict both the original URL and *every redirect*. The Plex token
-            # is never included in this request or sent to external image hosts.
-            req = Request(thumb, headers={'User-Agent': 'PlexCastExplorer/0.4'})
-            with build_opener(ArtworkRedirects(ALLOWED_REMOTE_IMAGES)).open(req, timeout=12) as response:
-                raw = response.read(4_000_001)
-        else:
-            raise ValueError('External image source not allowed')
-    if len(raw) > 4_000_000:
-        raise ValueError('Image too large')
-    return raw
+    if kind == 'actor':
+        return cached_plex_portrait(thumb)
+    return plex_image_bytes(thumb)
 
 
 # Only classify a browser as on-LAN when the *actual TCP peer* is in an
