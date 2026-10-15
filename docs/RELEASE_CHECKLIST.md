@@ -15,6 +15,7 @@
 
 - [x] Maintainer confirmed the **0.4.7-beta** source/build gates, Windows installer, upgrade and application worked on the Windows host after prior fixes.
 - [x] Source on `dev` has a single CMD builder, six PowerShell scripts and explicit local build gates.
+- [x] Audited the current tracked `dev` tree: 47 files, no committed generated executables, databases, logs or private artwork, no duplicate file blobs and no broken internal Markdown links. This is **not** a complete Git-history or packaged-binary audit.
 - [ ] **Run the new 1.0.0-rc.1 local build** from latest `dev` using `BUILD-INSTALLER.cmd`. Record Git SHA, 73+ regression tests, JS syntax check, EXE smoke, exact installer output and SHA-256. Previously passing 0.4.7 does not validate the candidate.
 
 ## Mandatory Windows release acceptance — use a disposable VM/test PC
