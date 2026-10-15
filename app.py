@@ -1753,7 +1753,7 @@ def main():
     print(f'Plex Cast Explorer v{VERSION} — {address}', flush=True)
     print('LAN server listening. Access from other devices at http://SERVER-IP:' + str(PORT), flush=True)
     if not load_auth().get('hash'):
-        print('LAN access locked until a gallery password is set. Run set_password_windows.bat.', flush=True)
+        print('LAN access locked until a gallery password is set. Use the Start Menu: Plex Cast Explorer > Set Gallery Password.', flush=True)
     server = ThreadingHTTPServer((HOST, PORT), Handler)
     # Incremental refresh on startup and every 12 hours by default.
     def background_refresh():
