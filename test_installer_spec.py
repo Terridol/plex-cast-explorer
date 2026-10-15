@@ -22,6 +22,21 @@ class InstallerSpecTests(unittest.TestCase):
         self.assertIn('configure_service.ps1', spec)
         self.assertNotIn('ExistingDataDir', spec)
 
+    def test_dev_installers_are_uniquely_identified(self):
+        spec = self.read('PlexCastExplorer.iss')
+        builder = self.read('build_installer_windows.ps1')
+        gate = self.read('build_gate.py')
+        self.assertIn('#ifndef DevBuildId', spec)
+        self.assertIn('#error DevBuildId must be provided', spec)
+        self.assertIn('AppVersion={#AppVersion}-{#DevBuildId}', spec)
+        self.assertIn('AppVerName={#AppName} {#AppVersion} ({#DevBuildId})', spec)
+        self.assertIn('OutputBaseFilename=PlexCastExplorer-Setup-{#AppVersion}-{#DevBuildId}-win-x64', spec)
+        self.assertIn('yyyyMMdd-HHmmssfff', builder)
+        self.assertIn('rev-parse --verify --short=8 HEAD', builder)
+        self.assertIn("'/DDevBuildId=' + $buildId", builder)
+        self.assertIn("Invoke-LocalGate 'installer' -BuildId $buildId", builder)
+        self.assertIn("def validate_build_id(", gate)
+
     def test_installation_options_and_firewall_scoping(self):
         spec = self.read('PlexCastExplorer.iss')
         setup = self.read('installer/configure_service.ps1')
@@ -90,7 +105,7 @@ class InstallerSpecTests(unittest.TestCase):
         self.assertIn('BUILD-EXE.cmd', self.read('build_installer_windows.ps1'))
         self.assertIn('WinSW-x64.exe', self.read('build_installer_windows.ps1'))
         self.assertIn('ISCC.exe', self.read('build_installer_windows.ps1'))
-        self.assertIn('PlexCastExplorer-Setup-0.4.7-beta-win-x64.exe', self.read('build_installer_windows.ps1'))
+        self.assertIn('PlexCastExplorer-Setup-0.4.7-beta-$buildId-win-x64.exe', self.read('build_installer_windows.ps1'))
         self.assertEqual(re.search(r"^VERSION = '([^']+)'", self.read('app.py'), re.M).group(1), '0.4.7-beta')
 
 
