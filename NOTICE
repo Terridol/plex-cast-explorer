@@ -8,3 +8,8 @@ WinSW v2.12.0 is included under the MIT license; its copyright and permission no
 This software is independently developed and not affiliated with Plex, TMDB, ThePornDB or Wikimedia. Their trademarks, imagery, and data remain subject to their separate terms and licenses. See docs/THIRD_PARTY.md.
 
 Before public release, replace the above handle-only copyright/contact line with a legally suitable rights-holder identification or authorized business entity, as advised by counsel.
+
+When an operator explicitly enables TMDB API use, the app presents TMDB's official unmodified logo and required attribution in the user interface and About/Privacy page:
+"This product uses TMDB and the TMDB APIs but is not endorsed, certified, or otherwise approved by TMDB."
+Official logos and requirements: https://www.themoviedb.org/about/logos-attribution
+TMDB API access and imagery remain subject to applicable TMDB terms and any separately granted permission; this project's license does not extend those rights.
