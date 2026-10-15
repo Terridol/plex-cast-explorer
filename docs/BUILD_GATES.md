@@ -10,6 +10,8 @@ Double-click `BUILD-INSTALLER.cmd`. **A discovery-based PowerShell parse preflig
 | Compiled executable smoke | After PyInstaller; before Inno Setup | The actual compiled EXE cannot launch with isolated temp data and a random local port, `--version` mismatches, frontend resources fail, version API fails, Host-header and CSRF protections regress, or isolated database cannot initialize |
 | Installer artifact check | After Inno Setup | Compilation fails, Setup EXE missing/malformed/truncated, WinSW hash differs from pinned digest, version filename drifts, checksum sidecar absent/mismatched |
 
+The source gate also requires the upstream WinSW MIT license notice to be included in the installer payload. The stable build mode is a **separate, explicit path** that shares these mandatory gates, not permission to skip them.
+
 All tests are run on the developer's Windows PC, against a disposable temporary directory and ephemeral HTTP port. **The build does not touch the installed Windows service or your Plex library.** No credentials are read for executable smoke tests. A generated test report never contains access tokens.
 
 Application-version extraction is checked as part of the **source gate** and rechecked in PowerShell before expensive dependency installation or EXE compilation. It must recognize the source `VERSION` declaration and agree with Inno Setup, the update checker, and service defaults. A PowerShell regex string uses single backslashes (e.g. `\s`), not doubled backslashes.
