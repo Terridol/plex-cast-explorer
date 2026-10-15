@@ -93,6 +93,14 @@ def check_install_contract(root: Path) -> str:
             'NOT EXISTS (' in app_source and
             'plex-portraits/' in read(root, '.gitignore'),
             'Plex actor images must be safely fetched via Plex for both built-in and custom agents')
+    require('CREATE TABLE IF NOT EXISTS actor_plex_refs' in app_source and
+            'def plex_role_thumb(role, rating_key:' in app_source and
+            'def plex_role_metadata_path(role)' in app_source and
+            'def resolve_plex_actor_refs()' in app_source and
+            'errors += resolve_plex_actor_refs()' in app_source and
+            "'/file?' + urlencode({'url': thumb})" in app_source and
+            'plex_transcoded_image(thumb)' in app_source,
+            'Custom Plex actor images require bundle, person-reference, and proxy handling')
     require('Name: "tmdb"' in spec and
             "WizardIsTaskSelected('tmdb')" in spec and
             "if ($EnableTMDB -eq 1)" in service and
