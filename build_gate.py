@@ -81,10 +81,15 @@ def check_install_contract(root: Path) -> str:
             'Service expected-version default must match app.py VERSION')
     require('#ifndef DevBuildId' in spec and '#error DevBuildId must be provided' in spec,
             'Development installer must require a build ID at compilation')
-    require('AppVersion={#AppVersion}-{#DevBuildId}' in spec and
-            'AppVerName={#AppName} {#AppVersion} ({#DevBuildId})' in spec and
-            'OutputBaseFilename=PlexCastExplorer-Setup-{#AppVersion}-{#DevBuildId}-win-x64' in spec,
-            'Setup identity, display version and filename must include unique build ID')
+    require('AppVersion={#BuildVersion}' in spec and
+            'AppVerName={#BuildDisplayVersion}' in spec and
+            'OutputBaseFilename={#BuildFilename}' in spec and
+            '#ifdef ReleaseBuild' in spec and
+            '#define BuildVersion AppVersion' in spec and
+            '#define BuildVersion AppVersion + "-" + DevBuildId' in spec and
+            '#define BuildFilename "PlexCastExplorer-Setup-" + AppVersion + "-win-x64"' in spec and
+            '#define BuildFilename "PlexCastExplorer-Setup-" + AppVersion + "-" + DevBuildId + "-win-x64"' in spec,
+            'Setup must support separate stable and uniquely identified development artifacts')
     # Regression: a string replacement involving the regex end anchor ('$')
     # once duplicated the entire installer tail inside a PowerShell string.
     # This structural check protects non-Windows source reviews as well as
@@ -102,6 +107,12 @@ def check_install_contract(root: Path) -> str:
             "Invoke-LocalGate 'installer' -BuildId $buildId" in build and
             'yyyyMMdd-HHmmssfff' in build and 'rev-parse --verify --short=8 HEAD' in build,
             'Windows build script must derive the app version and embed a unique build ID in Setup and validation')
+    require("param([switch]$Release)" in build and
+            "'/DReleaseBuild=1'" in build and
+            'Stable Setup must be built from approved main, not dev.' in build and
+            "Stable Setup requires a final MAJOR.MINOR.PATCH version" in build and
+            'PlexCastExplorer-Setup-$appVersion-win-x64.exe' in build,
+            'Stable Setup builds must require a final version and approved main checkout')
     require('AppId={{974DC3BB-C0AD-46E4-A920-053E710D988C}' in spec,
             'Product AppId changed: this would break in-place upgrades')
     require('UsePreviousAppDir=yes' in spec and 'UsePreviousTasks=yes' in spec,
@@ -315,9 +326,14 @@ def validate_build_id(build_id: str) -> str:
 
 def installer_gate(build_id: str):
     version = check_install_contract(ROOT)
-    build_id = validate_build_id(build_id)
     out_dir = ROOT / 'output'
-    exe = out_dir / f'PlexCastExplorer-Setup-{version}-{build_id}-win-x64.exe'
+    if build_id == 'release':
+        require(bool(re.fullmatch(r'[0-9]+\.[0-9]+\.[0-9]+', version)),
+                'Stable installer cannot be produced from a prerelease source version')
+        exe = out_dir / f'PlexCastExplorer-Setup-{version}-win-x64.exe'
+    else:
+        build_id = validate_build_id(build_id)
+        exe = out_dir / f'PlexCastExplorer-Setup-{version}-{build_id}-win-x64.exe'
     require(exe.is_file(), f'Expected installer is missing: {exe}')
     size = exe.stat().st_size
     require(size >= 1024 * 1024, f'Installer looks truncated: {size} bytes')

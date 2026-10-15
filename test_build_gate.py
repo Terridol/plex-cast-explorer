@@ -60,8 +60,15 @@ class BuildGateRegressionTests(unittest.TestCase):
 
     def test_missing_dev_build_display_version_is_fatal(self):
         self.assert_mutation_blocked('PlexCastExplorer.iss',
-                                    'AppVersion={#AppVersion}-{#DevBuildId}',
-                                    'AppVersion={#AppVersion}')
+                                    '#define BuildVersion AppVersion + "-" + DevBuildId',
+                                    '#define BuildVersion AppVersion')
+
+    def test_stable_release_requires_main_and_semver(self):
+        self.assert_mutation_blocked('build_installer_windows.ps1',
+                                     'Stable Setup must be built from approved main, not dev.',
+                                     'Stable Setup can be built on dev.')
+        self.assert_mutation_blocked('build_installer_windows.ps1',
+                                     "'/DReleaseBuild=1'", "'/DDevBuildId=' + $buildId")
 
     def test_missing_installer_build_id_is_fatal(self):
         self.assert_mutation_blocked('build_installer_windows.ps1',

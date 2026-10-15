@@ -14,6 +14,8 @@ All tests are run on the developer's Windows PC, against a disposable temporary 
 
 Application-version extraction is checked as part of the **source gate** and rechecked in PowerShell before expensive dependency installation or EXE compilation. It must recognize the source `VERSION` declaration and agree with Inno Setup, the update checker, and service defaults. A PowerShell regex string uses single backslashes (e.g. `\s`), not doubled backslashes.
 
+**Stable-release packaging:** after the entire [general-release checklist](RELEASE_CHECKLIST.md) passes and the maintainer approves promotion to `main`, set `VERSION` and all application/installer/service/update constants to the final `1.0.0` release, then invoke `powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\build_installer_windows.ps1 -Release` **from the clean `main` checkout**. The release mode omits development IDs from the Setup filename and installed display version, rejects `-rc` versions and dirty tracked files, and still runs the same source, EXE and installer artifact gates. Do not invoke it on `dev`.
+
 ### Reproduce the gates separately
 
 ```powershell

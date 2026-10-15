@@ -1,9 +1,18 @@
 #define AppName "Plex Cast Explorer"
 #define AppVersion "1.0.0-rc.1"
-; Required build ID is supplied by the local Windows builder with /DDevBuildId=...
-; Never produce an ambiguously named development installer.
-#ifndef DevBuildId
-  #error DevBuildId must be provided by BUILD-INSTALLER.cmd
+; Production builds are opt-in and use the clean semver name. A development
+; build always requires its unique build ID so the two cannot be confused.
+#ifdef ReleaseBuild
+  #define BuildVersion AppVersion
+  #define BuildDisplayVersion AppName + " " + AppVersion
+  #define BuildFilename "PlexCastExplorer-Setup-" + AppVersion + "-win-x64"
+#else
+  #ifndef DevBuildId
+    #error DevBuildId must be provided by BUILD-INSTALLER.cmd
+  #endif
+  #define BuildVersion AppVersion + "-" + DevBuildId
+  #define BuildDisplayVersion AppName + " " + AppVersion + " (" + DevBuildId + ")"
+  #define BuildFilename "PlexCastExplorer-Setup-" + AppVersion + "-" + DevBuildId + "-win-x64"
 #endif
 #define Publisher "Terridol"
 #define AppExe "PlexCastExplorer.exe"
@@ -12,8 +21,8 @@
 ; Stable application identity: retain across all future versions for reliable upgrades.
 AppId={{974DC3BB-C0AD-46E4-A920-053E710D988C}
 AppName={#AppName}
-AppVersion={#AppVersion}-{#DevBuildId}
-AppVerName={#AppName} {#AppVersion} ({#DevBuildId})
+AppVersion={#BuildVersion}
+AppVerName={#BuildDisplayVersion}
 AppPublisher={#Publisher}
 AppPublisherURL=https://github.com/Terridol/plex-cast-explorer
 AppSupportURL=https://github.com/Terridol/plex-cast-explorer/issues
@@ -22,7 +31,7 @@ DefaultDirName={autopf}\PlexCastExplorer
 DefaultGroupName=Plex Cast Explorer
 DisableProgramGroupPage=yes
 OutputDir=output
-OutputBaseFilename=PlexCastExplorer-Setup-{#AppVersion}-{#DevBuildId}-win-x64
+OutputBaseFilename={#BuildFilename}
 Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern
