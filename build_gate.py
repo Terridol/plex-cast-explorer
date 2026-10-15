@@ -142,10 +142,21 @@ def check_install_contract(root: Path) -> str:
             'Unsupported WinSW v2 refresh command would stop the service during upgrade')
     require("Get-CimInstance -ClassName Win32_Service" in service and
             '$registeredPath -ne $wrapper' in service and
-            '$registered.StartName -notin' in service and
+            '$registeredAccount -notin' in service and
             '& sc.exe config $serviceName start= delayed-auto' in service and
             '& $wrapper start' in service,
             'Upgrades must validate the installed service and apply supported SCM settings')
+    # Historical Windows installations can have SCM identity LocalSystem,
+    # whereas the new service XML expects LocalService. Migrate only the
+    # known legacy built-in identity, and validate the SCM result before start.
+    require("$registeredAccount -in @('LocalSystem', '.\\LocalSystem', 'NT AUTHORITY\\SYSTEM')" in service and
+            'Start-Process -FilePath $scPath' in service and
+            'obj= "NT AUTHORITY\\LocalService" password= ""' in service and
+            '$migration.ExitCode -ne 0' in service and
+            'Service registration missing after account migration.' in service and
+            '$registeredAccount -notin' in service and
+            'Refusing to modify an unrecognized service identity.' in service,
+            'Legacy LocalSystem services must migrate in place without accepting custom identities')
     # Regression: a regular-expression edit once swallowed the closing quote
     # and duplicated the update checker tail. That corruption passed basic
     # Python tests but failed Windows PowerShell parsing before installation.
