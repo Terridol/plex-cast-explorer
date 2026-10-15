@@ -2,6 +2,12 @@
 
 ## v0.4.7-beta — Windows setup startup verification
 
+- Fix confirmed Windows upgrade failure: WinSW v2.12 rejected the unsupported `refresh` command and left the service stopped.
+- Preserve existing service registration; verify wrapper path/account; apply automatic delayed-start via Windows SCM; restart with updated WinSW XML.
+- Add fail-closed regression checks forbidding `refresh`, including a mutation test that reproduces the previously released failure.
+- Capture underlying Windows setup exceptions and surface them in the installer instead of reporting only exit code 1.
+
+
 - Introduce mandatory local fail-closed build gates: source regression/negative tests, compiled EXE HTTP smoke, and installer hash/artifact checks.
 - Document GitHub Desktop `dev` pull-and-build workflow; exclude generated installers and service wrapper binaries from source control.
 - Start and verify the Windows service before the installer Finish page appears.
