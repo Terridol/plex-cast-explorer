@@ -8,7 +8,7 @@ The new Windows wizard **replaces the manual service-migration process**. It is 
 
 1. Extract the source kit into a clean directory. Use Windows 10/11 x64 with Python 3.10+ (3.13 tested).
 2. Double-click **`BUILD-INSTALLER.cmd`**. It calls `BUILD-EXE.cmd` if necessary, downloads or installs Inno Setup 6 if needed, and obtains the pinned WinSW service executable (preferring the verified copy from the existing installation).
-3. The produced installer is `output/PlexCastExplorer-Setup-0.4.7-beta-win-x64.exe` with a matching `.sha256` checksum file. Distribute the compiled installer and checksum, **not** any local ProgramData files.
+3. Each local `dev` build gets a unique installer ID including **UTC date/time (milliseconds)** and a short **Git commit** (or source fingerprint fallback), such as `output/PlexCastExplorer-Setup-0.4.7-beta-dev-20261014-203512123-g23a496e7-win-x64.exe`. The build ID is also displayed in Setup and in Windows Installed Apps, while the stable `AppId` stays unchanged for in-place upgrades. A matching `.sha256` accompanies the EXE. Older installers are retained in `output`. Distribute only the compiled installer and checksum, **not** local ProgramData.
 4. Scan the installer and review its digital signature before distribution. It is **not Authenticode-signed** until the maintainer signs it; do not advise disabling Windows SmartScreen or antivirus.
 
 Compiling is a local Windows operation; the process does **not run GitHub Actions**.
