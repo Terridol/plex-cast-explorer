@@ -407,8 +407,10 @@ def cache_plex_portraits() -> int:
     def needs_download(thumb):
         path = plex_portrait_cache_path(thumb, config['url'])
         try:
-            return (not path.is_file() or path.is_symlink() or
-                    not 0 < path.stat().st_size <= MAX_PLEX_IMAGE_BYTES)
+            if not path.is_file() or path.is_symlink() or not 0 < path.stat().st_size <= MAX_PLEX_IMAGE_BYTES:
+                return True
+            with path.open('rb') as cached:
+                return not valid_plex_image(cached.read(16))
         except OSError:
             return True
 
