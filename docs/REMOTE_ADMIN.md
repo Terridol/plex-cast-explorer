@@ -11,4 +11,4 @@ The admin password is stored as PBKDF2-HMAC-SHA256 with an independent salt and 
 
 With the allowlist unset or no admin password configured, all remote clients remain gallery-only. The normal gallery password alone never grants remote admin privileges.
 
-**Transport caveat:** The built-in web server is HTTP. Admin credentials must only cross a VPN tunnel or separately secured private channel, never the Internet or an untrusted LAN. The service is not hardened for public Internet access. Do not forward port 8765 from your router and do not place an untrusted reverse proxy on localhost. <https://github.com/Terridol/plex-cast-explorer/blob/dev/docs/WINDOWS_SERVICE.md>
+**Transport caveat:** The built-in web server is HTTP. Admin credentials must only cross a VPN tunnel or separately secured private channel, never the Internet or an untrusted LAN. The service is not hardened for public Internet access. Do not forward port 8765 from your router and do not place an untrusted reverse proxy on localhost. See [Windows Setup](WINDOWS_INSTALLER.md).
