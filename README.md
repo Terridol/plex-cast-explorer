@@ -23,9 +23,17 @@ A self-hosted, cross-library performer directory for **Plex Media Server**. Brow
 
 Windows installations use **[the new installer](docs/WINDOWS_INSTALLER.md)**. The Setup wizard offers install folder, port, a **Private-profile and local-subnet-restricted Windows Firewall rule**, TMDB opt-in, VPN-restricted remote administration, release channel, and shortcuts. It installs an automatic Windows service using the restricted LocalService identity and preserves `ProgramData` on upgrades and uninstall.
 
-**Build the real Setup.exe on Windows:** extract this source package and double-click `BUILD-INSTALLER.cmd`. The result is `output/PlexCastExplorer-Setup-0.4.7-beta-win-x64.exe`. End users of that resulting Setup.exe do **not** need Python or build tools. An offline Windows compiler/integration smoke test remains outstanding; do not treat the installer as production-certified yet.
+**Build the real Setup.exe on Windows:** check out the `dev` branch with GitHub Desktop and double-click `BUILD-INSTALLER.cmd` in your local repository folder. The result is `output/PlexCastExplorer-Setup-0.4.7-beta-win-x64.exe`. End users of that resulting Setup.exe do **not** need Python or build tools. An offline Windows compiler/integration smoke test remains outstanding; do not treat the installer as production-certified yet.
 
 **Updating:** Choose **Start → Plex Cast Explorer → Check for Updates**. The updater checks published releases; a newer installer runs only after explicit user confirmation and digest verification. No background self-updater or GitHub Actions are used.
+
+## Developer workflow (GitHub Desktop)
+
+The `dev` branch is the **single source of truth** for active development; no downloaded builder ZIPs are needed. In GitHub Desktop, clone [Terridol/plex-cast-explorer](https://github.com/Terridol/plex-cast-explorer), switch **Current Branch** to `dev`, then use **Fetch origin → Pull origin** to get updates. Open the repository in Explorer and double-click **`BUILD-INSTALLER.cmd`**.
+
+The mandatory **local, fail-closed build gates** run automatically: Python regression and installer policy tests (42 passing in the latest Linux-side validation), a compiled EXE HTTP smoke test, Windows PowerShell syntax validation and installer checksum checks. Generated `build/`, `dist/`, `output/`, `installer-assets/` and `*.spec` files are ignored by Git and must not be committed. See [Build gates](docs/BUILD_GATES.md).
+
+**No GitHub-hosted tests or builds**, no new branches, and no promotion to `main` without maintainer approval. Passing the build gates is distinct from real Windows install/upgrade/reboot tests on a disposable VM.
 
 ## Quick start (Windows)
 
