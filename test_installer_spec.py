@@ -111,7 +111,7 @@ class InstallerSpecTests(unittest.TestCase):
 
     def test_install_kit_has_build_pipeline(self):
         builder = self.read('build_installer_windows.ps1')
-        self.assertIn('BUILD-EXE.cmd', builder)
+        self.assertIn("'-m','PyInstaller'", builder)
         self.assertIn('WinSW-x64.exe', builder)
         self.assertIn('ISCC.exe', builder)
         self.assertIn('PlexCastExplorer-Setup-$appVersion-$buildId-win-x64.exe', builder)
