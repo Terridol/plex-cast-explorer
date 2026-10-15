@@ -43,6 +43,15 @@ class InstallerSpecTests(unittest.TestCase):
         self.assertIn("Invoke-LocalGate 'installer' -BuildId $buildId", builder)
         self.assertIn("def validate_build_id(", gate)
 
+    def test_clean_stable_package_name_is_explicitly_opt_in(self):
+        spec = self.read('PlexCastExplorer.iss')
+        builder = self.read('build_installer_windows.ps1')
+        self.assertIn('#define BuildFilename "PlexCastExplorer-Setup-" + AppVersion + "-win-x64"', spec)
+        self.assertIn('OutputBaseFilename={#BuildFilename}', spec)
+        self.assertIn('param([switch]$Release)', builder)
+        self.assertIn('status --porcelain --untracked-files=normal', builder)
+        self.assertIn('Stable Setup must be built from approved main, not dev.', builder)
+
     def test_installation_options_and_firewall_scoping(self):
         spec = self.read('PlexCastExplorer.iss')
         setup = self.read('installer/configure_service.ps1')
