@@ -30,6 +30,24 @@ class BuildGateRegressionTests(unittest.TestCase):
                                     '#define AppVersion "0.4.7-beta"',
                                     '#define AppVersion "9.0.0"')
 
+    def test_dev_build_id_has_strict_format(self):
+        build_gate.validate_build_id('dev-20261014-203512123-g23a496e7')
+        build_gate.validate_build_id('dev-20261014-203512123-s01234567')
+        for bad in ('', '0.4.7-beta', 'dev-20261014-g23a496e7',
+                    'dev-20261014-203512123-nohash', '../malicious'):
+            with self.subTest(bad=bad), self.assertRaises(build_gate.GateFailure):
+                build_gate.validate_build_id(bad)
+
+    def test_missing_dev_build_display_version_is_fatal(self):
+        self.assert_mutation_blocked('PlexCastExplorer.iss',
+                                    'AppVersion={#AppVersion}-{#DevBuildId}',
+                                    'AppVersion={#AppVersion}')
+
+    def test_missing_installer_build_id_is_fatal(self):
+        self.assert_mutation_blocked('build_installer_windows.ps1',
+                                    "'/DDevBuildId=' + $buildId",
+                                    "'/DDevBuildId=' + ''")
+
     def test_bypassed_service_readiness_is_fatal(self):
         self.assert_mutation_blocked('installer/configure_service.ps1',
                                     '$health.version -eq $ExpectedVersion',
