@@ -1,23 +1,27 @@
-# Mandatory parse gate for Windows installer/service/updater PowerShell scripts.
-# This script only parses files; it does not execute them.
+# Mandatory PowerShell parse gate. Discover every tracked production script
+# in the root, installer and scripts directories (including this gate).
+# Parse only; never execute the installer or modify a running service.
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
-$paths = @('build_installer_windows.ps1',
-           'installer/configure_service.ps1',
-           'installer/uninstall_cleanup.ps1', 'installer/configure_password.ps1',
-           'installer/check_updates.ps1')
-$failed = $false
-foreach ($relative in $paths) {
-    $file = Join-Path $root $relative
-    if (-not (Test-Path -LiteralPath $file -PathType Leaf)) {
-        Write-Host "[FAIL] Missing PowerShell file: $relative"
-        $failed = $true
-        continue
+$directories = @($root, (Join-Path $root 'installer'), (Join-Path $root 'scripts'))
+$paths = @(
+    foreach ($directory in $directories) {
+        if (Test-Path -LiteralPath $directory -PathType Container) {
+            Get-ChildItem -LiteralPath $directory -Filter '*.ps1' -File
+        }
     }
+)
+if ($paths.Count -eq 0) {
+    Write-Host '[FAIL] No PowerShell scripts found for syntax validation.'
+    exit 1
+}
+$failed = $false
+foreach ($entry in $paths) {
+    $relative = $entry.FullName.Substring($root.Length + 1)
     $tokens = $null
     $parseErrors = $null
     $null = [System.Management.Automation.Language.Parser]::ParseFile(
-        $file, [ref]$tokens, [ref]$parseErrors)
+        $entry.FullName, [ref]$tokens, [ref]$parseErrors)
     if ($parseErrors.Count -gt 0) {
         Write-Host "[FAIL] PowerShell syntax: $relative"
         foreach ($errorItem in $parseErrors) { Write-Host ($errorItem.ToString()) }
@@ -27,4 +31,5 @@ foreach ($relative in $paths) {
     }
 }
 if ($failed) { exit 1 }
+Write-Host "[PASS] Parsed $($paths.Count) PowerShell scripts."
 exit 0
