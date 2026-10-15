@@ -2,6 +2,7 @@
 
 ## dev — Windows installer and repository cleanup
 
+- Fixed a regression-gate false negative after legacy service-account migration: both pre-migration and post-migration Windows service-registration checks are required, and separate mutation tests verify that removing either blocks the build.
 - Fixed a confirmed Windows in-place upgrade failure reported in `installer-error-details.log`: older WinSW services can be registered as `LocalSystem` and were rejected by the `LocalService`-only installer guard. Known legacy services now migrate to the least-privileged account in place; unknown custom service accounts are still rejected.
 - Added service-account migration regression and build-contract checks. A successful Windows upgrade/reboot test is still required.
 - Fixed PowerShell application-version recognition (`\\s` escaping) and moved it ahead of PyInstaller packaging, so malformed version logic fails before compiling the executable.
