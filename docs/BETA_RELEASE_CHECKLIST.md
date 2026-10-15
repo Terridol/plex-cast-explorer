@@ -4,13 +4,14 @@
 
 ## Completed locally
 - [x] Application and installer source checked with local Python and JavaScript tools.
-- [x] 36 automated tests pass in the development environment.
+- [x] 42 automated Python unit/regression tests pass locally, including negative build-gate mutation tests.
+- [x] Mandatory local build pipeline added: source regression, compiled EXE HTTP smoke, and installer artifact/digest checks (Windows-specific stages still pending).
 - [x] Inno Setup service configuration moved into `CurStepChanged(ssPostInstall)`, before the Finish screen.
 - [x] Service setup now requires both Windows service status `Running` and a live HTTP response from the **expected** version.
 - [x] Existing upgrades retain ProgramData and manage a Private-profile, subnet-scoped firewall rule.
 
 ## Windows verification needed before public beta
-- [ ] Compile the updated installer on Windows with no errors; verify resulting installer hash.
+- [ ] Pull `dev` in GitHub Desktop and run `BUILD-INSTALLER.cmd` on Windows; verify that **all three mandatory gates pass**, the compiler succeeds, and the output checksum matches.
 - [ ] Clean Windows installation: confirm configured port, password setup, firewall scope, and service ready **before** Finish.
 - [ ] In-place upgrade from v0.4.6-beta: preserve gallery index, portraits, settings, credentials, and installer choices.
 - [ ] Reboot: service must start without interactive sign-in.
