@@ -121,8 +121,8 @@ class PlexCastExplorerTests(unittest.TestCase):
                              {'mode':'remote','base':'https://app.plex.tv/desktop/'})
             self.assertEqual(app.plex_link_config('10.10.20.45', '10.44.10.30')['mode'], 'remote')
 
-    @patch.object(app, 'provider_enabled', new=lambda name: name in ('tmdb', 'wikimedia'))
-    def test_artwork_search_matches_exact_name_and_multiple_providers(self):
+    @patch.object(app, 'provider_enabled', new=lambda name: name == 'tmdb')
+    def test_artwork_search_uses_tmdb_first_when_portrait_found(self):
         with patch.object(app, 'plex_xml', side_effect=self.fake_xml):
             app.sync_all(force=True)
         def fake_get(url, bearer=None):
@@ -141,9 +141,29 @@ class PlexCastExplorerTests(unittest.TestCase):
         with patch.object(app, 'artwork_keys', return_value={'tmdb':'secret','theporndb':'secret'}), \
                 patch.object(app, 'provider_json', side_effect=fake_get):
             data = app.find_art('sample actor')
-        self.assertEqual([x['source'] for x in data['results']], ['TMDB', 'ThePornDB', 'Wikimedia Commons'])
+        self.assertEqual([x['source'] for x in data['results']], ['TMDB'])
         self.assertNotIn('Sample Actor Jr', [x['name'] for x in data['results']])
         self.assertTrue(all(x['preview'].startswith('/api/art/preview?id=') for x in data['results']))
+
+    @patch.object(app, 'provider_enabled', new=lambda name: name == 'tmdb')
+    def test_artwork_search_falls_back_to_tpdb_without_tmdb_portrait(self):
+        with patch.object(app, 'plex_xml', side_effect=self.fake_xml):
+            app.sync_all(force=True)
+        calls = []
+        def fake_get(url, bearer=None):
+            calls.append(url)
+            if 'themoviedb.org' in url:
+                return {'results': [{'id': 12, 'name': 'Sample Actor', 'profile_path': None}]}
+            if 'theporndb.net' in url:
+                return {'data': [{'id': 'z1', 'name': 'Sample Actor', 'image': 'https://cdn.theporndb.net/abc.jpg'}]}
+            raise AssertionError(url)
+        with patch.object(app, 'artwork_keys', return_value={'tmdb': 't', 'theporndb': 'p'}), \
+             patch.object(app, 'provider_json', side_effect=fake_get):
+            result = app.find_art('sample actor')
+        self.assertEqual([x['source'] for x in result['results']], ['ThePornDB'])
+        self.assertEqual(len(calls), 2)
+        self.assertIn('themoviedb.org', calls[0])
+        self.assertIn('theporndb.net', calls[1])
 
     def test_artwork_override_survives_reindex_and_reverts(self):
         with patch.object(app, 'plex_xml', side_effect=self.fake_xml):
@@ -311,16 +331,15 @@ class PlexCastExplorerTests(unittest.TestCase):
         self.assertEqual(app.enrichment_status()['review_waiting'],0)
         self.assertIsNone(app.get_actor('second actor')['art']['source'] or None)
 
-    def test_legacy_tmdb_review_is_preserved_but_new_downloads_are_blocked(self):
+    def test_existing_tmdb_review_can_display_full_resolution_preview(self):
         with patch.object(app, 'plex_xml', side_effect=self.fake_xml):
             app.sync_all(force=True)
         app.remember_enrichment('second actor','review',[{
             'source':'TMDB', 'url':'https://image.tmdb.org/t/p/w342/a.jpg',
             'name':'Second Actor','matches':[]}])
-        with patch.object(app, 'external_image') as image:
-            with self.assertRaisesRegex(ValueError, 'unavailable'):
-                app.get_enrichment_preview('second actor', 0)
-            image.assert_not_called()
+        with patch.object(app, 'external_image', return_value=(b'img', 'jpg')) as image:
+            self.assertEqual(app.get_enrichment_preview('second actor', 0), (b'img', 'jpg'))
+            image.assert_called_once_with('https://image.tmdb.org/t/p/h632/a.jpg')
         self.assertEqual(app.enrichment_status()['review_waiting'], 1)
 
     def test_conflicting_character_roles_block_automatic_application(self):
@@ -384,6 +403,35 @@ class PlexCastExplorerTests(unittest.TestCase):
         self.assertEqual(app.enrichment_status()['review_waiting'],1)
         self.assertFalse(app.get_actor('second actor')['art']['source'])
         self.assertEqual(len(app.review_enrichment()[0]['choices']),2)
+
+    def test_retry_unmatched_does_not_erase_review_or_applied_portraits(self):
+        with patch.object(app, 'plex_xml', side_effect=self.fake_xml):
+            app.sync_all(force=True)
+        app.remember_enrichment('second actor', 'unmatched')
+        app.remember_enrichment('sample actor', 'review', [], '')
+        self.assertEqual(app.retry_unmatched_enrichment(), 1)
+        self.assertEqual(len(app.review_enrichment()), 1)
+        self.assertIn('second actor', app.pending_enrichment_keys())
+        self.assertEqual(app.retry_unmatched_enrichment(), 0)
+
+    @patch.object(app, 'provider_enabled', new=lambda name: name == 'tmdb')
+    def test_verified_candidates_use_tmdb_without_calling_tpdb(self):
+        with patch.object(app, 'plex_xml', side_effect=self.fake_xml):
+            app.sync_all(force=True)
+        calls = []
+        def fake_provider(url, token):
+            calls.append(url)
+            if '/search/person?' in url:
+                return {'results': [{'id': 24, 'name': 'Sample Actor', 'profile_path': '/ok.jpg'}]}
+            if '/person/24/combined_credits' in url:
+                return {'cast': [{'title': 'Alpha', 'media_type': 'movie', 'release_date': '2024-06-11'}]}
+            raise AssertionError('TPDB should not be queried: '+url)
+        with patch.object(app, 'artwork_keys', return_value={'tmdb': 'tmdb-key', 'theporndb': 'tpdb-key'}), \
+             patch.object(app, 'paced_provider_json', side_effect=fake_provider):
+            candidates, errors = app.verified_portrait_candidates('sample actor')
+        self.assertEqual(errors, [])
+        self.assertEqual([c['source'] for c in candidates], ['TMDB'])
+        self.assertEqual(len(calls), 2)
 
     def test_retry_failed_lookups_only(self):
         with patch.object(app, 'plex_xml', side_effect=self.fake_xml):

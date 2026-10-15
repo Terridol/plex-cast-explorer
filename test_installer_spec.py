@@ -71,11 +71,10 @@ class InstallerSpecTests(unittest.TestCase):
         spec = self.read('PlexCastExplorer.iss')
         setup = self.read('installer/configure_service.ps1')
         self.assertIn('CreateInputQueryPage', spec)
-        for option in ('firewall', 'remoteadmin', 'beta'):
+        for option in ('firewall', 'tmdb', 'remoteadmin', 'beta'):
             self.assertIn(f'Name: "{option}"', spec)
-        self.assertNotIn('Name: "tmdb"', spec)
-        self.assertIn("Result := '0';", spec)
-        self.assertIn("@('CAST_EXPLORER_ENABLE_TMDB', '0')", setup)
+        self.assertIn('WizardIsTaskSelected(\'tmdb\')', spec)
+        self.assertIn("if ($EnableTMDB -eq 1)", setup)
         self.assertIn("-Profile Private -RemoteAddress $remote", setup)
         self.assertIn("$remote = @('LocalSubnet') + $addresses", setup)
         self.assertIn('Get-NetFirewallRule -Name $ruleName', setup)

@@ -19,31 +19,31 @@ class ReleaseGuardrailTests(unittest.TestCase):
             self.assertFalse(app.provider_enabled('tmdb'))
             self.assertFalse(app.provider_enabled('wikimedia'))
 
-    def test_old_provider_flags_cannot_reactivate_restricted_integrations(self):
+    def test_tmdb_opt_in_requires_explicit_flag(self):
         with patch.dict(os.environ, {'CAST_EXPLORER_ENABLE_TMDB': '1',
                                      'CAST_EXPLORER_ENABLE_WIKIMEDIA': '1',
-                                     'CAST_EXPLORER_TMDB_TOKEN': 'legacy-secret'}):
-            self.assertFalse(app.provider_enabled('tmdb'))
+                                     'CAST_EXPLORER_TMDB_TOKEN': 'example-token'}):
+            self.assertTrue(app.provider_enabled('tmdb'))
             self.assertFalse(app.provider_enabled('wikimedia'))
-        for url in ('https://api.themoviedb.org/3/search/person',
-                    'https://www.wikidata.org/w/api.php'):
-            with self.subTest(url=url), self.assertRaisesRegex(ValueError, 'unavailable'):
-                app.provider_json(url, 'old-token')
+        with patch.dict(os.environ, {'CAST_EXPLORER_ENABLE_TMDB': 'true'}):
+            self.assertFalse(app.provider_enabled('tmdb'))
 
-    def test_tmdb_credential_enrollment_is_blocked(self):
-        with self.assertRaisesRegex(ValueError, 'unavailable'):
-            app.save_artwork_keys('new-tmdb-token', '')
-        with patch.object(app, 'artwork_keys', return_value={'tmdb':'old', 'theporndb':''}):
-            with self.assertRaisesRegex(ValueError, 'ThePornDB'):
-                app.enrichment_start()
+    def test_tmdb_token_can_be_saved_without_automatically_enabling_lookup(self):
+        with tempfile.TemporaryDirectory() as tmp, patch.object(app, 'ART_CONFIG_PATH', Path(tmp) / 'artwork.json'):
+            app.save_artwork_keys('new-tmdb-token', 'tpdb-token')
+            keys = app.artwork_keys()
+            self.assertEqual(keys['tmdb'], 'new-tmdb-token')
+            self.assertEqual(keys['theporndb'], 'tpdb-token')
+        with patch.dict(os.environ, {}, clear=True):
+            self.assertFalse(app.provider_enabled('tmdb'))
 
-    def test_existing_artwork_is_not_erased_by_provider_disable(self):
-        self.assertFalse(app.provider_enabled('tmdb'))
-        self.assertFalse(app.provider_enabled('wikimedia'))
-        for url in ('https://image.tmdb.org/t/p/w342/x.jpg',
-                    'https://commons.wikimedia.org/wiki/Special:Redirect/file/x.jpg'):
-            with self.subTest(url=url), self.assertRaisesRegex(ValueError, 'unavailable'):
-                app.verified_portrait_image(url)
+    def test_tmdb_image_uses_high_resolution_with_fallback(self):
+        with patch.object(app, 'external_image', return_value=(b'img', 'jpg')) as image:
+            self.assertEqual(app.verified_portrait_image('https://image.tmdb.org/t/p/w342/x.jpg'), (b'img', 'jpg'))
+            image.assert_called_once_with('https://image.tmdb.org/t/p/h632/x.jpg')
+        with patch.object(app, 'external_image', side_effect=[ValueError('Unavailable'), (b'fallback', 'jpg')]) as image:
+            self.assertEqual(app.verified_portrait_image('https://image.tmdb.org/t/p/w342/x.jpg'), (b'fallback', 'jpg'))
+            self.assertEqual(image.call_count, 2)
 
     def test_privacy_notice_accessible_without_authentication(self):
         server = ThreadingHTTPServer(('127.0.0.1', 0), app.Handler)

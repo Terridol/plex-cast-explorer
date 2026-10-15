@@ -66,12 +66,17 @@ def check_install_contract(root: Path) -> str:
             'Python-LICENSE.txt' in build and
             'runtimeLicense' in build,
             'Windows installer must include CPython runtime license and project NOTICE')
-    require('Name: "tmdb"' not in spec and
-            "Result := '0';" in spec and
-            "@('CAST_EXPLORER_ENABLE_TMDB', '0')" in service and
-            "def provider_enabled(name):" in read(root, 'app.py') and
-            "This provider is unavailable in Plex Cast Explorer 1.0" in read(root, 'app.py'),
-            'GA 1.0 must not reenable disallowed TMDB/Wikimedia integrations')
+    require('Name: "tmdb"' in spec and
+            "WizardIsTaskSelected('tmdb')" in spec and
+            "if ($EnableTMDB -eq 1)" in service and
+            "CAST_EXPLORER_ENABLE_TMDB" in read(root, 'app.py') and
+            "if keys['theporndb'] and not found:" in read(root, 'app.py') and
+            "if keys['theporndb'] and not results:" in read(root, 'app.py') and
+            "retry_unmatched_enrichment" in read(root, 'app.py') and
+            "enrichRetryUnmatched" in read(root, 'static/app.js') and
+            "This product uses TMDB and the TMDB APIs but is not endorsed, certified, or otherwise approved by TMDB." in read(root, 'static/privacy.html') and
+            "blue_short-8e7b30" in read(root, 'static/index.html'),
+            'GA 1.0 must preserve authorized TMDB-first lookup, TPDB fallback and TMDB attribution')
     require('MIT License' in winsw_license and
             'Kohsuke Kawaguchi' in winsw_license and
             'Source: "legal\\WinSW-LICENSE.txt"; DestDir: "{app}\\licenses"' in spec,
