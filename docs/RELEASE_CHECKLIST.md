@@ -1,0 +1,43 @@
+# Plex Cast Explorer 1.0 — General release checklist
+
+**Status: FEATURE FROZEN, NOT PUBLISHED.** Candidate version: `1.0.0-rc.1`. The most recent maintainer-confirmed installed working build was `0.4.7-beta`. This file is the single source of truth for general-availability approval.
+
+**Change policy:** On `dev`, only narrowly scoped release-blocking fixes, security/privacy hardening, dependency/attribution work, regression tests, installer compatibility, and release documents. No new features, unrelated refactors, providers, branches, GitHub-hosted builds or automatic releases. Do not update `main` before approval.
+
+## Feature scope frozen for v1.0
+
+- Windows 10/11 x64 installer, compatible in-place upgrades, auto-start service, Private-profile scoped firewall.
+- Plex movie/TV cast and credits indexing, actor gallery, search, filters, library links and incremental synchronization.
+- Portrait cache, manually reviewed external art, conservative matching, passwords and optional VPN-restricted remote administration.
+- Existing runtime data, configuration, database and portraits under `C:\ProgramData\PlexCastExplorer`.
+
+## Verified evidence
+
+- [x] Maintainer confirmed the **0.4.7-beta** source/build gates, Windows installer, upgrade and application worked on the Windows host after prior fixes.
+- [x] Source on `dev` has a single CMD builder, six PowerShell scripts and explicit local build gates.
+- [ ] **Run the new 1.0.0-rc.1 local build** from latest `dev` using `BUILD-INSTALLER.cmd`. Record Git SHA, 73+ regression tests, JS syntax check, EXE smoke, exact installer output and SHA-256. Previously passing 0.4.7 does not validate the candidate.
+
+## Mandatory Windows release acceptance — use a disposable VM/test PC
+
+- [ ] Clean install with configured port, password enrollment, Private firewall and `NT AUTHORITY\LocalService` identity; verify service and local HTTP API before Finish.
+- [ ] In-place upgrade from the 0.4.7-beta installed build, including a legacy `LocalSystem` service; confirm all credentials, index, portraits, review history, port/options, firewall and identity retained or migrated correctly.
+- [ ] Reboot without interactive sign-in; verify delayed service startup, index availability and LAN gallery authentication.
+- [ ] Simulate an occupied port and failed service startup; confirm error is surfaced and a working backup/recovery procedure exists.
+- [ ] Uninstall/reinstall on disposable Windows; verify service/firewall cleanup and **ProgramData survives**.
+- [ ] Confirm VPN-restricted administrator logins reject unauthorized networks and gallery-only sessions cannot access admin controls.
+- [ ] Validate offline/no Plex connection behavior, invalid credentials, corrupt configuration and recovery instructions.
+
+## Security, legal and publication gates
+
+- [ ] Audit entire Git **history**, source archive and installer payload for tokens, databases, local portraits, logs, user metadata or unexpected binaries; rotate anything historically leaked.
+- [ ] Review WinSW MIT notice, Python/PyInstaller dependencies, bundled licenses and third-party attribution; ensure no external/provider artwork is bundled.
+- [ ] Verify optional provider permission and attribution. **TMDB and Wikimedia are off by default**. TMDB's restrictions on pornographic apps and approved-logo requirements remain unresolved; do not enable TMDB without demonstrated compliance or agreement.
+- [ ] Independently assess the custom noncommercial source-share license if public enforcement/commercial permissions matter. Never call it an OSI open-source license.
+- [ ] Review session, HTTP Host, CSRF, file-path, credential, provider redirect and API handling for general distribution; independent penetration testing recommended.
+- [ ] Confirm restricted LAN/private-VPN HTTP-only deployment; never publicly forward the port or imply native TLS protection.
+- [ ] Confirm **GitHub Actions disabled in repository Settings** before tagging or changing `main` (existing `main` contains workflow triggers).
+- [ ] Implement and validate a **stable-named 1.0.0 Setup** without a `dev-` suffix; build from exact release source, sign if possible, calculate SHA-256 and verify an external download.
+- [ ] Verify explicit user-consented update check, released asset digest, publisher identity, release notes, privacy/support/contact instructions and license notices.
+- [ ] Obtain explicit maintainer go/no-go to promote `dev` to `main`, tag and publish the 1.0.0 installer.
+
+**No-go:** Any unchecked mandatory item blocks a public 1.0 general-availability claim. Document any formally waived item and reason rather than silently marking it complete.

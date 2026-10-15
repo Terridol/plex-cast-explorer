@@ -1,5 +1,12 @@
 # Changelog
 
+## v1.0.0-rc.1 — Feature-freeze release candidate (NOT general availability)
+
+- Freeze existing Plex cast indexing, actor gallery, authentication, artwork review, and Windows installer/service features for v1.
+- Preserve the Windows product AppId, service name, ProgramData index, tokens, artwork and upgrade compatibility.
+- Align app, Setup, updater, service and regression tests to `1.0.0-rc.1`, with a consolidated general-release gate and draft notes.
+- Remain on `dev`; do not tag, publish, invoke GitHub Actions or promote to `main` before independent release validation and maintainer authorization.
+
 ## dev — Windows installer and repository cleanup
 
 - Fixed a regression-gate false negative after legacy service-account migration: both pre-migration and post-migration Windows service-registration checks are required, and separate mutation tests verify that removing either blocks the build.

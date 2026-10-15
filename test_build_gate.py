@@ -25,7 +25,7 @@ class BuildGateRegressionTests(unittest.TestCase):
 
     def test_version_drift_is_fatal(self):
         self.assert_mutation_blocked('PlexCastExplorer.iss',
-                                    '#define AppVersion "0.4.7-beta"',
+                                    '#define AppVersion "1.0.0-rc.1"',
                                     '#define AppVersion "9.0.0"')
 
     def test_powershell_version_regex_double_escaping_is_fatal(self):
@@ -42,18 +42,18 @@ class BuildGateRegressionTests(unittest.TestCase):
 
     def test_updater_version_mismatch_is_fatal(self):
         self.assert_mutation_blocked('installer/check_updates.ps1',
-                                     "$installed = '0.4.7-beta'",
+                                     "$installed = '1.0.0-rc.1'",
                                      "$installed = '0.4.6-beta'")
 
     def test_service_version_mismatch_is_fatal(self):
         self.assert_mutation_blocked('installer/configure_service.ps1',
-                                     "$ExpectedVersion = '0.4.7-beta'",
+                                     "$ExpectedVersion = '1.0.0-rc.1'",
                                      "$ExpectedVersion = '0.4.6-beta'")
 
     def test_dev_build_id_has_strict_format(self):
         build_gate.validate_build_id('dev-20261014-203512123-g23a496e7')
         build_gate.validate_build_id('dev-20261014-203512123-s01234567')
-        for bad in ('', '0.4.7-beta', 'dev-20261014-g23a496e7',
+        for bad in ('', '1.0.0-rc.1', 'dev-20261014-g23a496e7',
                     'dev-20261014-203512123-nohash', '../malicious'):
             with self.subTest(bad=bad), self.assertRaises(build_gate.GateFailure):
                 build_gate.validate_build_id(bad)

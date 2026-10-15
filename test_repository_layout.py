@@ -18,6 +18,7 @@ OBSOLETE = (
     "docs/INSTALLATION.md",
     "docs/WINDOWS_SERVICE.md",
     "docs/PUBLICATION_STATUS.md",
+    "docs/BETA_RELEASE_CHECKLIST.md",
     "docs/BRANCHING.md",
     "docs/RELEASE.md",
     "docs/MAINTAINERS.md",
@@ -27,6 +28,8 @@ OBSOLETE = (
 )
 REQUIRED = (
     "app.py",
+    "docs/RELEASE_CHECKLIST.md",
+    "docs/RELEASE_NOTES_1_0.md",
     "PlexCastExplorer.iss",
     "BUILD-INSTALLER.cmd",
     "build_installer_windows.ps1",

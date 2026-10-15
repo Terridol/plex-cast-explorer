@@ -1,4 +1,4 @@
-# Windows installer, upgrades and updates — v0.4.7-beta
+# Windows installer, upgrades and updates — v1.0.0-rc.1 (release candidate)
 
 The new Windows wizard **replaces the manual service-migration process**. It is built with [Inno Setup 6](https://jrsoftware.org/isinfo.php) and installs Plex Cast Explorer as an Automatic (Delayed Start) Windows service under the restricted `LocalService` account. The compiled installer includes the PyInstaller application and a SHA-256-pinned WinSW service wrapper, so **end users do not need Python, PyInstaller or Inno Setup**.
 
@@ -8,7 +8,7 @@ The new Windows wizard **replaces the manual service-migration process**. It is 
 
 1. Clone `dev` in GitHub Desktop and pull the latest commits. Use Windows 10/11 x64 with Python 3.10+ on the build machine (3.13 tested).
 2. Double-click **`BUILD-INSTALLER.cmd`**. It validates every active PowerShell script **before** building, runs source/negative regression checks, builds the EXE directly, downloads or installs Inno Setup 6 if needed, and obtains the pinned WinSW service executable (preferring the verified copy from the existing installation).
-3. Each local `dev` build gets a unique installer ID including **UTC date/time (milliseconds)** and a short **Git commit** (or source fingerprint fallback), such as `output/PlexCastExplorer-Setup-0.4.7-beta-dev-20261014-203512123-g23a496e7-win-x64.exe`. The build ID is also displayed in Setup and in Windows Installed Apps, while the stable `AppId` stays unchanged for in-place upgrades. A matching `.sha256` accompanies the EXE. Older installers are retained in `output`. Distribute only the compiled installer and checksum, **not** local ProgramData.
+3. Each local `dev` build gets a unique installer ID including **UTC date/time (milliseconds)** and a short **Git commit** (or source fingerprint fallback), such as `output/PlexCastExplorer-Setup-1.0.0-rc.1-dev-20261014-203512123-g23a496e7-win-x64.exe`. The build ID is also displayed in Setup and in Windows Installed Apps, while the stable `AppId` stays unchanged for in-place upgrades. A matching `.sha256` accompanies the EXE. Older installers are retained in `output`. Distribute only the compiled installer and checksum, **not** local ProgramData.
 4. Scan the installer and review its digital signature before distribution. It is **not Authenticode-signed** until the maintainer signs it; do not advise disabling Windows SmartScreen or antivirus.
 
 Compiling is a local Windows operation; the process does **not run GitHub Actions**.

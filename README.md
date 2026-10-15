@@ -2,16 +2,16 @@
 
 Self-hosted Plex cast browser for Windows. Index actors across movie and TV libraries, browse portraits and credits, and optionally search external portrait providers.
 
-**Development:** `0.4.7-beta` · **Windows:** 10/11 x64 · **Runtime:** bundled into installer · **Source build:** Python 3.10+ and Inno Setup 6
+**Feature-frozen candidate:** `1.0.0-rc.1` · **Windows:** 10/11 x64 · **Runtime:** bundled into installer · **Source build:** Python 3.10+ and Inno Setup 6
 
-**Project state:** Public development source, not a production-verified beta installer. Follow [the release checklist](docs/BETA_RELEASE_CHECKLIST.md) before publishing an installation package.
+**Project state:** Feature-frozen 1.0 release candidate, **not a published or certified general release**. See [the release checklist](docs/RELEASE_CHECKLIST.md) before promoting or distributing a stable installer.
 
 ## Install and use
 
 1. On a Windows build machine, clone `Terridol/plex-cast-explorer` with GitHub Desktop and select the **`dev`** branch.
 2. Choose **Fetch origin → Pull origin**, then run **`BUILD-INSTALLER.cmd`** in the repository directory.
 3. The local build validates PowerShell syntax before any other step, runs Python regression/negative tests, builds a self-contained application, smoke-tests that executable with disposable data, compiles Inno Setup, and verifies the installer/checksum.
-4. The uniquely named installer is placed in `output/`: for example, `PlexCastExplorer-Setup-0.4.7-beta-dev-20261014-203512123-g23a496e7-win-x64.exe`.
+4. The uniquely named installer is placed in `output/`: for example, `PlexCastExplorer-Setup-1.0.0-rc.1-dev-20261014-203512123-g23a496e7-win-x64.exe`.
 5. **Back up `C:\ProgramData\PlexCastExplorer` before an upgrade.** Run Setup as Administrator. Choose the service port, Private-profile Windows Firewall rule, and any explicitly permitted provider/VPN options. Do not uninstall your existing service first.
 6. After installation, use **Start → Plex Cast Explorer → Set Gallery Password** if this is a new installation. On the server, browse `http://127.0.0.1:8765` (or your configured port), configure Plex, and index the libraries. Other trusted LAN devices sign in with the gallery password.
 
@@ -29,6 +29,10 @@ For details see [Windows installation, service, upgrades and updates](docs/WINDO
 **Security boundary:** The web server uses plain HTTP. Use only a trusted LAN or an appropriately secured private VPN; **never forward the application port to the public Internet**. Do not expose it through an untrusted proxy on localhost. Provider API tokens and credentials must remain on the server. See [security](SECURITY.md), [privacy](docs/PRIVACY.md), and [remote admin](docs/REMOTE_ADMIN.md).
 
 External provider support has independent terms. **TMDB and Wikimedia are off by default**; ThePornDB requires an API token. TMDB's restrictions on adult-oriented uses and its attribution/logo requirements remain unresolved. Never present optional provider integration as licensed for every deployment. See [artwork](docs/ARTWORK.md) and [third-party requirements](docs/THIRD_PARTY.md).
+
+## 1.0 feature freeze
+
+The v1.0 feature set is frozen. Only targeted release-blocking bug fixes, security/privacy corrections, dependency and rights issues, compatibility fixes, regression tests, packaging and release documentation are allowed on `dev` until general availability. Do not add features, external provider integrations or unrelated refactors during stabilization.
 
 ## Development rules
 

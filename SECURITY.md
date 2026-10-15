@@ -18,4 +18,4 @@ Never commit API tokens, Plex credentials, gallery passwords, configuration with
 
 ## Security expectations
 
-See [beta release readiness checklist](docs/BETA_RELEASE_CHECKLIST.md) for remaining reviews. There is no security certification or guaranteed vulnerability response SLA.
+See [1.0 release checklist](docs/RELEASE_CHECKLIST.md) for remaining reviews. There is no security certification or guaranteed vulnerability response SLA.

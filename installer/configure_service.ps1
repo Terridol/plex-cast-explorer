@@ -8,7 +8,7 @@ param(
     [ValidateSet(0,1)][int]$CreateFirewall = 1,
     [ValidateSet(0,1)][int]$AllowBetaUpdates = 0,
     [string]$RemoteAdminCIDRs = '',
-    [string]$ExpectedVersion = '0.4.7-beta'
+    [string]$ExpectedVersion = '1.0.0-rc.1'
 )
 $ErrorActionPreference = 'Stop'
 # Capture terminating setup failures before Windows Setup hides PowerShell.

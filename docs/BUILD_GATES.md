@@ -24,13 +24,13 @@ py -3 build_gate.py installer --build-id dev-YYYYMMDD-HHMMSSmmm-g12345678 # actu
 
 ### Important release boundary
 
-**A build passing is not sufficient to claim the installer has been installed successfully.** The WinSW/SCM integration, service account ACLs, firewall rule on a real network profile, first installation, upgrade from a prior release, reboot and uninstall must also pass on a *disposable Windows VM or dedicated test PC*. Never run destructive installer tests automatically against the primary Plex server. A failure in any of those scenarios blocks public beta release; record the results in `docs/BETA_RELEASE_CHECKLIST.md`.
+**A build passing is not sufficient to claim the installer has been installed successfully.** The WinSW/SCM integration, service account ACLs, firewall rule on a real network profile, first installation, upgrade from a prior release, reboot and uninstall must also pass on a *disposable Windows VM or dedicated test PC*. Never run destructive installer tests automatically against the primary Plex server. A failure in any of those scenarios blocks public beta release; record the results in `docs/RELEASE_CHECKLIST.md`.
 
 If Node.js is absent, the build prints a prominent message that JavaScript syntax was not parsed; the Python/backend and Windows installer/executable gates remain mandatory. Install Node.js for an additional JS syntax check prior to public beta.
 
 ## Unique development installer versions
 
-Every local `dev` installer receives a build ID in the form `dev-YYYYMMDD-HHMMSSmmm-g<8-char-Git-SHA>`, or `dev-YYYYMMDD-HHMMSSmmm-s<8-char-source-fingerprint>` when Git is not available on PATH. Inno Setup requires this ID at compile time, embeds it into the displayed application version, and uses it in the setup filename. Example: `PlexCastExplorer-Setup-0.4.7-beta-dev-20261014-203512123-g23a496e7-win-x64.exe`. The installer artifact gate requires the exact generated name and checksum. All previous output builds remain available for comparison; no build is deployed automatically. The stable installer `AppId` is **never changed** by a build ID.
+Every local `dev` installer receives a build ID in the form `dev-YYYYMMDD-HHMMSSmmm-g<8-char-Git-SHA>`, or `dev-YYYYMMDD-HHMMSSmmm-s<8-char-source-fingerprint>` when Git is not available on PATH. Inno Setup requires this ID at compile time, embeds it into the displayed application version, and uses it in the setup filename. Example: `PlexCastExplorer-Setup-1.0.0-rc.1-dev-20261014-203512123-g23a496e7-win-x64.exe`. The installer artifact gate requires the exact generated name and checksum. All previous output builds remain available for comparison; no build is deployed automatically. The stable installer `AppId` is **never changed** by a build ID.
 
 ## Repository workflow and promotion
 

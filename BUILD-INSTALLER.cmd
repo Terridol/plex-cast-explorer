@@ -2,7 +2,7 @@
 setlocal EnableExtensions
 cd /d "%~dp0"
 echo ===============================================================
-echo   Plex Cast Explorer - Windows Setup Builder (v0.4.7 beta)
+echo   Plex Cast Explorer - Windows Setup Builder (v1.0.0 release candidate)
 echo ===============================================================
 echo.
 echo Creates a single Windows Setup EXE with installation options,

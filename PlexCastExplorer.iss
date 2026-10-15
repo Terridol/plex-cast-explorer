@@ -1,5 +1,5 @@
 #define AppName "Plex Cast Explorer"
-#define AppVersion "0.4.7-beta"
+#define AppVersion "1.0.0-rc.1"
 ; Required build ID is supplied by the local Windows builder with /DDevBuildId=...
 ; Never produce an ambiguously named development installer.
 #ifndef DevBuildId
