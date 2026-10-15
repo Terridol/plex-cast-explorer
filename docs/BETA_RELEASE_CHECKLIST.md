@@ -30,3 +30,16 @@
 - Custom noncommercial source license is not independently legally reviewed.
 
 **Minimum beta gate:** Windows clean install, upgrade, reboot, failure/rollback and privacy checks; published checksum and clear limitations; explicit maintainer go-ahead.
+## Release publication and ownership checks
+
+The following gates are required *in addition to* passing the local builder:
+
+- Confirm no credentials, databases, private metadata, cached portraits, or service logs appear in the repository, Git history, installer, or publication assets.
+- Check redistribution rights for all bundled dependencies and third-party material. The project's custom noncommercial license has not undergone independent legal review.
+- Keep TMDB off by default; resolve any approved-logo, attribution, caching, and permitted-use questions before enabling it in a supported public release. Artwork from other providers carries separate rights.
+- Validate clean installation, upgrade with data retention, reboot, uninstall/reinstall, LAN gallery authentication, VPN-only administrator login, and a deliberate installer failure on a disposable Windows test machine.
+- Confirm publisher, release notes, documentation, exact versioned installer filename, and SHA-256. The executable is currently unsigned; publishing an unsigned beta requires clear notice.
+- Confirm repository Actions are disabled before creating GitHub release tags (legacy triggers still exist on `main`). Never run GitHub-hosted builds or automation.
+- Accept third-party copyrighted contributions only after obtaining necessary rights or appropriate signed contributor agreements.
+
+Do not claim a stable or certified release, and do not publish tags or modify `main` without maintainer approval.
