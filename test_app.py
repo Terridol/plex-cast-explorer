@@ -17,11 +17,13 @@ class PlexCastExplorerTests(unittest.TestCase):
         self.old_db = app.DB_PATH
         self.old_conf = app.CONFIG_PATH
         self.old_portraits = app.PORTRAIT_DIR
+        self.old_plex_portraits = app.PLEX_PORTRAIT_DIR
         self.old_art_config = app.ART_CONFIG_PATH
         self.old_network_config = app.NETWORK_CONFIG_PATH
         app.DB_PATH = Path(self.temp.name) / 'data.sqlite'
         app.CONFIG_PATH = Path(self.temp.name) / 'settings.json'
         app.PORTRAIT_DIR = Path(self.temp.name) / 'portraits'
+        app.PLEX_PORTRAIT_DIR = Path(self.temp.name) / 'plex-portraits'
         app.ART_CONFIG_PATH = Path(self.temp.name) / 'artwork.json'
         app.NETWORK_CONFIG_PATH = Path(self.temp.name) / 'network.json'
         app.image_bytes.cache_clear()
@@ -31,6 +33,7 @@ class PlexCastExplorerTests(unittest.TestCase):
         app.DB_PATH = self.old_db
         app.CONFIG_PATH = self.old_conf
         app.PORTRAIT_DIR = self.old_portraits
+        app.PLEX_PORTRAIT_DIR = self.old_plex_portraits
         app.ART_CONFIG_PATH = self.old_art_config
         app.NETWORK_CONFIG_PATH = self.old_network_config
         app.image_bytes.cache_clear()
@@ -80,6 +83,71 @@ class PlexCastExplorerTests(unittest.TestCase):
             self.assertEqual(app.status_snapshot()['phase'], 'Finished')
             self.assertEqual(mock_plex.call_count - count, 4)  # root, sections, 2 paged lists; no detail requests
 
+
+    def test_sync_downloads_and_reuses_plex_actor_portraits(self):
+        # Plex's Role.thumb may be available even though the first sync only
+        # indexed its URL. Cache missing images while indexing, and backfill
+        # without requiring the movie's updatedAt timestamp to change.
+        with patch.dict(os.environ, {'PLEX_URL': '', 'PLEX_TOKEN': ''}):
+            app.save_config('http://127.0.0.1:32400', 'example-token')
+            with patch.object(app, 'plex_xml', side_effect=self.fake_xml), \
+                 patch.object(app, 'request_plex', return_value=b'\\xff\\xd8\\xffPlex image') as photo:
+                app.sync_all(force=True)
+                self.assertEqual(app.status_snapshot()['phase'], 'Finished')
+                cache_path = app.plex_portrait_cache_path('/portrait/sample')
+                self.assertTrue(cache_path.is_file())
+                self.assertEqual(cache_path.read_bytes(), b'\\xff\\xd8\\xffPlex image')
+                photo.assert_called_once_with('/portrait/sample', timeout=12,
+                                              max_bytes=app.MAX_PLEX_IMAGE_BYTES)
+                app.image_bytes.cache_clear()
+                self.assertEqual(app.image_bytes('actor', 'sample actor'), b'\\xff\\xd8\\xffPlex image')
+                self.assertEqual(photo.call_count, 1)
+                app.sync_all(force=False)
+                self.assertEqual(photo.call_count, 1)
+                self.assertEqual(app.status_snapshot()['phase'], 'Finished')
+                self.assertEqual(app.get_actor('second actor')['image'], '')
+
+    def test_plex_sync_portrait_download_failure_is_non_destructive_and_retryable(self):
+        with patch.dict(os.environ, {'PLEX_URL': '', 'PLEX_TOKEN': ''}):
+            app.save_config('http://127.0.0.1:32400', 'example-token')
+            with patch.object(app, 'plex_xml', side_effect=self.fake_xml), \
+                 patch.object(app, 'request_plex', side_effect=[OSError('temporarily offline'),
+                                                               b'\\xff\\xd8\\xffRecovered']):
+                app.sync_all(force=True)
+                self.assertEqual(app.status_snapshot()['phase'], 'Finished with warnings')
+                self.assertEqual(app.get_stats()['actors'], 2)
+                app.sync_all(force=False)
+                self.assertEqual(app.status_snapshot()['phase'], 'Finished')
+                self.assertTrue(app.plex_portrait_cache_path('/portrait/sample').is_file())
+
+    def test_plex_sync_never_replaces_manual_portrait_override(self):
+        with patch.object(app, 'plex_xml', side_effect=self.fake_xml):
+            app.sync_all(force=True)
+        candidate = app.new_art_candidate('sample actor', 'Sample Actor',
+            'https://image.tmdb.org/t/p/w342/img.jpg', 'TMDB',
+            'https://www.themoviedb.org/person/12', 'TMDB')
+        with patch.object(app, 'external_image', return_value=(b'\\xff\\xd8\\xffManual','jpg')):
+            app.apply_art('sample actor', candidate['id'])
+        with patch.dict(os.environ, {'PLEX_URL': '', 'PLEX_TOKEN': ''}):
+            app.save_config('http://127.0.0.1:32400', 'example-token')
+            with patch.object(app, 'plex_xml', side_effect=self.fake_xml), \
+                 patch.object(app, 'request_plex') as image_request:
+                app.sync_all(force=False)
+                image_request.assert_not_called()
+        self.assertEqual(app.image_bytes('actor', 'sample actor'), b'\\xff\\xd8\\xffManual')
+        self.assertEqual(app.get_actor('sample actor')['art']['source'], 'TMDB')
+
+    def test_plex_image_retrieval_limits_bytes_and_prevents_external_hosts(self):
+        with patch.object(app, 'load_config', return_value={'url':'http://127.0.0.1:32400','token':'example'}), \
+             patch.object(app, 'request_plex', return_value=b'\\xff\\xd8\\xffimage') as request:
+            self.assertEqual(app.plex_image_bytes('http://127.0.0.1:32400/portrait/2'),
+                             b'\\xff\\xd8\\xffimage')
+            request.assert_called_once_with('/portrait/2', timeout=12,
+                                             max_bytes=app.MAX_PLEX_IMAGE_BYTES)
+            with self.assertRaisesRegex(ValueError, 'not allowed'):
+                app.plex_image_bytes('https://untrusted.example/portrait.jpg')
+            with self.assertRaisesRegex(ValueError, 'not allowed'):
+                app.plex_image_bytes('http://untrusted.example/portrait.jpg')
 
     def test_provider_json_reads_large_valid_credit_payload_without_truncating(self):
         # Regression: ThePornDB sometimes returns scene-credit JSON larger
