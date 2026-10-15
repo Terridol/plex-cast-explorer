@@ -113,7 +113,7 @@ $null = $account.AppendChild($username); $null = $svc.AppendChild($account)
 foreach ($pair in @(
     @('CAST_EXPLORER_DATA_DIR', $dataDir),
     @('CAST_EXPLORER_PORT', "$Port"),
-    @('CAST_EXPLORER_ENABLE_TMDB', '0'),
+    @('CAST_EXPLORER_ENABLE_TMDB', $(if ($EnableTMDB -eq 1) { '1' } else { '0' })),
     @('CAST_EXPLORER_REMOTE_ADMIN_CIDRS', ($addresses -join ','))
 )) {
     $node = $xml.CreateElement('env')
