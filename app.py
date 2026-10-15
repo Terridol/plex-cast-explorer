@@ -48,7 +48,6 @@ ADMIN_SESSION_SECONDS = 60 * 60
 ARTWORK_MAX_AGE_SECONDS = 180 * 24 * 60 * 60  # Under any six-calendar-month window.
 LOGIN_LOCK = threading.Lock()
 LOGIN_ATTEMPTS = {}
-LOCAL_HOSTS = {'localhost', '127.0.0.1', '[::1]'}
 ALLOWED_REMOTE_IMAGES = {'metadata-static.plex.tv', 'image.tmdb.org', 'assets.plex.tv', 'metadata.provider.plex.tv'}
 ART_LOCK = threading.Lock()
 ART_CANDIDATES = {}  # Temporary server-side choices; URLs are never accepted from browser clients.
