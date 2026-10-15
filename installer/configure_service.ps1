@@ -132,8 +132,22 @@ if ($service) {
         Stop-Service -Name $serviceName -Force -ErrorAction Stop
         (Get-Service -Name $serviceName).WaitForStatus('Stopped', [TimeSpan]::FromSeconds(30))
     }
-    & $wrapper refresh
-    if ($LASTEXITCODE -ne 0) { throw 'Could not refresh the installed Windows service. Check the service logs.' }
+    # WinSW v2.12 does NOT support a 'refresh' command. The wrapper
+    # reads its adjacent XML configuration when the Windows service starts.
+    # Keep the existing registration, and validate it points to this install.
+    $registered = Get-CimInstance -ClassName Win32_Service -Filter "Name='$serviceName'" -ErrorAction Stop
+    if (-not $registered) { throw 'Windows service registration disappeared during upgrade.' }
+    $registeredPath = ([string]$registered.PathName).Trim()
+    if ($registeredPath -ne $wrapper -and $registeredPath -ne ('"' + $wrapper + '"')) {
+        throw "Existing service runs a different executable: $registeredPath. Refusing to modify another service."
+    }
+    if ($registered.StartName -notin @('NT AUTHORITY\LocalService', 'LocalService')) {
+        throw "Existing service account is not LocalService: $($registered.StartName). Review service permissions before upgrade."
+    }
+    # Reapply automatic delayed startup using the Windows SCM's supported
+    # configuration command; WinSW reads the new XML on the subsequent start.
+    & sc.exe config $serviceName start= delayed-auto
+    if ($LASTEXITCODE -ne 0) { throw 'Could not configure automatic delayed service startup.' }
 } else {
     & $wrapper install
     if ($LASTEXITCODE -ne 0) { throw 'Windows service registration failed.' }
