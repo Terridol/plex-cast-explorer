@@ -115,6 +115,10 @@ def check_install_contract(root: Path) -> str:
             'Upgrades must validate the installed service and apply supported SCM settings')
     require('[A-Za-z0-9.]+(?:-[A-Za-z0-9.]+)*' in updater,
             'Updater must recognize beta release assets bearing a unique dev build ID')
+    require('scripts\\validate_powershell.ps1' in runner and
+            'if errorlevel 1 (' in runner and
+            runner.index('scripts\\validate_powershell.ps1') < runner.index('build_installer_windows.ps1'),
+            'Windows builder must parse ALL PowerShell scripts before launching the build')
     require('build_installer_windows.ps1' in runner,
             'BUILD-INSTALLER.cmd must use the gated local builder')
     require('build_gate.py' in build and "'source'" in build and
