@@ -12,9 +12,13 @@ if errorlevel 1 goto :missing_python
 py -3 -c "import sys; print('Python '+sys.version.split()[0]); sys.exit(0 if sys.version_info >= (3,10) else 1)"
 if errorlevel 1 goto :missing_python
 
-echo [GATE 1/2] Source regression tests and installer safety contracts...
-py -3 build_gate.py source
-if errorlevel 1 goto :test_error
+if "%CAST_BUILD_NONINTERACTIVE%"=="1" (
+    echo [GATE] Source checks already passed in the parent installer builder.
+) else (
+    echo [GATE 1/2] Running source regression tests and safety contracts...
+    py -3 build_gate.py source
+    if errorlevel 1 goto :test_error
+)
 
 py -3 -m pip --version >nul
 if errorlevel 1 (
