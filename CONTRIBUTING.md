@@ -1,13 +1,15 @@
 # Contributing
 
-Bug reports, discussion, and documentation feedback are welcome. **External copyrighted code contributions will not be merged until a contributor-rights workflow is finalized**. This project is source-available under a custom noncommercial, network-source-sharing license, not OSI-approved open source. Do not assume that opening a pull request conveys commercial-relicensing rights.
+Plex Cast Explorer is publicly readable **source-available** software under a custom noncommercial source-share license; it is not OSI-approved open source. The owner currently accepts issues, reproducible bug reports, and documentation feedback. **Outside copyrighted code or artwork is not accepted until a suitable contributor-rights process is in place.** Opening a pull request does not grant commercial licensing rights.
 
-1. Search existing issues first; for significant features, open an issue describing the proposed behavior.
-2. Fork the repository or create a feature branch. Keep each pull request focused, with a clear rationale and tests for changed behavior.
-3. Use Python 3.10-compatible standard-library code unless a dependency is justified and documented. Keep the app usable on Windows.
-4. Run `python -m unittest discover -s . -p 'test_*.py' -v` and `python -m compileall -q app.py manage.py` before submitting.
-5. Document changes affecting install, configuration, user workflows, security, providers, or data formats. Add a changelog entry for user-visible changes.
-6. Never post or commit Plex tokens, external API keys, personal library data, portrait cache files, credentials, or unredacted logs. Use synthetic test data.
-7. Only submit code, text, or artwork that you are authorized to contribute, and disclose third-party license requirements. All accepted Program-derived contributions must be distributable under the custom project license. The maintainer also intends to request a separate [Contributor License Agreement](legal/CONTRIBUTOR_LICENSE_AGREEMENT_PROPOSAL.md) permitting the maintainer to grant commercial exceptions while contributors retain copyright. **Until a signed CLA workflow is established, maintainer should not merge third-party copyrighted contributions.**
+## Local development
 
-Maintainers review changes for correctness, cross-platform behavior, testing, security, privacy, accessibility, and documentation. Pull requests may be declined or revised; passing CI does not guarantee acceptance. Use issues for bugs and feature requests, and private security reporting for vulnerabilities.
+Use the existing `dev` branch of [Terridol/plex-cast-explorer](https://github.com/Terridol/plex-cast-explorer). The maintainer works directly on `dev` and approves any promotion to `main`; new branches and PRs are not part of the maintainer's current workflow.
+
+The Windows entry point is `BUILD-INSTALLER.cmd`. This runs the PowerShell parser, Python tests, regression mutation tests, compiled EXE smoke test, Inno Setup build, and installer checksum validation **on your Windows computer**. Independent source tests: `python -m unittest discover -s . -p "test_*.py" -v`.
+
+Do not run GitHub Actions, hosted CI, or cloud build/deployment jobs. Do not commit `dist/`, `output/`, `build/`, `installer-assets/`, Plex or provider tokens, passwords, library metadata, private portrait files or logs.
+
+Changes to authentication, provider rights, service upgrades, firewall rules, or the installer require appropriate regression tests and documentation updates. A green source build does not prove that a Windows service upgrade worked; the public release checklist requires a disposable Windows VM test.
+
+See [LICENSE](LICENSE), [project licensing](docs/LICENSING.md), and [contributor-rights proposal](legal/CONTRIBUTOR_LICENSE_AGREEMENT_PROPOSAL.md) for legal limitations. Security reports follow [SECURITY.md](SECURITY.md).
