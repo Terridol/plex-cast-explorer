@@ -101,6 +101,23 @@ class InstallerSpecTests(unittest.TestCase):
         self.assertIn("$answer -cne 'YES'", checker)
         self.assertIn('Start-Process -FilePath $installer -Verb RunAs', checker)
 
+    def test_updater_recognizes_dev_build_version_assets(self):
+        checker = self.read('installer/check_updates.ps1')
+        self.assertIn('[A-Za-z0-9.]+(?:-[A-Za-z0-9.]+)*', checker)
+        pattern = r'^PlexCastExplorer-Setup-v?\d+\.\d+\.\d+(?:-[A-Za-z0-9.]+(?:-[A-Za-z0-9.]+)*)?-win-x64\.exe
+        self.assertIn('BUILD-EXE.cmd', self.read('build_installer_windows.ps1'))
+        self.assertIn('WinSW-x64.exe', self.read('build_installer_windows.ps1'))
+        self.assertIn('ISCC.exe', self.read('build_installer_windows.ps1'))
+        self.assertIn('PlexCastExplorer-Setup-0.4.7-beta-$buildId-win-x64.exe', self.read('build_installer_windows.ps1'))
+        self.assertEqual(re.search(r"^VERSION = '([^']+)'", self.read('app.py'), re.M).group(1), '0.4.7-beta')
+
+
+if __name__ == '__main__':
+    unittest.main()
+
+        self.assertRegex('PlexCastExplorer-Setup-0.4.7-beta-dev-20261014-203512123-g23a496e7-win-x64.exe', pattern)
+        self.assertRegex('PlexCastExplorer-Setup-0.4.7-beta-win-x64.exe', pattern)
+
     def test_install_kit_has_build_pipeline(self):
         self.assertIn('BUILD-EXE.cmd', self.read('build_installer_windows.ps1'))
         self.assertIn('WinSW-x64.exe', self.read('build_installer_windows.ps1'))
