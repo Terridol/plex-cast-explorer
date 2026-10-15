@@ -93,6 +93,26 @@ class BuildGateRegressionTests(unittest.TestCase):
                                     'LoadStringFromFile(FailurePath, FailureRaw)',
                                     'False')
 
+    def test_missing_legacy_service_identity_migration_is_fatal(self):
+        self.assert_mutation_blocked('installer/configure_service.ps1',
+                                     "'LocalSystem', '.\\LocalSystem', 'NT AUTHORITY\\SYSTEM'",
+                                     "'UnsupportedLegacyAccount'")
+
+    def test_migration_identity_destination_drift_is_fatal(self):
+        self.assert_mutation_blocked('installer/configure_service.ps1',
+                                     'obj= "NT AUTHORITY\\LocalService" password= ""',
+                                     'obj= "LocalSystem" password= ""')
+
+    def test_migration_exit_code_must_be_checked(self):
+        self.assert_mutation_blocked('installer/configure_service.ps1',
+                                     '$migration.ExitCode -ne 0',
+                                     '$false')
+
+    def test_custom_service_account_must_still_be_rejected(self):
+        self.assert_mutation_blocked('installer/configure_service.ps1',
+                                     'Refusing to modify an unrecognized service identity.',
+                                     'Accepting any service identity.')
+
     def test_unsupported_winsw_refresh_is_fatal(self):
         # Regression: actual WinSW 2.12 rejected 'refresh' and left the
         # installed service stopped after Setup failed with exit code 1.
