@@ -2,6 +2,11 @@
 
 ## dev — Windows installer and repository cleanup
 
+- Fixed PowerShell application-version recognition (`\\s` escaping) and moved it ahead of PyInstaller packaging, so malformed version logic fails before compiling the executable.
+- Added fail-closed source regression coverage that evaluates the builder's version regex against `app.py`, detects updater/service version drift, and protects early validation ordering.
+- Expanded the PowerShell parse preflight to cover all six retained scripts, including the validator itself; repository hygiene tests now enforce the single supported CMD launcher and six-purpose script layout.
+- Rechecked frontend/backend API paths, Markdown link resolution and duplicate tracked-file blobs; removed unused source symbols without changing application behavior.
+- **Windows Setup compilation and real clean-install/upgrade tests are still pending.**
 - Repaired invalid `test_installer_spec.py` syntax and removed duplicated test case/footer, which would have prevented regression tests from starting.
 - Consolidated the Windows builder into `BUILD-INSTALLER.cmd` plus `build_installer_windows.ps1`; removed the redundant nested `BUILD-EXE.cmd`.
 - Merged overlapping branching, general release, and maintainer documentation into the build guide, beta checklist, and contribution guide.
