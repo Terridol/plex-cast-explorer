@@ -13,6 +13,14 @@ class InstallerSpecTests(unittest.TestCase):
     def read(self, path):
         return (BASE / path).read_text(encoding='utf-8')
 
+    def test_python_runtime_license_and_notice_are_packaged(self):
+        spec = self.read('PlexCastExplorer.iss')
+        builder = self.read('build_installer_windows.ps1')
+        self.assertIn('Source: "NOTICE"; DestDir: "{app}"', spec)
+        self.assertIn("sys.base_prefix", builder)
+        self.assertIn("Python-LICENSE.txt", builder)
+        self.assertIn("Copy-Item -LiteralPath $runtimeLicense[0]", builder)
+
     def test_winsw_mit_notice_is_packaged(self):
         spec = self.read('PlexCastExplorer.iss')
         license_text = self.read('legal/WinSW-LICENSE.txt')
