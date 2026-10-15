@@ -76,7 +76,8 @@ if ($LASTEXITCODE -ne 0 -or $pythonPrefix.Count -ne 1 -or
     [string]::IsNullOrWhiteSpace($pythonPrefix[0])) {
     throw 'Cannot determine the CPython build interpreter directory.'
 }
-$runtimeLicense = Join-Path -Path $pythonPrefix[0].Trim() -ChildPath 'LICENSE.txt'
+$pythonInstallRoot = $pythonPrefix[0].Trim()
+$runtimeLicense = Join-Path -Path $pythonInstallRoot -ChildPath 'LICENSE.txt'
 if (-not (Test-Path -LiteralPath $runtimeLicense -PathType Leaf)) {
     throw "CPython license not found in the build interpreter: $runtimeLicense"
 }
