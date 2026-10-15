@@ -91,16 +91,16 @@ class PlexCastExplorerTests(unittest.TestCase):
         with patch.dict(os.environ, {'PLEX_URL': '', 'PLEX_TOKEN': ''}):
             app.save_config('http://127.0.0.1:32400', 'example-token')
             with patch.object(app, 'plex_xml', side_effect=self.fake_xml), \
-                 patch.object(app, 'request_plex', return_value=b'\\xff\\xd8\\xffPlex image') as photo:
+                 patch.object(app, 'request_plex', return_value=b'\xff\xd8\xffPlex image') as photo:
                 app.sync_all(force=True)
                 self.assertEqual(app.status_snapshot()['phase'], 'Finished')
                 cache_path = app.plex_portrait_cache_path('/portrait/sample')
                 self.assertTrue(cache_path.is_file())
-                self.assertEqual(cache_path.read_bytes(), b'\\xff\\xd8\\xffPlex image')
+                self.assertEqual(cache_path.read_bytes(), b'\xff\xd8\xffPlex image')
                 photo.assert_called_once_with('/portrait/sample', timeout=12,
                                               max_bytes=app.MAX_PLEX_IMAGE_BYTES)
                 app.image_bytes.cache_clear()
-                self.assertEqual(app.image_bytes('actor', 'sample actor'), b'\\xff\\xd8\\xffPlex image')
+                self.assertEqual(app.image_bytes('actor', 'sample actor'), b'\xff\xd8\xffPlex image')
                 self.assertEqual(photo.call_count, 1)
                 app.sync_all(force=False)
                 self.assertEqual(photo.call_count, 1)
@@ -112,7 +112,7 @@ class PlexCastExplorerTests(unittest.TestCase):
             app.save_config('http://127.0.0.1:32400', 'example-token')
             with patch.object(app, 'plex_xml', side_effect=self.fake_xml), \
                  patch.object(app, 'request_plex', side_effect=[OSError('temporarily offline'),
-                                                               b'\\xff\\xd8\\xffRecovered']):
+                                                               b'\xff\xd8\xffRecovered']):
                 app.sync_all(force=True)
                 self.assertEqual(app.status_snapshot()['phase'], 'Finished with warnings')
                 self.assertEqual(app.get_stats()['actors'], 2)
@@ -126,7 +126,7 @@ class PlexCastExplorerTests(unittest.TestCase):
         candidate = app.new_art_candidate('sample actor', 'Sample Actor',
             'https://image.tmdb.org/t/p/w342/img.jpg', 'TMDB',
             'https://www.themoviedb.org/person/12', 'TMDB')
-        with patch.object(app, 'external_image', return_value=(b'\\xff\\xd8\\xffManual','jpg')):
+        with patch.object(app, 'external_image', return_value=(b'\xff\xd8\xffManual','jpg')):
             app.apply_art('sample actor', candidate['id'])
         with patch.dict(os.environ, {'PLEX_URL': '', 'PLEX_TOKEN': ''}):
             app.save_config('http://127.0.0.1:32400', 'example-token')
@@ -134,14 +134,14 @@ class PlexCastExplorerTests(unittest.TestCase):
                  patch.object(app, 'request_plex') as image_request:
                 app.sync_all(force=False)
                 image_request.assert_not_called()
-        self.assertEqual(app.image_bytes('actor', 'sample actor'), b'\\xff\\xd8\\xffManual')
+        self.assertEqual(app.image_bytes('actor', 'sample actor'), b'\xff\xd8\xffManual')
         self.assertEqual(app.get_actor('sample actor')['art']['source'], 'TMDB')
 
     def test_plex_image_retrieval_limits_bytes_and_prevents_external_hosts(self):
         with patch.object(app, 'load_config', return_value={'url':'http://127.0.0.1:32400','token':'example'}), \
-             patch.object(app, 'request_plex', return_value=b'\\xff\\xd8\\xffimage') as request:
+             patch.object(app, 'request_plex', return_value=b'\xff\xd8\xffimage') as request:
             self.assertEqual(app.plex_image_bytes('http://127.0.0.1:32400/portrait/2'),
-                             b'\\xff\\xd8\\xffimage')
+                             b'\xff\xd8\xffimage')
             request.assert_called_once_with('/portrait/2', timeout=12,
                                              max_bytes=app.MAX_PLEX_IMAGE_BYTES)
             with self.assertRaisesRegex(ValueError, 'not allowed'):
