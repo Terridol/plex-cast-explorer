@@ -50,6 +50,27 @@ It only downloads a release installer when GitHub exposes an asset **SHA-256 dig
 
 There is **no automatic self-update job or unattended downloader**. If no installer release is available (or no digest is published), the checker links to the official release page without installing anything.
 
+## Diagnosing service setup failures
+
+If Setup stops with `Service configuration failed (exit code 1)`, the installer did not complete service configuration. **Do not uninstall the existing service or remove ProgramData.** The current development installer logs the underlying PowerShell exception to:
+
+- `C:\\ProgramData\\PlexCastExplorer\\logs\\installer-last-error.txt` — short cause shown in Setup's error dialog.
+- `C:\\ProgramData\\PlexCastExplorer\\logs\\installer-error-details.log` — timestamped script error and source position. May reveal local paths; review before sharing.
+
+An earlier installer only displayed a generic exit code 1, which is **not enough information to establish the root cause**. On a failed upgrade, check the current service state before trying Setup again:
+
+```powershell
+Get-Service PlexCastExplorer -ErrorAction SilentlyContinue |
+    Format-Table Name,Status,StartType
+Get-ChildItem "$env:ProgramData\\PlexCastExplorer\\logs" -File |
+    Sort-Object LastWriteTime -Descending |
+    Select-Object -First 8 Name,LastWriteTime,Length
+```
+
+The app/database in `ProgramData` should be retained. An unsuccessful service health check can indicate a Windows service issue, an app process startup failure, an occupied TCP port, access permissions, or a mismatched app version; **the installer error code alone does not identify which**.
+
+The build gate verifies the diagnostic code is present but **is not a substitute for a genuine Windows install/upgrade test in a disposable VM**.
+
 ## Firewall and VPN
 
 The installer manages only its own named inbound rule `PlexCastExplorer-Inbound-Private` (and cleans up the older legacy app rule if present). It allows TCP on the selected port only on a **Private** Windows network profile and only from the `LocalSubnet` plus optionally selected VPN client CIDRs. To reach from another subnet, explicitly enter the trusted VPN client IP/CIDR at setup or rerun the installer. It never permits unsolicited public Internet access. A VPN interface classed Public requires a separately evaluated limited rule; do not open the port to all Public interfaces. Remote administration uses a separate 16-character-minimum password and cannot be accessed without a configured VPN source allowlist.
