@@ -56,6 +56,11 @@ def check_install_contract(root: Path) -> str:
     runner = read(root, 'BUILD-INSTALLER.cmd')
     updater = read(root, 'installer/check_updates.ps1')
 
+    require('Source: "NOTICE"; DestDir: "{app}"' in spec and
+            "bundledLicenses = Join-Path $root 'dist\PlexCastExplorer\licenses'" in build and
+            'Python-LICENSE.txt' in build and
+            'runtimeLicense' in build,
+            'Windows installer must include CPython runtime license and project NOTICE')
     require('MIT License' in winsw_license and
             'Kohsuke Kawaguchi' in winsw_license and
             'Source: "legal\\WinSW-LICENSE.txt"; DestDir: "{app}\\licenses"' in spec,
@@ -345,6 +350,9 @@ def installer_gate(build_id: str):
     else:
         build_id = validate_build_id(build_id)
         exe = out_dir / f'PlexCastExplorer-Setup-{version}-{build_id}-win-x64.exe'
+    license_file = ROOT / 'dist' / 'PlexCastExplorer' / 'licenses' / 'Python-LICENSE.txt'
+    require(license_file.is_file() and license_file.stat().st_size > 256,
+            'Bundled CPython license is missing or truncated')
     require(exe.is_file(), f'Expected installer is missing: {exe}')
     size = exe.stat().st_size
     require(size >= 1024 * 1024, f'Installer looks truncated: {size} bytes')
