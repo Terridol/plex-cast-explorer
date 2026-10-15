@@ -55,6 +55,18 @@ class BuildGateRegressionTests(unittest.TestCase):
                                     'LoadStringFromFile(FailurePath, FailureRaw)',
                                     'False')
 
+    def test_unsupported_winsw_refresh_is_fatal(self):
+        # Regression: actual WinSW 2.12 rejected 'refresh' and left the
+        # installed service stopped after Setup failed with exit code 1.
+        self.assert_mutation_blocked('installer/configure_service.ps1',
+                                    '& sc.exe config $serviceName start= delayed-auto',
+                                    '& $wrapper refresh')
+
+    def test_missing_existing_service_verification_is_fatal(self):
+        self.assert_mutation_blocked('installer/configure_service.ps1',
+                                    'Get-CimInstance -ClassName Win32_Service',
+                                    'Get-Service -Name $serviceName')
+
     def test_removing_build_stage_is_fatal(self):
         self.assert_mutation_blocked('build_installer_windows.ps1',
                                     "'installer'", "'omitted'")
