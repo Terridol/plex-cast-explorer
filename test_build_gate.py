@@ -45,6 +45,16 @@ class BuildGateRegressionTests(unittest.TestCase):
                                     '-Profile Private -RemoteAddress $remote',
                                     '-Profile Any -RemoteAddress Any')
 
+    def test_missing_installer_failure_logging_is_fatal(self):
+        self.assert_mutation_blocked('installer/configure_service.ps1',
+                                    'installer-last-error.txt',
+                                    'removed-setup-error-log.txt')
+
+    def test_missing_error_display_is_fatal(self):
+        self.assert_mutation_blocked('PlexCastExplorer.iss',
+                                    'LoadStringFromFile(FailurePath, FailureRaw)',
+                                    'False')
+
     def test_removing_build_stage_is_fatal(self):
         self.assert_mutation_blocked('build_installer_windows.ps1',
                                     "'installer'", "'omitted'")
