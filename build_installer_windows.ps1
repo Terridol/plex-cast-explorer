@@ -27,16 +27,47 @@ function Invoke-LocalGate([string]$Stage, [string]$BuildId = '') {
 }
 
 Invoke-LocalGate 'source'
-$env:CAST_BUILD_NONINTERACTIVE='1'
-try {
-    & cmd.exe /d /c ('"' + (Join-Path $root 'BUILD-EXE.cmd') + '"')
-    $status = $LASTEXITCODE
-} finally {
-    Remove-Item Env:CAST_BUILD_NONINTERACTIVE -ErrorAction SilentlyContinue
+
+# Compile the standalone application directly: one supported build orchestrator,
+# one source gate, and one executable gate. No nested batch scripts.
+function Invoke-Python([string[]]$Arguments, [string]$Description) {
+    Write-Host "[BUILD] $Description"
+    $oldPreference = $ErrorActionPreference
+    try {
+        $ErrorActionPreference = 'Continue'
+        & $py.Source -3 @Arguments
+        $exitCode = $LASTEXITCODE
+    } finally {
+        $ErrorActionPreference = $oldPreference
+    }
+    if ($exitCode -ne 0) { throw "$Description failed (exit code $exitCode)." }
 }
-if ($status -ne 0) { throw "Windows EXE build failed (exit $status)." }
+Invoke-Python @('-c','import sys; sys.exit(0 if sys.version_info >= (3,10) else 1)') 'Python 3.10+ verification'
+$pythonPip = @('-m', 'pip', '--version')
+$oldPreference = $ErrorActionPreference
+try {
+    $ErrorActionPreference = 'Continue'
+    & $py.Source -3 @pythonPip *> $null
+    $pipExitCode = $LASTEXITCODE
+} finally {
+    $ErrorActionPreference = $oldPreference
+}
+if ($pipExitCode -ne 0) {
+    Invoke-Python @('-m','ensurepip','--upgrade') 'Enable pip'
+}
+Invoke-Python @('-m','pip','install','--upgrade','pyinstaller>=6.10,<7') 'Install or verify PyInstaller'
+$pyInstallerArgs = @(
+    '-m','PyInstaller','--noconfirm','--clean','--onedir','--console',
+    '--name','PlexCastExplorer','--add-data','static;static',
+    '--distpath',(Join-Path $root 'dist'),
+    '--workpath',(Join-Path $root 'build'),
+    '--specpath',$root,(Join-Path $root 'app.py')
+)
+Invoke-Python $pyInstallerArgs 'Compile standalone application'
 $exe = Join-Path $root 'dist\PlexCastExplorer\PlexCastExplorer.exe'
-if (-not (Test-Path -LiteralPath $exe -PathType Leaf)) { throw "Missing built application at $exe" }
+if (-not (Test-Path -LiteralPath $exe -PathType Leaf)) {
+    throw "Missing built application at $exe"
+}
 Invoke-LocalGate 'exe'
 
 $winswDir = Join-Path $root 'installer-assets'
