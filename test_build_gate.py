@@ -85,6 +85,11 @@ class BuildGateRegressionTests(unittest.TestCase):
                                     'Get-CimInstance -ClassName Win32_Service',
                                     'Get-Service -Name $serviceName')
 
+    def test_missing_windows_powershell_parse_preflight_is_fatal(self):
+        self.assert_mutation_blocked('BUILD-INSTALLER.cmd',
+                                    'scripts\\validate_powershell.ps1',
+                                    'scripts\\missing_preflight.ps1')
+
     def test_removing_build_stage_is_fatal(self):
         self.assert_mutation_blocked('build_installer_windows.ps1',
                                     "'installer'", "'omitted'")
