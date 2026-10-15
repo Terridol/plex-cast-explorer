@@ -30,7 +30,8 @@
 ## Security, legal and publication gates
 
 - [ ] Audit entire Git **history**, source archive and installer payload for tokens, databases, local portraits, logs, user metadata or unexpected binaries; rotate anything historically leaked.
-- [ ] Review WinSW MIT notice, Python/PyInstaller dependencies, bundled licenses and third-party attribution; ensure no external/provider artwork is bundled.
+- [x] Bundle the original WinSW MIT license notice alongside the installed wrapper; enforce its inclusion through source tests.
+- [ ] Review Python/PyInstaller versions and all remaining binary dependencies, bundled licenses and third-party attribution; ensure no external/provider artwork is bundled.
 - [ ] Verify optional provider permission and attribution. **TMDB and Wikimedia are off by default**. TMDB's restrictions on pornographic apps and approved-logo requirements remain unresolved; do not enable TMDB without demonstrated compliance or agreement.
 - [ ] Independently assess the custom noncommercial source-share license if public enforcement/commercial permissions matter. Never call it an OSI open-source license.
 - [ ] Review session, HTTP Host, CSRF, file-path, credential, provider redirect and API handling for general distribution; independent penetration testing recommended.

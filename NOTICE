@@ -3,6 +3,8 @@ Copyright (c) 2026 Terridol and applicable contributors.
 
 Project status: public source-available; all commercial use prohibited without advance written permission from appropriate copyright holders. See LICENSE and docs/LICENSING.md.
 
+WinSW v2.12.0 is included under the MIT license; its copyright and permission notice accompany installed copies in `licenses/WinSW-LICENSE.txt` and source copies in `legal/WinSW-LICENSE.txt`.
+
 This software is independently developed and not affiliated with Plex, TMDB, ThePornDB or Wikimedia. Their trademarks, imagery, and data remain subject to their separate terms and licenses. See docs/THIRD_PARTY.md.
 
 Before public release, replace the above handle-only copyright/contact line with a legally suitable rights-holder identification or authorized business entity, as advised by counsel.

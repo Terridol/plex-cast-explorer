@@ -13,6 +13,13 @@ class InstallerSpecTests(unittest.TestCase):
     def read(self, path):
         return (BASE / path).read_text(encoding='utf-8')
 
+    def test_winsw_mit_notice_is_packaged(self):
+        spec = self.read('PlexCastExplorer.iss')
+        license_text = self.read('legal/WinSW-LICENSE.txt')
+        self.assertIn('Source: "legal\\WinSW-LICENSE.txt"; DestDir: "{app}\\licenses"', spec)
+        self.assertIn('MIT License', license_text)
+        self.assertIn('Kohsuke Kawaguchi', license_text)
+
     def test_stable_product_id_and_upgrades(self):
         spec = self.read('PlexCastExplorer.iss')
         self.assertRegex(spec, r'AppId=\{\{[A-F0-9-]{36}\}')

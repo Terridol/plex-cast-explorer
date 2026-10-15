@@ -51,10 +51,15 @@ def check_install_contract(root: Path) -> str:
     version = app_version(root)
     spec = read(root, 'PlexCastExplorer.iss')
     service = read(root, 'installer/configure_service.ps1')
+    winsw_license = read(root, 'legal/WinSW-LICENSE.txt')
     build = read(root, 'build_installer_windows.ps1')
     runner = read(root, 'BUILD-INSTALLER.cmd')
     updater = read(root, 'installer/check_updates.ps1')
 
+    require('MIT License' in winsw_license and
+            'Kohsuke Kawaguchi' in winsw_license and
+            'Source: "legal\\WinSW-LICENSE.txt"; DestDir: "{app}\\licenses"' in spec,
+            'Bundled WinSW must include its upstream MIT license notice')
     require(f'#define AppVersion "{version}"' in spec,
             'Installer version differs from app.py VERSION')
     # Validate the actual meaning of the PowerShell expression. PowerShell

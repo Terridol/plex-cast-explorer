@@ -2,6 +2,12 @@
 
 Plex Cast Explorer is independently developed and is not affiliated with Plex, TMDB, ThePornDB, or Wikimedia. The source-code license **does not license any provider's data, artwork, or trademarks**.
 
+## Bundled Windows Service Wrapper and build tools
+
+The Windows installer includes **WinSW v2.12.0** as the service wrapper. WinSW is licensed under the MIT License; its upstream copyright and permission notice is retained in [`legal/WinSW-LICENSE.txt`](../legal/WinSW-LICENSE.txt) and bundled beside the installed application under `licenses/`. The builder verifies the published WinSW binary with a pinned SHA-256.
+
+PyInstaller bundles Python and dependencies into the application executable. PyInstaller documents its GPL-with-bootloader-exception terms permitting distribution of generated bundles subject to the bundled dependencies' own licenses. Review the actual installed Python/PyInstaller versions, package license notices and any binary dependencies before general release.
+
 ## Plex
 
 Users supply their own Plex tokens. Plex metadata and upstream images remain subject to Plex and underlying rights-holder terms. Keep all tokens out of commits, exports, logs and URLs sent to external providers.

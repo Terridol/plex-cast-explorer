@@ -40,6 +40,7 @@ REQUIRED = (
     "installer/check_updates.ps1",
     "installer/uninstall_cleanup.ps1",
     "LICENSE",
+    "legal/WinSW-LICENSE.txt",
 )
 
 
