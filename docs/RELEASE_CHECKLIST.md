@@ -29,7 +29,7 @@
 - [ ] Uninstall/reinstall on disposable Windows; verify service/firewall cleanup and **ProgramData survives**.
 - [ ] Confirm VPN-restricted administrator logins reject unauthorized networks and gallery-only sessions cannot access admin controls.
 - [ ] Validate offline/no Plex connection behavior, invalid credentials, corrupt configuration and recovery instructions.
-- [ ] Run a real Plex sync with known cast `Role.thumb` images; verify `plex-portraits/` receives files, the gallery serves the cached images, unchanged-title incremental sync does not redownload files, and manual portrait overrides remain unchanged.
+- [ ] Run a real Plex sync with known cast `Role.thumb` images, including at least one **custom-agent/THDB portrait from a public HTTPS host**. Verify both direct Plex images and Plex photo-transcoded custom images are cached, gallery image URLs display, unchanged-title incremental sync avoids duplicate requests, and manual artwork overrides remain unchanged. Confirm Plex rejects blocked/private image hosts without exposing its token.
 - [ ] Validate live ThePornDB enrichment for performers with large scene-credit responses (previously truncated at 1,000,001 bytes), then confirm retrying failed lookups processes saved errors without deleting applied portraits.
 
 ## Security, legal and publication gates

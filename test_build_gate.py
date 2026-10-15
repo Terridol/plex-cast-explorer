@@ -63,6 +63,16 @@ class BuildGateRegressionTests(unittest.TestCase):
                                      'errors += cache_plex_portraits()',
                                      'errors += 0  # skip portrait cache')
 
+    def test_custom_scraper_proxy_must_require_public_https_destination(self):
+        self.assert_mutation_blocked('app.py',
+                                     'ipaddress.ip_address(result[4][0]).is_global',
+                                     'True  # skip public IP validation')
+
+    def test_custom_scraper_proxy_must_not_accept_arbitrary_input(self):
+        self.assert_mutation_blocked('app.py',
+                                     'raw = plex_transcoded_image(thumb)',
+                                     "raise ValueError('Unknown artwork source')")
+
     def test_plex_actor_cache_must_remain_size_bounded(self):
         self.assert_mutation_blocked('app.py',
                                      'MAX_PLEX_IMAGE_BYTES = 4_000_000',

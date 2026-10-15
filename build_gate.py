@@ -83,9 +83,16 @@ def check_install_contract(root: Path) -> str:
             'errors += cache_plex_portraits()' in app_source and
             'return cached_plex_portrait(thumb)' in app_source and
             'MAX_PLEX_IMAGE_BYTES = 4_000_000' in app_source and
+            'def public_custom_plex_thumb(url: str) -> bool:' in app_source and
+            'def plex_transcoded_image(url: str) -> bytes:' in app_source and
+            "'/photo/:/transcode?' + urlencode" in app_source and
+            'socket.getaddrinfo(host, 443, type=socket.SOCK_STREAM)' in app_source and
+            "ipaddress.ip_address(result[4][0]).is_global" in app_source and
+            "'url': url, 'width': 300, 'height': 450, 'format': 'jpeg'" in app_source and
+            'raw = plex_transcoded_image(thumb)' in app_source and
             'NOT EXISTS (' in app_source and
             'plex-portraits/' in read(root, '.gitignore'),
-            'Plex actor images must be cached on every sync without changing overrides')
+            'Plex actor images must be safely fetched via Plex for both built-in and custom agents')
     require('Name: "tmdb"' in spec and
             "WizardIsTaskSelected('tmdb')" in spec and
             "if ($EnableTMDB -eq 1)" in service and

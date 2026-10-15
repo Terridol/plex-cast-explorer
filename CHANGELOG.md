@@ -2,6 +2,8 @@
 
 ## v1.0.0 — Feature-locked release source (not yet published)
 
+- Added scraper-independent support for Plex actor `Role.thumb` URLs from custom metadata agents, using Plex's own authenticated image transcoder for validated public HTTPS custom hosts. Public DNS/IP checks reject loopback, private LAN, link-local, and reserved destinations; cache and manual override priority are unchanged. Includes regression coverage and a mandatory real-Plex custom-scraper acceptance check.
+
 - Fixed missing Plex actor images after sync by actively fetching and locally caching Plex-provided Role.thumb portraits (including unchanged-title backfills). Image reads are size-limited and origin-restricted, user artwork overrides remain untouched, and failed downloads are retryable on the next sync. The cache lives in excluded `plex-portraits/` and is not part of release assets.
 
 - Updated the local Windows builder to clear every previous installer, checksum and subfolder from the repository's `output/` before packaging a new Setup EXE, with junction/symlink protection and regression tests. All other build and installed-application folders are unaffected.
