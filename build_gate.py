@@ -140,6 +140,11 @@ def check_install_contract(root: Path) -> str:
     # This exact unsupported command broke upgrades on a real Windows host.
     require(not re.search(r'(?m)^\s*&\s*\$wrapper\s+refresh\b', service, re.I),
             'Unsupported WinSW v2 refresh command would stop the service during upgrade')
+    # Require verification before AND after changing the service account.
+    # A single string-presence check became insufficient once a second
+    # Get-CimInstance call was added by the legacy-account migration.
+    require(service.count('Get-CimInstance -ClassName Win32_Service') == 2,
+            'Existing service registration must be checked before and after migration')
     require("Get-CimInstance -ClassName Win32_Service" in service and
             '$registeredPath -ne $wrapper' in service and
             '$registeredAccount -notin' in service and
