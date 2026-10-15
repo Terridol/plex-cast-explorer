@@ -1,7 +1,7 @@
 # Maintainers and governance
 
 - **Repository owner and release maintainer:** [@Terridol](https://github.com/Terridol).
-- **Contributors:** submit changes via GitHub issues and pull requests; there are currently no additional maintainers with release permissions.
+- **Contributors:** report bugs or suggest changes using GitHub issues; external code patches are not being accepted yet; there are currently no additional maintainers with release permissions.
 
 The owner controls releases, repository settings, review approval, and secrets. Contributors receive only the minimum necessary access. Additional maintainers will be listed here if permissions change.
 
