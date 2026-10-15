@@ -6,6 +6,26 @@ Set-Location $root
 
 $py = Get-Command 'py.exe' -ErrorAction SilentlyContinue
 if (-not $py) { throw 'Python 3.10+ with the py launcher is required for the initial build.' }
+
+# Every release build is fail-closed. No packaging on failed regressions.
+$gate = Join-Path $root 'build_gate.py'
+if (-not (Test-Path -LiteralPath $gate -PathType Leaf)) { throw 'Required build_gate.py is missing. Build blocked.' }
+function Invoke-LocalGate([string]$Stage) {
+    Write-Host "[BUILD GATE] Running mandatory $Stage validation..."
+    $oldPreference = $ErrorActionPreference
+    try {
+        # Windows PowerShell 5.1 can elevate redirected Python stderr to a
+        # terminating error even when the child is doing normal diagnostics.
+        $ErrorActionPreference = 'Continue'
+        & $py.Source -3 $gate $Stage
+        $exitCode = $LASTEXITCODE
+    } finally {
+        $ErrorActionPreference = $oldPreference
+    }
+    if ($exitCode -ne 0) { throw "Build blocked: $Stage gate failed (exit $exitCode). No release may be published." }
+}
+
+Invoke-LocalGate 'source'
 $env:CAST_BUILD_NONINTERACTIVE='1'
 try {
     & cmd.exe /d /c ('"' + (Join-Path $root 'BUILD-EXE.cmd') + '"')
@@ -16,6 +36,7 @@ try {
 if ($status -ne 0) { throw "Windows EXE build failed (exit $status)." }
 $exe = Join-Path $root 'dist\PlexCastExplorer\PlexCastExplorer.exe'
 if (-not (Test-Path -LiteralPath $exe -PathType Leaf)) { throw "Missing built application at $exe" }
+Invoke-LocalGate 'exe'
 
 $winswDir = Join-Path $root 'installer-assets'
 $winsw = Join-Path $winswDir 'WinSW-x64.exe'
@@ -67,6 +88,10 @@ if (-not $iscc) {
     if (-not $iscc) { throw 'Inno Setup installed but ISCC.exe was not found. Reopen PowerShell and retry.' }
 }
 
+# Delete an old artifact first: a failed compile must never look like success.
+$installer = Join-Path $root 'output\PlexCastExplorer-Setup-0.4.7-beta-win-x64.exe'
+$checksum = $installer + '.sha256'
+Remove-Item -LiteralPath $installer,$checksum -Force -ErrorAction SilentlyContinue
 Write-Host "Compiling Setup.exe with $iscc"
 $oldPref = $ErrorActionPreference
 try {
@@ -75,10 +100,16 @@ try {
     $compilerExit = $LASTEXITCODE
 } finally { $ErrorActionPreference = $oldPref }
 if ($compilerExit -ne 0) { throw "Inno Setup compiler failed (exit $compilerExit)." }
-$installer = Join-Path $root 'output\PlexCastExplorer-Setup-0.4.7-beta-win-x64.exe'
 if (-not (Test-Path -LiteralPath $installer -PathType Leaf)) { throw 'Installer compilation reported success but expected output was absent.' }
 $hash = (Get-FileHash -LiteralPath $installer -Algorithm SHA256).Hash.ToLowerInvariant()
 Set-Content -LiteralPath ($installer + '.sha256') -Value ($hash + '  ' + [IO.Path]::GetFileName($installer)) -Encoding ASCII
 Write-Host "SUCCESS: $installer"
 Write-Host "SHA-256: $hash"
+try {
+    Invoke-LocalGate 'installer'
+} catch {
+    Remove-Item -LiteralPath $installer,$checksum -Force -ErrorAction SilentlyContinue
+    throw
+}
+Write-Host 'LOCAL BUILD GATE PASSED: source tests, EXE smoke, compiler and installer artifact checks.'
 Write-Host 'Installer not yet smoke-tested; back up your current data before running the upgrade.'
