@@ -2,6 +2,10 @@
 
 ## v0.4.7-beta — Windows setup startup verification
 
+- Distinguish every `dev` installer by an automatically generated UTC build timestamp and Git SHA/source fingerprint; embed the ID in the Setup filename and Installed Apps version.
+- Preserve older installer builds rather than overwriting identical filenames; validate the build identifier in local gates and updater asset matching.
+
+
 - Fix confirmed Windows upgrade failure: WinSW v2.12 rejected the unsupported `refresh` command and left the service stopped.
 - Preserve existing service registration; verify wrapper path/account; apply automatic delayed-start via Windows SCM; restart with updated WinSW XML.
 - Add fail-closed regression checks forbidding `refresh`, including a mutation test that reproduces the previously released failure.
