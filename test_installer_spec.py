@@ -17,9 +17,11 @@ class InstallerSpecTests(unittest.TestCase):
         spec = self.read('PlexCastExplorer.iss')
         builder = self.read('build_installer_windows.ps1')
         self.assertIn('Source: "NOTICE"; DestDir: "{app}"', spec)
-        self.assertIn("sys.base_prefix", builder)
+        self.assertIn("-c 'import sys; print(sys.base_prefix)'", builder)
+        self.assertIn("Join-Path -Path $pythonPrefix[0].Trim() -ChildPath 'LICENSE.txt'", builder)
         self.assertIn("Python-LICENSE.txt", builder)
-        self.assertIn("Copy-Item -LiteralPath $runtimeLicense[0]", builder)
+        self.assertIn("Copy-Item -LiteralPath $runtimeLicense -Destination", builder)
+        self.assertNotIn('print(pathlib.Path(sys.base_prefix) / "LICENSE.txt")', builder)
 
     def test_winsw_mit_notice_is_packaged(self):
         spec = self.read('PlexCastExplorer.iss')
