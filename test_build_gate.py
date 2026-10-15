@@ -100,6 +100,22 @@ class BuildGateRegressionTests(unittest.TestCase):
                                     'scripts\\validate_powershell.ps1',
                                     'scripts\\missing_preflight.ps1')
 
+    def test_truncated_updater_filename_regex_is_fatal(self):
+        self.assert_mutation_blocked('installer/check_updates.ps1',
+                                    "win-x64\\.exe
+        self.assert_mutation_blocked('build_installer_windows.ps1',
+                                    "'installer'", "'omitted'")
+
+
+if __name__ == '__main__':
+    unittest.main() } | Select-Object -First 1",
+                                    "win-x64\\.exe } | Select-Object -First 1")
+
+    def test_duplicated_updater_download_section_is_fatal(self):
+        self.assert_mutation_blocked('installer/check_updates.ps1',
+                                    "Start-Process -FilePath $installer -Verb RunAs -Wait",
+                                    "Start-Process -FilePath $installer -Verb RunAs -Wait\nStart-Process -FilePath $installer -Verb RunAs -Wait")
+
     def test_removing_build_stage_is_fatal(self):
         self.assert_mutation_blocked('build_installer_windows.ps1',
                                     "'installer'", "'omitted'")
