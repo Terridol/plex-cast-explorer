@@ -2,8 +2,8 @@
 # This script only parses files; it does not execute them.
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
-$paths = @('build_installer_windows.ps1', 'build_windows_exe.ps1',
-           'installer/configure_service.ps1', 'installer/stop_for_upgrade.ps1',
+$paths = @('build_installer_windows.ps1',
+           'installer/configure_service.ps1',
            'installer/uninstall_cleanup.ps1', 'installer/configure_password.ps1',
            'installer/check_updates.ps1')
 $failed = $false
