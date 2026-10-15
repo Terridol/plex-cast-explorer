@@ -2,6 +2,11 @@
 
 ## v0.4.7-beta — Windows setup startup verification
 
+- Correct malformed PowerShell build script introduced by dev build-ID versioning: remove duplicated installer sections and restore complete Git revision/build-ID regex.
+- Run Windows PowerShell AST syntax validation **before launching** the installer build; reject syntax errors before compiling or changing service state.
+- Extend fail-closed regression checks to catch duplicated installer body, malformed Git SHA regex, or missing PowerShell preflight.
+
+
 - Distinguish every `dev` installer by an automatically generated UTC build timestamp and Git SHA/source fingerprint; embed the ID in the Setup filename and Installed Apps version.
 - Preserve older installer builds rather than overwriting identical filenames; validate the build identifier in local gates and updater asset matching.
 
