@@ -433,6 +433,32 @@ class PlexCastExplorerTests(unittest.TestCase):
         self.assertEqual([c['source'] for c in candidates], ['TMDB'])
         self.assertEqual(len(calls), 2)
 
+    @patch.object(app, 'provider_enabled', new=lambda name: name == 'tmdb')
+    def test_verified_candidates_fall_back_to_tpdb_if_tmdb_lacks_portrait(self):
+        with patch.object(app, 'plex_xml', side_effect=self.fake_xml):
+            app.sync_all(force=True)
+        requested = []
+        def fake_provider(url, token):
+            requested.append(url)
+            if '/search/person?' in url:
+                return {'results': [{'id': 24, 'name': 'Sample Actor', 'profile_path': None}]}
+            if '/performers?' in url:
+                return {'data': [{'_id': 'p123', 'name': 'Sample Actor',
+                                  'image': 'https://cdn.theporndb.net/p.jpg'}]}
+            if '/performers/p123/scenes?' in url:
+                return {'data': [{'title': 'Alpha', 'year': 2024}]}
+            raise AssertionError('Unexpected request: '+url)
+        with patch.object(app, 'artwork_keys', return_value={'tmdb': 'tmdb-key',
+                                                              'theporndb': 'tpdb-key'}), \
+             patch.object(app, 'paced_provider_json', side_effect=fake_provider):
+            candidates, errors = app.verified_portrait_candidates('sample actor')
+        self.assertEqual(errors, [])
+        self.assertEqual([x['source'] for x in candidates], ['ThePornDB'])
+        self.assertEqual(len(requested), 3)
+        self.assertIn('themoviedb.org', requested[0])
+        self.assertIn('theporndb.net', requested[1])
+        self.assertIn('/scenes?', requested[2])
+
     def test_retry_failed_lookups_only(self):
         with patch.object(app, 'plex_xml', side_effect=self.fake_xml):
             app.sync_all(force=True)
