@@ -74,6 +74,18 @@ def check_install_contract(root: Path) -> str:
             "Join-Path -Path $pythonInstallRoot -ChildPath 'LICENSE.txt'" in build and
             'Copy-Item -LiteralPath $runtimeLicense -Destination' in build,
             'CPython license discovery must avoid nested quotes in native Python arguments')
+    # Plex sync must acquire the actor portraits advertised by Role.thumb,
+    # not merely record their URL and leave every gallery request to fetch it.
+    # Existing manual artwork must retain priority over Plex's local cache.
+    app_source = read(root, 'app.py')
+    require("PLEX_PORTRAIT_DIR = ROOT / 'plex-portraits'" in app_source and
+            'def cache_plex_portraits()' in app_source and
+            'errors += cache_plex_portraits()' in app_source and
+            'return cached_plex_portrait(thumb)' in app_source and
+            'MAX_PLEX_IMAGE_BYTES = 4_000_000' in app_source and
+            'NOT EXISTS (' in app_source and
+            'plex-portraits/' in read(root, '.gitignore'),
+            'Plex actor images must be cached on every sync without changing overrides')
     require('Name: "tmdb"' in spec and
             "WizardIsTaskSelected('tmdb')" in spec and
             "if ($EnableTMDB -eq 1)" in service and

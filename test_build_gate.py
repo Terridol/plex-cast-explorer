@@ -58,6 +58,16 @@ class BuildGateRegressionTests(unittest.TestCase):
             'Output cleanup failure ignored.'
         )
 
+    def test_plex_actor_portrait_sync_cannot_be_silently_skipped(self):
+        self.assert_mutation_blocked('app.py',
+                                     'errors += cache_plex_portraits()',
+                                     'errors += 0  # skip portrait cache')
+
+    def test_plex_actor_cache_must_remain_size_bounded(self):
+        self.assert_mutation_blocked('app.py',
+                                     'MAX_PLEX_IMAGE_BYTES = 4_000_000',
+                                     'MAX_PLEX_IMAGE_BYTES = 0')
+
     def test_missing_project_notice_is_fatal(self):
         self.assert_mutation_blocked('PlexCastExplorer.iss',
                                      'Source: "NOTICE"; DestDir: "{app}"',

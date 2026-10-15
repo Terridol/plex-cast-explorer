@@ -2,6 +2,8 @@
 
 ## v1.0.0 — Feature-locked release source (not yet published)
 
+- Fixed missing Plex actor images after sync by actively fetching and locally caching Plex-provided Role.thumb portraits (including unchanged-title backfills). Image reads are size-limited and origin-restricted, user artwork overrides remain untouched, and failed downloads are retryable on the next sync. The cache lives in excluded `plex-portraits/` and is not part of release assets.
+
 - Updated the local Windows builder to clear every previous installer, checksum and subfolder from the repository's `output/` before packaging a new Setup EXE, with junction/symlink protection and regression tests. All other build and installed-application folders are unaffected.
 
 - Fixed a Windows PowerShell 5.1 native-command quoting bug in CPython license discovery that caused `NameError: name 'LICENSE' is not defined` after the executable smoke gate. The builder now gets only `sys.base_prefix` from Python, constructs `LICENSE.txt` using PowerShell, and verifies the license before expensive packaging. Added source and regression guards.

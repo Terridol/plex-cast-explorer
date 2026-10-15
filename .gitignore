@@ -19,6 +19,7 @@ network.json
 
 # Downloaded portraits, caches, and logs
 portraits/
+plex-portraits/
 server.log
 *.log
 *.log.*

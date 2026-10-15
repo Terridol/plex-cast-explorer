@@ -6,6 +6,8 @@
 
 **Plex asks for a PIN after opening a title.** Plex Web manages its own browser session and PIN, independent of Cast Explorer. Open local Plex directly, sign in, and configure Plex's own auto-sign-in behavior on trusted browsers only.
 
+**Plex actors have names but no photographs after sync.** Sync now fetches and caches any `Role.thumb` URLs that Plex returns, including for previously indexed movies/shows. Run Sync again to backfill the local `plex-portraits/` cache. If a Role has no `thumb` in Plex metadata, Plex Cast Explorer cannot retrieve a nonexistent Plex portrait; use TMDB/TPDB enrichment or supply artwork to Plex itself. If the Plex artwork host is unreachable, Sync finishes with warnings and retries the missing thumbnails on your next Sync. Ensure the server can reach Plex's artwork hosts and that LocalService can write to `C:\ProgramData\PlexCastExplorer\plex-portraits`. A user-approved artwork override is never replaced by this cache.
+
 **An actor portrait is missing or wrong.** Check the performer and associated Plex credits, try optional provider search, and review the image source. One matching production does not prove a person's identity. You can reject candidates or remove overrides.
 
 **Provider lookups fail.** Verify provider credentials, HTTP errors, API quotas and DNS. Pause enrichment during outages; use Retry failed lookups afterward.

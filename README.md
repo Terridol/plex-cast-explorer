@@ -22,7 +22,7 @@ For details see [Windows installation, service, upgrades and updates](docs/WINDO
 ## Features and security
 
 - A–Z cast browser, search and filters; performers' credits and links into Plex.
-- Cached portraits, reviewable third-party artwork, and incremental library synchronization.
+- Plex actor portraits actively downloaded and cached during full or incremental sync; manual portrait overrides remain authoritative. Reviewable third-party artwork and incremental library synchronization are also supported.
 - Separate gallery password and optional VPN-address-restricted remote administrator password.
 - No change to Plex media files or metadata.
 
