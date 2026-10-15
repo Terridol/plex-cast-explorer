@@ -11,7 +11,7 @@ Browser on LAN → Cast Explorer HTTP (:8765) → SQLite index and local portrai
 
 - **`app.py`**: HTTP routes, authentication, Plex indexing, SQLite queries, artwork lookups, matching, and background tasks.
 - **`static/`**: user interface; no client-side Plex/API secrets.
-- **`manage.py`** and Windows scripts: setup and lifecycle helpers.
+- **`BUILD-INSTALLER.cmd`**, **`BUILD-EXE.cmd`**, and **`build_installer_windows.ps1`**: supported local Windows build pipeline; `installer/` holds service/updater utilities.
 - **`test_app.py`**: synthetic indexing, matching, and route tests.
 - **`*.json` / SQLite / `portraits/`** (runtime): per-installation credentials, settings, index, queue, and downloaded media; excluded from Git.
 
