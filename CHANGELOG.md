@@ -4,7 +4,7 @@
 
 - Repaired `installer/check_updates.ps1`: restored its terminated filename pattern and removed a duplicated download block; added regression tests that reproduce both faults.
 - Repaired `build_gate.py` and `test_build_gate.py`: removed accidentally duplicated module/test sections and restored the updater-guard regular expression.
-- Kept one supported Windows installation entry point (`BUILD-INSTALLER.cmd`), retaining `BUILD-EXE.cmd` only as the internal executable build helper.
+- Kept one supported Windows installation entry point (`BUILD-INSTALLER.cmd`), building the executable directly in the PowerShell orchestrator, without a second batch helper.
 - Removed obsolete direct-run launchers, redundant `manage.py`, unused standalone PyInstaller and service-migration scripts, obsolete installation documents, and unused PR metadata.
 - Reduced nested duplicate source-test execution; retained mandatory PowerShell syntax preflight, source regression and mutation tests, compiled EXE smoke, Inno Setup compilation, and installer artifact/digest check.
 - Updated all installation, contributor, provider, troubleshooting and release documents to match the Windows service deployment.
