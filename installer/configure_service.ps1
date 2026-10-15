@@ -11,6 +11,35 @@ param(
     [string]$ExpectedVersion = '0.4.7-beta'
 )
 $ErrorActionPreference = 'Stop'
+# Capture terminating setup failures before Windows Setup hides PowerShell.
+# Do not include credentials or configuration files in the report.
+$installerErrorFile = Join-Path $env:ProgramData 'PlexCastExplorer\logs\installer-last-error.txt'
+$installerDetailFile = Join-Path $env:ProgramData 'PlexCastExplorer\logs\installer-error-details.log'
+trap {
+    $failureMessage = [string]$_.Exception.Message
+    try {
+        $logDirectory = Split-Path -Parent $installerErrorFile
+        New-Item -Path $logDirectory -ItemType Directory -Force -ErrorAction Stop | Out-Null
+        # ASCII keeps the short message readable by the Inno Setup script.
+        $failureMessage -replace '[\r\n]+', ' ' |
+            Set-Content -LiteralPath $installerErrorFile -Encoding ASCII -ErrorAction Stop
+        $details = @(
+            ('UTC: ' + [DateTime]::UtcNow.ToString('o')),
+            ('Error: ' + $failureMessage),
+            ('At: ' + [string]$_.InvocationInfo.PositionMessage),
+            ('Stack: ' + [string]$_.ScriptStackTrace)
+        )
+        $details | Add-Content -LiteralPath $installerDetailFile -Encoding UTF8 -ErrorAction Stop
+    } catch {
+        Write-Host ('Unable to write installer error log: ' + $_.Exception.Message)
+    }
+    Write-Host ('INSTALLER FAILURE: ' + $failureMessage)
+    exit 1
+}
+# Clear any previous failure marker. An old error must never be shown as new.
+if (Test-Path -LiteralPath $installerErrorFile -PathType Leaf) {
+    Remove-Item -LiteralPath $installerErrorFile -Force -ErrorAction Stop
+}
 $serviceName = 'PlexCastExplorer'
 $ruleName = 'PlexCastExplorer-Inbound-Private'
 $dataDir = Join-Path $env:ProgramData 'PlexCastExplorer'
