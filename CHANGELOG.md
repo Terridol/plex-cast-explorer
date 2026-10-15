@@ -2,6 +2,8 @@
 
 ## dev — Windows installer and repository cleanup
 
+- Fixed a confirmed Windows in-place upgrade failure reported in `installer-error-details.log`: older WinSW services can be registered as `LocalSystem` and were rejected by the `LocalService`-only installer guard. Known legacy services now migrate to the least-privileged account in place; unknown custom service accounts are still rejected.
+- Added service-account migration regression and build-contract checks. A successful Windows upgrade/reboot test is still required.
 - Fixed PowerShell application-version recognition (`\\s` escaping) and moved it ahead of PyInstaller packaging, so malformed version logic fails before compiling the executable.
 - Added fail-closed source regression coverage that evaluates the builder's version regex against `app.py`, detects updater/service version drift, and protects early validation ordering.
 - Expanded the PowerShell parse preflight to cover all six retained scripts, including the validator itself; repository hygiene tests now enforce the single supported CMD launcher and six-purpose script layout.
