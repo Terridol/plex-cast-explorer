@@ -2,6 +2,8 @@
 
 ## v0.4.7-beta — Windows setup startup verification
 
+- Introduce mandatory local fail-closed build gates: source regression/negative tests, compiled EXE HTTP smoke, and installer hash/artifact checks.
+- Document GitHub Desktop `dev` pull-and-build workflow; exclude generated installers and service wrapper binaries from source control.
 - Start and verify the Windows service before the installer Finish page appears.
 - Verify the actual application responds on localhost with the expected version; SCM/WinSW Running alone is insufficient.
 - Report service start and health-check failures clearly instead of presenting false success.
