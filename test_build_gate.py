@@ -70,6 +70,11 @@ class BuildGateRegressionTests(unittest.TestCase):
         self.assert_mutation_blocked('build_installer_windows.ps1',
                                      "'/DReleaseBuild=1'", "'/DDevBuildId=' + $buildId")
 
+    def test_prerelease_cannot_pass_stable_installer_gate(self):
+        # A release-named binary from 1.0.0-rc.1 must never be allowed.
+        with self.assertRaises(build_gate.GateFailure):
+            build_gate.installer_gate('release')
+
     def test_missing_installer_build_id_is_fatal(self):
         self.assert_mutation_blocked('build_installer_windows.ps1',
                                     "'/DDevBuildId=' + $buildId",
