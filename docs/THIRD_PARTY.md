@@ -12,9 +12,9 @@ PyInstaller bundles Python and dependencies into the application executable. The
 
 Users supply their own Plex tokens. Plex metadata and upstream images remain subject to Plex and underlying rights-holder terms. Keep all tokens out of commits, exports, logs and URLs sent to external providers.
 
-## TMDB — OFF by default
+## TMDB — BLOCKED in public v1.0
 
-TMDB's [API Terms](https://www.themoviedb.org/api-terms-of-use) prohibit API use in applications connected with pornographic content as TMDB determines, limit cached API content to **no more than six months**, and require the approved TMDB logo and prescribed attribution notice when the API is used. See [TMDB's logos and attribution guidance](https://www.themoviedb.org/about/logos-attribution). A saved token **does not** enable TMDB. The optional `CAST_EXPLORER_ENABLE_TMDB=1` flag must not be used unless the individual deployment and complete app attribution are compliant. The present text-only footer is **not** enough to satisfy the logo rule.
+TMDB's [API Terms](https://www.themoviedb.org/api-terms-of-use) prohibit connecting TMDB API/content to pornographic uses and require approved-logo attribution and notice for approved API integrations. See [official FAQ](https://developer.themoviedb.org/docs/faq). **The v1.0 distribution cannot initiate TMDB API calls or new TMDB image downloads**; saved tokens and previous environment flags cannot reenable the integration. We have **not** obtained written permission, so no TMDB brand logo or misleading active-API attribution is included in the release. Previously saved local artwork is left untouched to avoid destructive migrations; individual users must assess any required purge or removal.
 
 The application removes TMDB-source portrait overrides after 180 days and expires old lookup result records. This helps with cache duration but does not address every possible TMDB usage restriction.
 
@@ -22,9 +22,9 @@ The application removes TMDB-source portrait overrides after 180 days and expire
 
 Use only under the provider's currently applicable conditions. The maintainers have **not independently verified** any general right to redistribute provider images or use API responses for commercial deployment.
 
-## Wikimedia Commons — OFF by default
+## Wikimedia Commons — BLOCKED in public v1.0
 
-Media files use **individual licenses**. Verify the image's file page, photographer/author credit, applicable license, any share-alike requirements, and appropriate attribution before reuse. See [Wikimedia reuse guidance](https://www.mediawiki.org/wiki/Wikimedia_APIs/Content_reuse). The optional `CAST_EXPLORER_ENABLE_WIKIMEDIA=1` flag does not bypass these obligations.
+Media files use **individual licenses**. Verify the image's file page, photographer/author credit, applicable license, any share-alike requirements, and appropriate attribution before reuse. See [Wikimedia reuse guidance](https://www.mediawiki.org/wiki/Wikimedia_APIs/Content_reuse). The v1.0 app does not implement a complete file-license, photographer-credit and ShareAlike attribution record. Consequently Wikimedia lookups are **blocked even with legacy opt-in flags**, until a future explicitly reviewed release implements per-image compliance.
 
 ## Public repository
 

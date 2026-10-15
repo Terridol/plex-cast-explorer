@@ -19,13 +19,24 @@ class ReleaseGuardrailTests(unittest.TestCase):
             self.assertFalse(app.provider_enabled('tmdb'))
             self.assertFalse(app.provider_enabled('wikimedia'))
 
-    def test_provider_opt_in_is_explicit(self):
+    def test_old_provider_flags_cannot_reactivate_restricted_integrations(self):
         with patch.dict(os.environ, {'CAST_EXPLORER_ENABLE_TMDB': '1',
-                                     'CAST_EXPLORER_ENABLE_WIKIMEDIA': '1'}):
-            self.assertTrue(app.provider_enabled('tmdb'))
-            self.assertTrue(app.provider_enabled('wikimedia'))
-        with patch.dict(os.environ, {'CAST_EXPLORER_ENABLE_TMDB': 'true'}):
+                                     'CAST_EXPLORER_ENABLE_WIKIMEDIA': '1',
+                                     'CAST_EXPLORER_TMDB_TOKEN': 'legacy-secret'}):
             self.assertFalse(app.provider_enabled('tmdb'))
+            self.assertFalse(app.provider_enabled('wikimedia'))
+        for url in ('https://api.themoviedb.org/3/search/person',
+                    'https://www.wikidata.org/w/api.php'):
+            with self.subTest(url=url), self.assertRaisesRegex(ValueError, 'unavailable'):
+                app.provider_json(url, 'old-token')
+
+    def test_existing_artwork_is_not_erased_by_provider_disable(self):
+        self.assertFalse(app.provider_enabled('tmdb'))
+        self.assertFalse(app.provider_enabled('wikimedia'))
+        for url in ('https://image.tmdb.org/t/p/w342/x.jpg',
+                    'https://commons.wikimedia.org/wiki/Special:Redirect/file/x.jpg'):
+            with self.subTest(url=url), self.assertRaisesRegex(ValueError, 'unavailable'):
+                app.verified_portrait_image(url)
 
     def test_untrusted_host_header_rejected(self):
         server = ThreadingHTTPServer(('127.0.0.1', 0), app.Handler)

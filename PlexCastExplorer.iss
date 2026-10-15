@@ -52,7 +52,6 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 
 [Tasks]
 Name: "firewall"; Description: "Add inbound Windows Firewall rule (Private network, local subnet only)"; GroupDescription: "Network access:"
-Name: "tmdb"; Description: "Enable TMDB lookup (only if your use meets TMDB's API and attribution terms)"; GroupDescription: "Optional providers:"; Flags: unchecked
 Name: "remoteadmin"; Description: "Enable remote administration for specified VPN client CIDRs"; GroupDescription: "Security:"; Flags: unchecked
 Name: "beta"; Description: "Offer beta releases when checking for updates"; GroupDescription: "Updates:"; Flags: unchecked
 Name: "desktopicon"; Description: "Create a desktop shortcut"; GroupDescription: "Shortcuts:"; Flags: unchecked
@@ -105,7 +104,8 @@ end;
 
 function GetTMDB(Param: String): String;
 begin
-  if WizardIsTaskSelected('tmdb') then Result := '1' else Result := '0';
+  // GA 1.0 cannot opt in to this unlicensed provider integration.
+  Result := '0';
 end;
 
 function GetFirewall(Param: String): String;

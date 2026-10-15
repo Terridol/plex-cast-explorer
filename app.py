@@ -690,14 +690,15 @@ def plex_link_config(peer, server_ip):
 
 
 def provider_enabled(name):
-    """Opt-in to third-party providers requiring additional terms compliance.
+    """The GA 1.0 build does not enable TMDB or Wikimedia lookups.
 
-    TMDB and Wikimedia are OFF by default. Saved tokens do not activate TMDB.
-    The operator is responsible for provider-specific permitted uses.
+    TMDB restricts content connected with pornography, and approved-logo
+    attribution has not been implemented. Wikimedia image authorship and
+    file-specific license compliance have not been implemented. Prior
+    environment opt-in flags and saved tokens MUST NOT override this.
+    Existing locally saved artwork is left intact on upgrades.
     """
-    flag = {'tmdb': 'CAST_EXPLORER_ENABLE_TMDB',
-            'wikimedia': 'CAST_EXPLORER_ENABLE_WIKIMEDIA'}.get(name)
-    return bool(flag and os.environ.get(flag, '').strip() == '1')
+    return False
 
 
 def artwork_keys():
@@ -767,7 +768,12 @@ def external_image(url):
 
 def provider_json(url, bearer=None):
     host = urlsplit(url).hostname
-    if urlsplit(url).scheme != 'https' or host not in {'api.themoviedb.org','api.theporndb.net','www.wikidata.org'}:
+    # GA 1.0 accepts only the independently token-configured provider. Never
+    # send existing TMDB/Wikimedia credentials, even if old environment flags
+    # or saved credentials are left over from a previous installation.
+    if host in {'api.themoviedb.org', 'www.wikidata.org'}:
+        raise ValueError('This provider is unavailable in Plex Cast Explorer 1.0')
+    if urlsplit(url).scheme != 'https' or host not in {'api.theporndb.net'}:
         raise ValueError('Unknown metadata provider')
     headers = {'Accept': 'application/json', 'User-Agent': 'PlexCastExplorer/0.4 (personal library artwork browser)'}
     if bearer:
@@ -1142,12 +1148,12 @@ def choose_automatic_candidate(candidates, actor_name=None, errors=None):
 
 
 def verified_portrait_image(url):
-    """Prefer a higher-resolution TMDB profile and fall back to legacy size."""
-    if url.startswith('https://image.tmdb.org/t/p/w342/'):
-        try:
-            return external_image(url.replace('/t/p/w342/', '/t/p/h632/', 1))
-        except Exception:
-            pass
+    """Do not fetch newly selected artwork from disabled providers.
+
+    Previously saved user portraits remain on disk and can still be viewed.
+    """
+    if urlsplit(url).hostname in {'image.tmdb.org', 'commons.wikimedia.org', 'upload.wikimedia.org'}:
+        raise ValueError('Artwork source is unavailable in Plex Cast Explorer 1.0')
     return external_image(url)
 
 
@@ -1266,7 +1272,7 @@ def enrichment_start():
         if ENRICH_STATE['running']:
             return False
         if not any(artwork_keys().values()):
-            raise ValueError('Configure TMDB or ThePornDB first')
+            raise ValueError('Configure ThePornDB first')
         ENRICH_STOP.clear()
         ENRICH_STATE['running'] = True
         ENRICH_STATE['phase'] = 'Preparing'
@@ -1702,7 +1708,9 @@ class Handler(BaseHTTPRequestHandler):
                 tpdb = data.get('theporndb', '')
                 if not all(isinstance(x, str) and len(x) <= 512 for x in (tmdb, tpdb)):
                     return self.respond(400, {'error': 'Invalid provider token'})
-                save_artwork_keys(tmdb.strip(), tpdb.strip())
+                if tmdb.strip():
+                    raise ValueError('TMDB credential configuration is unavailable in Plex Cast Explorer 1.0')
+                save_artwork_keys('', tpdb.strip())
                 self.respond(200, {'ok': True})
             elif path == '/api/art/apply':
                 key, identifier = data.get('key', ''), data.get('id', '')

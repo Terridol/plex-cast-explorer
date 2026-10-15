@@ -28,7 +28,7 @@ For details see [Windows installation, service, upgrades and updates](docs/WINDO
 
 **Security boundary:** The web server uses plain HTTP. Use only a trusted LAN or an appropriately secured private VPN; **never forward the application port to the public Internet**. Do not expose it through an untrusted proxy on localhost. Provider API tokens and credentials must remain on the server. See [security](SECURITY.md), [privacy](docs/PRIVACY.md), and [remote admin](docs/REMOTE_ADMIN.md).
 
-External provider support has independent terms. **TMDB and Wikimedia are off by default**; ThePornDB requires an API token. TMDB's restrictions on adult-oriented uses and its attribution/logo requirements remain unresolved. Never present optional provider integration as licensed for every deployment. See [artwork](docs/ARTWORK.md) and [third-party requirements](docs/THIRD_PARTY.md).
+External provider support has independent terms. **TMDB and Wikimedia new lookups are disabled in the public 1.0 build**, even with old environment opt-ins; no TMDB license/branding exception has been obtained for adult-media use. ThePornDB requires your own token and applicable provider/artwork rights. Existing user artwork is not deleted by upgrades. See [artwork](docs/ARTWORK.md) and [third-party requirements](docs/THIRD_PARTY.md).
 
 Development builds use unique `dev-` installer IDs. The final general-release installer has a separate, opt-in `-Release` build mode that requires a clean `dev` or `main` checkout and the final version number. A release-named binary built from `dev` is for final acceptance testing; only the exact source revision accepted for general availability is promoted to `main` and published.
 

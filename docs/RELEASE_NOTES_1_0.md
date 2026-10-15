@@ -13,7 +13,7 @@ Plex Cast Explorer is a self-hosted Windows cast explorer for Plex movie/TV libr
 
 ## Security and licensing boundaries
 
-The built-in web server serves **HTTP only**: trusted LAN/private VPN, never public WAN forwarding. This project uses a custom noncommercial source-share license, **not** an OSI-approved open-source license. Provider content/images/trademarks have separate rights. TMDB and Wikimedia integration are **off by default**; enabled use must satisfy provider conditions. The public release installer must be checked for its final signature state; an unsigned installer must be clearly labeled as such.
+The built-in web server serves **HTTP only**: trusted LAN/private VPN, never public WAN forwarding. This project uses a custom noncommercial source-share license, **not** an OSI-approved open-source license. Provider content/images/trademarks have separate rights. TMDB and Wikimedia lookups are **unavailable** in v1.0 due to unresolved API/attribution rights; old opt-in flags do not reactivate them. Existing user artwork is not erased by upgrading. The public release installer must be checked for its final signature state; an unsigned installer must be clearly labeled as such.
 
 ## Upgrade and support
 

@@ -37,7 +37,8 @@
 - [x] Bundle the original WinSW MIT license notice alongside the installed wrapper; enforce its inclusion through source tests.
 - [x] Require the CPython runtime license from the build interpreter and include project NOTICE in the Windows installer.
 - [ ] Review Python/PyInstaller versions and all remaining binary dependencies, bundled licenses and third-party attribution; ensure no external/provider artwork is bundled.
-- [ ] Verify optional provider permission and attribution. **TMDB and Wikimedia are off by default**. TMDB's restrictions on pornographic apps and approved-logo requirements remain unresolved; do not enable TMDB without demonstrated compliance or agreement.
+- [x] Fail-closed disable TMDB and Wikimedia API use and new portrait downloads in public v1.0; remove misleading TMDB Setup option and credential UI while preserving existing local data on upgrade.
+- [ ] Verify ThePornDB's current API terms and artwork rights with the provider; use only user-provided tokens and never bundle downloaded portraits or third-party metadata. No general redistribution permission has been established.
 - [ ] Independently assess the custom noncommercial source-share license if public enforcement/commercial permissions matter. Never call it an OSI open-source license.
 - [ ] Review session, HTTP Host, CSRF, file-path, credential, provider redirect and API handling for general distribution; independent penetration testing recommended.
 - [ ] Confirm restricted LAN/private-VPN HTTP-only deployment; never publicly forward the port or imply native TLS protection.
