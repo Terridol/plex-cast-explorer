@@ -19,6 +19,13 @@ class ReleaseGuardrailTests(unittest.TestCase):
             self.assertFalse(app.provider_enabled('tmdb'))
             self.assertFalse(app.provider_enabled('wikimedia'))
 
+    def test_tmdb_network_boundary_requires_opt_in(self):
+        with patch.dict(os.environ, {}, clear=True):
+            with self.assertRaisesRegex(ValueError, 'explicit installer opt-in'):
+                app.provider_json('https://api.themoviedb.org/3/search/person?query=example', 'secret')
+            with self.assertRaisesRegex(ValueError, 'unavailable'):
+                app.provider_json('https://www.wikidata.org/w/api.php', '')
+
     def test_tmdb_opt_in_requires_explicit_flag(self):
         with patch.dict(os.environ, {'CAST_EXPLORER_ENABLE_TMDB': '1',
                                      'CAST_EXPLORER_ENABLE_WIKIMEDIA': '1',
