@@ -66,6 +66,7 @@ Source: "installer\uninstall_cleanup.ps1"; DestDir: "{app}"; Flags: ignoreversio
 Source: "installer\configure_password.ps1"; DestDir: "{app}"; Flags: ignoreversion
 Source: "installer\check_updates.ps1"; DestDir: "{app}"; Flags: ignoreversion
 Source: "LICENSE"; DestDir: "{app}"; Flags: ignoreversion
+Source: "NOTICE"; DestDir: "{app}"; Flags: ignoreversion
 ; WinSW is bundled under MIT; retain the upstream notice with the binary.
 Source: "legal\WinSW-LICENSE.txt"; DestDir: "{app}\licenses"; Flags: ignoreversion
 Source: "README.md"; DestDir: "{app}"; Flags: ignoreversion
