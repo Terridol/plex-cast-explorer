@@ -216,15 +216,15 @@ class PlexCastExplorerTests(unittest.TestCase):
     def test_existing_review_queue_batch_accepts_only_verified_singletons(self):
         with patch.object(app, 'plex_xml', side_effect=self.fake_xml):
             app.sync_all(force=True)
-        good = {'name':'Sample Actor','source':'TMDB','url':'https://image.tmdb.org/t/p/w342/a.jpg',
-                'reference':'https://www.themoviedb.org/person/12',
+        good = {'name':'Sample Actor','source':'ThePornDB','url':'https://cdn.theporndb.net/a.jpg',
+                'reference':'https://theporndb.net/performers/12',
                 'matches':[{'title':'Alpha','year':2024,'external_year':2024,'year_verified':True}]}
         bad = dict(good, name='Different Person')
         app.remember_enrichment('sample actor', 'review', [good])
         app.remember_enrichment('second actor', 'review', [bad])
         with patch.object(app, 'external_image', return_value=(b'\xff\xd8\xff' + b'fake','jpg')):
             app.review_single_batch_worker()
-        self.assertEqual(app.get_actor('sample actor')['art']['source'], 'TMDB')
+        self.assertEqual(app.get_actor('sample actor')['art']['source'], 'ThePornDB')
         self.assertFalse(app.get_actor('second actor')['art']['source'])
         self.assertEqual(app.enrichment_status()['review_waiting'], 1)
         self.assertEqual(app.enrichment_status()['single_batch']['applied'], 1)
@@ -264,9 +264,9 @@ class PlexCastExplorerTests(unittest.TestCase):
     def test_review_queue_is_persistent_and_requires_selection(self):
         with patch.object(app, 'plex_xml', side_effect=self.fake_xml):
             app.sync_all(force=True)
-        choice = {'name':'Second Actor','source':'TMDB','url':'https://image.tmdb.org/t/p/w342/x.jpg',
-                  'reference':'https://www.themoviedb.org/person/123',
-                  'credit':'TMDB','matches':[{'title':'Alpha','year':2024,'year_verified':True}]}
+        choice = {'name':'Second Actor','source':'ThePornDB','url':'https://cdn.theporndb.net/x.jpg',
+                  'reference':'https://theporndb.net/performers/123',
+                  'credit':'ThePornDB','matches':[{'title':'Alpha','year':2024,'year_verified':True}]}
         app.remember_enrichment('second actor', 'review', [choice])
         reviews = app.review_enrichment()
         self.assertEqual(len(reviews),1)
@@ -275,7 +275,7 @@ class PlexCastExplorerTests(unittest.TestCase):
             app.approve_enrichment('second actor', 4)
         with patch.object(app, 'external_image', return_value=(b'\xff\xd8\xff' + b'fake', 'jpg')):
             app.approve_enrichment('second actor',0)
-        self.assertEqual(app.get_actor('second actor')['art']['source'], 'TMDB')
+        self.assertEqual(app.get_actor('second actor')['art']['source'], 'ThePornDB')
         self.assertEqual(app.enrichment_status()['review_waiting'], 0)
         self.assertEqual(app.image_bytes('actor','second actor'),b'\xff\xd8\xfffake')
 
@@ -311,20 +311,17 @@ class PlexCastExplorerTests(unittest.TestCase):
         self.assertEqual(app.enrichment_status()['review_waiting'],0)
         self.assertIsNone(app.get_actor('second actor')['art']['source'] or None)
 
-    def test_legacy_tmdb_preview_upgrades_resolution_and_falls_back(self):
+    def test_legacy_tmdb_review_is_preserved_but_new_downloads_are_blocked(self):
         with patch.object(app, 'plex_xml', side_effect=self.fake_xml):
             app.sync_all(force=True)
         app.remember_enrichment('second actor','review',[{
             'source':'TMDB', 'url':'https://image.tmdb.org/t/p/w342/a.jpg',
             'name':'Second Actor','matches':[]}])
-        with patch.object(app,'external_image',return_value=(b'img','jpg')) as img:
-            self.assertEqual(app.get_enrichment_preview('second actor',0)[0],b'img')
-            img.assert_called_once_with('https://image.tmdb.org/t/p/h632/a.jpg')
-        def fallback(url):
-            if 'h632' in url: raise ValueError('Unavailable')
-            return b'fallback','jpg'
-        with patch.object(app,'external_image',side_effect=fallback):
-            self.assertEqual(app.get_enrichment_preview('second actor',0)[0],b'fallback')
+        with patch.object(app, 'external_image') as image:
+            with self.assertRaisesRegex(ValueError, 'unavailable'):
+                app.get_enrichment_preview('second actor', 0)
+            image.assert_not_called()
+        self.assertEqual(app.enrichment_status()['review_waiting'], 1)
 
     def test_conflicting_character_roles_block_automatic_application(self):
         local=[{'title':'Movie One','year':2019,'media_type':'movie','character':'Detective'},
@@ -355,10 +352,10 @@ class PlexCastExplorerTests(unittest.TestCase):
     def test_background_enrichment_auto_applies_and_resumes(self):
         with patch.object(app, 'plex_xml', side_effect=self.fake_xml):
             app.sync_all(force=True)
-        candidate = {'name':'Second Actor','source':'TMDB',
-                     'url':'https://image.tmdb.org/t/p/w342/x.jpg',
-                     'reference':'https://www.themoviedb.org/person/2',
-                     'credit':'TMDB',
+        candidate = {'name':'Second Actor','source':'ThePornDB',
+                     'url':'https://cdn.theporndb.net/x.jpg',
+                     'reference':'https://theporndb.net/performers/2',
+                     'credit':'ThePornDB',
                      'matches':[{'title':'Alpha','year':2024,'year_verified':True},
                                 {'title':'Beta','year':2018,'year_verified':False}]}
         with patch.object(app, 'pending_enrichment_keys', return_value=['second actor']), \
@@ -366,7 +363,7 @@ class PlexCastExplorerTests(unittest.TestCase):
              patch.object(app, 'external_image', return_value=(b'\xff\xd8\xffauto','jpg')):
             app.ENRICH_STOP.clear()
             app.enrichment_worker()
-        self.assertEqual(app.get_actor('second actor')['art']['source'],'TMDB')
+        self.assertEqual(app.get_actor('second actor')['art']['source'],'ThePornDB')
         self.assertEqual(app.enrichment_status()['db_auto'],1)
         self.assertEqual(app.enrichment_status()['review_waiting'],0)
         self.assertEqual(app.pending_enrichment_keys(),[])

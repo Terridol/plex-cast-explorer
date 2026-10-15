@@ -712,8 +712,10 @@ def artwork_keys():
 
 def save_artwork_keys(tmdb, tpdb):
     keys = artwork_keys()
+    # GA 1.0 does not accept new TMDB tokens, including direct callers.
+    # Preserve previously saved values as legacy data; never use them.
     if tmdb:
-        keys['tmdb'] = tmdb
+        raise ValueError('TMDB is unavailable in Plex Cast Explorer 1.0')
     if tpdb:
         keys['theporndb'] = tpdb
     tmp = ART_CONFIG_PATH.with_suffix('.tmp')
@@ -1271,7 +1273,7 @@ def enrichment_start():
     with ENRICH_LOCK:
         if ENRICH_STATE['running']:
             return False
-        if not any(artwork_keys().values()):
+        if not artwork_keys()['theporndb']:
             raise ValueError('Configure ThePornDB first')
         ENRICH_STOP.clear()
         ENRICH_STATE['running'] = True
@@ -1582,7 +1584,7 @@ class Handler(BaseHTTPRequestHandler):
                 if not self.is_admin():
                     return self.respond(403, {'error': 'Server-only settings'})
                 art_keys = artwork_keys()
-                self.respond(200, {'tmdb_set': bool(art_keys['tmdb']), 'tmdb_enabled': provider_enabled('tmdb'), 'theporndb_set': bool(art_keys['theporndb']), 'wikimedia_enabled': provider_enabled('wikimedia')})
+                self.respond(200, {'tmdb_set': False, 'tmdb_enabled': False, 'theporndb_set': bool(art_keys['theporndb']), 'wikimedia_enabled': False})
             elif path == '/api/art/search':
                 if not self.is_admin():
                     return self.respond(403, {'error': 'Art searches can be started only on the server'})

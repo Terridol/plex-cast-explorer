@@ -61,6 +61,12 @@ def check_install_contract(root: Path) -> str:
             'Python-LICENSE.txt' in build and
             'runtimeLicense' in build,
             'Windows installer must include CPython runtime license and project NOTICE')
+    require('Name: "tmdb"' not in spec and
+            "Result := '0';" in spec and
+            "@('CAST_EXPLORER_ENABLE_TMDB', '0')" in service and
+            "def provider_enabled(name):" in read(root, 'app.py') and
+            "This provider is unavailable in Plex Cast Explorer 1.0" in read(root, 'app.py'),
+            'GA 1.0 must not reenable disallowed TMDB/Wikimedia integrations')
     require('MIT License' in winsw_license and
             'Kohsuke Kawaguchi' in winsw_license and
             'Source: "legal\\WinSW-LICENSE.txt"; DestDir: "{app}\\licenses"' in spec,

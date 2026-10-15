@@ -30,6 +30,13 @@ class ReleaseGuardrailTests(unittest.TestCase):
             with self.subTest(url=url), self.assertRaisesRegex(ValueError, 'unavailable'):
                 app.provider_json(url, 'old-token')
 
+    def test_tmdb_credential_enrollment_is_blocked(self):
+        with self.assertRaisesRegex(ValueError, 'unavailable'):
+            app.save_artwork_keys('new-tmdb-token', '')
+        with patch.object(app, 'artwork_keys', return_value={'tmdb':'old', 'theporndb':''}):
+            with self.assertRaisesRegex(ValueError, 'ThePornDB'):
+                app.enrichment_start()
+
     def test_existing_artwork_is_not_erased_by_provider_disable(self):
         self.assertFalse(app.provider_enabled('tmdb'))
         self.assertFalse(app.provider_enabled('wikimedia'))
