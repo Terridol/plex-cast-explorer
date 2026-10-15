@@ -17,7 +17,7 @@ if ($Channel -eq 'Default') {
     }
     $Channel = if ($selectedBeta) { 'Beta' } else { 'Stable' }
 }
-$installed = '1.0.0-rc.1'
+$installed = '1.0.0'
 $localExe = Join-Path $PSScriptRoot 'PlexCastExplorer.exe'
 if (!(Test-Path $localExe)) { throw "Missing application executable: $localExe" }
 

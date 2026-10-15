@@ -1,6 +1,6 @@
 # Plex Cast Explorer 1.0 — General release checklist
 
-**Status: FEATURE FROZEN, NOT PUBLISHED.** Candidate version: `1.0.0-rc.1`. The most recent maintainer-confirmed installed working build was `0.4.7-beta`. This file is the single source of truth for general-availability approval.
+**Status: FEATURE LOCKED, v1.0.0 SOURCE PREPARED, NOT PUBLISHED.** Target GA version: `1.0.0`. The most recent maintainer-confirmed installed working build was `0.4.7-beta`. This file is the single source of truth for general-availability approval.
 
 **Change policy:** On `dev`, only narrowly scoped release-blocking fixes, security/privacy hardening, dependency/attribution work, regression tests, installer compatibility, and release documents. No new features, unrelated refactors, providers, branches, GitHub-hosted builds or automatic releases. Do not update `main` before approval.
 
@@ -14,10 +14,11 @@
 ## Verified evidence
 
 - [x] Maintainer confirmed the **0.4.7-beta** source/build gates, Windows installer, upgrade and application worked on the Windows host after prior fixes.
+- [x] Final version `1.0.0` is set in application, installer, service, updater and version regression tests. Source is not itself a distribution-tested binary.
 - [x] Source on `dev` has a single CMD builder, six PowerShell scripts and explicit local build gates.
 - [x] Audited the current tracked `dev` tree: 47 files, no committed generated executables, databases, logs or private artwork, no duplicate file blobs and no broken internal Markdown links. This is **not** a complete Git-history or packaged-binary audit.
 - [x] Scanned the text content of all 47 currently tracked files for common GitHub/AWS/API credential formats and PEM private-key markers; no matching patterns were found. This does **not** prove older commits or unusual secret formats are clean.
-- [ ] **Run the new 1.0.0-rc.1 local build** from latest `dev` using `BUILD-INSTALLER.cmd`. Record Git SHA, 73+ regression tests, JS syntax check, EXE smoke, exact installer output and SHA-256. Previously passing 0.4.7 does not validate the candidate.
+- [ ] **Run the final 1.0.0 local build** from latest `dev` using `BUILD-INSTALLER.cmd`. Record Git SHA, 73+ regression tests, JS syntax check, EXE smoke, exact installer output and SHA-256. Previously passing 0.4.7 does not validate the candidate.
 
 ## Mandatory Windows release acceptance — use a disposable VM/test PC
 

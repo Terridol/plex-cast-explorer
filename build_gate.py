@@ -323,6 +323,13 @@ def executable_gate():
                 proc.wait(timeout=5)
 
 
+def validate_release_version(version: str) -> str:
+    """Require an explicit stable semver; reject prerelease/build suffixes."""
+    require(bool(re.fullmatch(r'[0-9]+\.[0-9]+\.[0-9]+', version or '')),
+            'Stable installer cannot be produced from a prerelease source version')
+    return version
+
+
 def validate_build_id(build_id: str) -> str:
     require(bool(re.fullmatch(r'dev-[0-9]{8}-[0-9]{9}-[gs][0-9a-f]{8}', build_id or '')),
             'Installer gate requires a valid unique dev build ID')
@@ -333,8 +340,7 @@ def installer_gate(build_id: str):
     version = check_install_contract(ROOT)
     out_dir = ROOT / 'output'
     if build_id == 'release':
-        require(bool(re.fullmatch(r'[0-9]+\.[0-9]+\.[0-9]+', version)),
-                'Stable installer cannot be produced from a prerelease source version')
+        validate_release_version(version)
         exe = out_dir / f'PlexCastExplorer-Setup-{version}-win-x64.exe'
     else:
         build_id = validate_build_id(build_id)

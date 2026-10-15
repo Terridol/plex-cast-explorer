@@ -1,6 +1,6 @@
 # Plex Cast Explorer 1.0 — Draft release notes
 
-**Unpublished draft for `1.0.0-rc.1`; not a stable release announcement.**
+**Unpublished 1.0.0 release notes; do not distribute as a GA announcement until acceptance gates pass.**
 
 Plex Cast Explorer is a self-hosted Windows cast explorer for Plex movie/TV libraries, with actor credits, searchable filmographies, portraits and optional reviewed artwork.
 
@@ -13,7 +13,7 @@ Plex Cast Explorer is a self-hosted Windows cast explorer for Plex movie/TV libr
 
 ## Security and licensing boundaries
 
-The built-in web server serves **HTTP only**: trusted LAN/private VPN, never public WAN forwarding. This project uses a custom noncommercial source-share license, **not** an OSI-approved open-source license. Provider content/images/trademarks have separate rights. TMDB and Wikimedia integration are **off by default**; enabled use must satisfy provider conditions. The candidate installer is unsigned unless separately code-signed.
+The built-in web server serves **HTTP only**: trusted LAN/private VPN, never public WAN forwarding. This project uses a custom noncommercial source-share license, **not** an OSI-approved open-source license. Provider content/images/trademarks have separate rights. TMDB and Wikimedia integration are **off by default**; enabled use must satisfy provider conditions. The public release installer must be checked for its final signature state; an unsigned installer must be clearly labeled as such.
 
 ## Upgrade and support
 

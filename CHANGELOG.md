@@ -1,5 +1,11 @@
 # Changelog
 
+## v1.0.0 — Feature-locked release source (not yet published)
+
+- Set the final `1.0.0` version consistently across the application, Inno Setup, updater, service, build regression checks and support material.
+- Preserve unique IDs for developer-built packages; official stable naming requires explicit `-Release`, a clean approved `main` checkout, and mandatory source/EXE/installer integrity gates.
+- Keep Windows acceptance, source-history/security, provider-licensing and public binary distribution verification blocking until real evidence exists. This entry is not a claim that a GA release has been published.
+
 ## v1.0.0-rc.1 — Feature-freeze release candidate (NOT general availability)
 
 - Fixed oversized ThePornDB performer-credit responses: metadata reads are now bounded at 8 MiB, larger valid JSON is parsed completely, and truly oversized payloads fail with an explicit size error instead of misleading 'Unterminated string' errors. Added regression coverage.

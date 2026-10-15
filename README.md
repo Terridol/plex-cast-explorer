@@ -2,16 +2,16 @@
 
 Self-hosted Plex cast browser for Windows. Index actors across movie and TV libraries, browse portraits and credits, and optionally search external portrait providers.
 
-**Feature-frozen candidate:** `1.0.0-rc.1` · **Windows:** 10/11 x64 · **Runtime:** bundled into installer · **Source build:** Python 3.10+ and Inno Setup 6
+**Version:** `1.0.0` (release source; GA installer not yet verified/published) · **Windows:** 10/11 x64 · **Runtime:** bundled into installer · **Source build:** Python 3.10+ and Inno Setup 6
 
-**Project state:** Feature-frozen 1.0 release candidate, **not a published or certified general release**. See [the release checklist](docs/RELEASE_CHECKLIST.md) before promoting or distributing a stable installer.
+**Project state:** Feature-frozen 1.0 release source, **not yet a published or verified general release**. See [the release checklist](docs/RELEASE_CHECKLIST.md) before promoting or distributing a stable installer.
 
 ## Install and use
 
 1. On a Windows build machine, clone `Terridol/plex-cast-explorer` with GitHub Desktop and select the **`dev`** branch.
 2. Choose **Fetch origin → Pull origin**, then run **`BUILD-INSTALLER.cmd`** in the repository directory.
 3. The local build validates PowerShell syntax before any other step, runs Python regression/negative tests, builds a self-contained application, smoke-tests that executable with disposable data, compiles Inno Setup, and verifies the installer/checksum.
-4. The uniquely named installer is placed in `output/`: for example, `PlexCastExplorer-Setup-1.0.0-rc.1-dev-20261014-203512123-g23a496e7-win-x64.exe`.
+4. The uniquely named installer is placed in `output/`: for example, `PlexCastExplorer-Setup-1.0.0-dev-20261014-203512123-g23a496e7-win-x64.exe`.
 5. **Back up `C:\ProgramData\PlexCastExplorer` before an upgrade.** Run Setup as Administrator. Choose the service port, Private-profile Windows Firewall rule, and any explicitly permitted provider/VPN options. Do not uninstall your existing service first.
 6. After installation, use **Start → Plex Cast Explorer → Set Gallery Password** if this is a new installation. On the server, browse `http://127.0.0.1:8765` (or your configured port), configure Plex, and index the libraries. Other trusted LAN devices sign in with the gallery password.
 

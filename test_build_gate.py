@@ -25,7 +25,7 @@ class BuildGateRegressionTests(unittest.TestCase):
 
     def test_version_drift_is_fatal(self):
         self.assert_mutation_blocked('PlexCastExplorer.iss',
-                                    '#define AppVersion "1.0.0-rc.1"',
+                                    '#define AppVersion "1.0.0"',
                                     '#define AppVersion "9.0.0"')
 
     def test_powershell_version_regex_double_escaping_is_fatal(self):
@@ -42,18 +42,18 @@ class BuildGateRegressionTests(unittest.TestCase):
 
     def test_updater_version_mismatch_is_fatal(self):
         self.assert_mutation_blocked('installer/check_updates.ps1',
-                                     "$installed = '1.0.0-rc.1'",
+                                     "$installed = '1.0.0'",
                                      "$installed = '0.4.6-beta'")
 
     def test_service_version_mismatch_is_fatal(self):
         self.assert_mutation_blocked('installer/configure_service.ps1',
-                                     "$ExpectedVersion = '1.0.0-rc.1'",
+                                     "$ExpectedVersion = '1.0.0'",
                                      "$ExpectedVersion = '0.4.6-beta'")
 
     def test_dev_build_id_has_strict_format(self):
         build_gate.validate_build_id('dev-20261014-203512123-g23a496e7')
         build_gate.validate_build_id('dev-20261014-203512123-s01234567')
-        for bad in ('', '1.0.0-rc.1', 'dev-20261014-g23a496e7',
+        for bad in ('', '1.0.0', 'dev-20261014-g23a496e7',
                     'dev-20261014-203512123-nohash', '../malicious'):
             with self.subTest(bad=bad), self.assertRaises(build_gate.GateFailure):
                 build_gate.validate_build_id(bad)
@@ -71,9 +71,10 @@ class BuildGateRegressionTests(unittest.TestCase):
                                      "'/DReleaseBuild=1'", "'/DDevBuildId=' + $buildId")
 
     def test_prerelease_cannot_pass_stable_installer_gate(self):
-        # A release-named binary from 1.0.0-rc.1 must never be allowed.
-        with self.assertRaises(build_gate.GateFailure):
-            build_gate.installer_gate('release')
+        self.assertEqual(build_gate.validate_release_version('1.0.0'), '1.0.0')
+        for bad in ('1.0.0-rc.1', '1.0.0-beta', '1.0.0+dirty', '', '1.0'):
+            with self.subTest(version=bad), self.assertRaises(build_gate.GateFailure):
+                build_gate.validate_release_version(bad)
 
     def test_missing_installer_build_id_is_fatal(self):
         self.assert_mutation_blocked('build_installer_windows.ps1',

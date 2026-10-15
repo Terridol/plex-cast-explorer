@@ -138,8 +138,8 @@ class InstallerSpecTests(unittest.TestCase):
         checker = self.read('installer/check_updates.ps1')
         self.assertIn('[A-Za-z0-9.]+(?:-[A-Za-z0-9.]+)*', checker)
         pattern = r'^PlexCastExplorer-Setup-v?\d+\.\d+\.\d+(?:-[A-Za-z0-9.]+(?:-[A-Za-z0-9.]+)*)?-win-x64\.exe$'
-        self.assertRegex('PlexCastExplorer-Setup-1.0.0-rc.1-dev-20261014-203512123-g23a496e7-win-x64.exe', pattern)
-        self.assertRegex('PlexCastExplorer-Setup-1.0.0-rc.1-win-x64.exe', pattern)
+        self.assertRegex('PlexCastExplorer-Setup-1.0.0-dev-20261014-203512123-g23a496e7-win-x64.exe', pattern)
+        self.assertRegex('PlexCastExplorer-Setup-1.0.0-win-x64.exe', pattern)
 
     def test_install_kit_has_build_pipeline(self):
         builder = self.read('build_installer_windows.ps1')
@@ -149,7 +149,7 @@ class InstallerSpecTests(unittest.TestCase):
         self.assertIn('PlexCastExplorer-Setup-$appVersion-$buildId-win-x64.exe', builder)
         self.assertEqual(
             re.search(r"^VERSION = '([^']+)'", self.read('app.py'), re.M).group(1),
-            '1.0.0-rc.1'
+            '1.0.0'
         )
 
 

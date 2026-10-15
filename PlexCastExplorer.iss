@@ -1,5 +1,5 @@
 #define AppName "Plex Cast Explorer"
-#define AppVersion "1.0.0-rc.1"
+#define AppVersion "1.0.0"
 ; Production builds are opt-in and use the clean semver name. A development
 ; build always requires its unique build ID so the two cannot be confused.
 #ifdef ReleaseBuild
