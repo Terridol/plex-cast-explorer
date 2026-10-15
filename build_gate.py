@@ -146,8 +146,9 @@ def check_install_contract(root: Path) -> str:
     require('build_gate.py' in build and "'source'" in build and
             "'exe'" in build and "'installer'" in build,
             'The build script must run all three mandatory gate stages')
-    require('BUILD-EXE.cmd' in build and 'ISCC.exe' in build,
-            'The build must compile both application and setup executable')
+    require("'-m','PyInstaller'" in build and 'ISCC.exe' in build and
+            "Invoke-LocalGate 'exe'" in build,
+            'The one supported build orchestrator must compile and smoke-test both application and Setup')
     return version
 
 
