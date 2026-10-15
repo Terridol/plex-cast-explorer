@@ -770,7 +770,13 @@ def external_image(url):
 
 def provider_json(url, bearer=None):
     host = urlsplit(url).hostname
-    if urlsplit(url).scheme != 'https' or host not in {'api.themoviedb.org', 'api.theporndb.net', 'www.wikidata.org'}:
+    # Enforce the TMDB consent/installer opt-in at the network boundary as
+    # well as in provider selection, so no indirect caller bypasses it.
+    if host == 'api.themoviedb.org' and not provider_enabled('tmdb'):
+        raise ValueError('TMDB lookup requires explicit installer opt-in')
+    if host == 'www.wikidata.org':
+        raise ValueError('Wikimedia lookups are unavailable in version 1.0')
+    if urlsplit(url).scheme != 'https' or host not in {'api.themoviedb.org', 'api.theporndb.net'}:
         raise ValueError('Unknown metadata provider')
     headers = {'Accept': 'application/json', 'User-Agent': 'PlexCastExplorer/1.0 (personal library artwork browser)'}
     if bearer:
