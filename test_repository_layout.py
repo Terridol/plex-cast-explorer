@@ -28,6 +28,7 @@ OBSOLETE = (
 )
 REQUIRED = (
     "app.py",
+    "static/privacy.html",
     "docs/RELEASE_CHECKLIST.md",
     "docs/RELEASE_NOTES_1_0.md",
     "PlexCastExplorer.iss",

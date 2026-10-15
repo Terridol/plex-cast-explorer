@@ -1,6 +1,8 @@
 """Plex Cast Explorer: LAN-served, read-only Plex cast directory.
 
 Run with Python 3.10+: python app.py
+
+Copyright (c) 2026 Terridol. See LICENSE and NOTICE for rights and limitations.
 """
 from __future__ import annotations
 
@@ -1545,6 +1547,11 @@ class Handler(BaseHTTPRequestHandler):
             return self.respond(400, {'error': 'Unrecognized host'})
         parts = urlsplit(self.path)
         path, params = parts.path, parse_qs(parts.query)
+        # A public privacy notice is available before entering a password,
+        # as required for transparent operation of Plex interfacing software.
+        if path == '/privacy':
+            return self.respond(200, (ASSET_ROOT / 'static' / 'privacy.html').read_bytes(),
+                                'text/html; charset=utf-8')
         if path == '/login':
             if self.logged_in():
                 return self.redirect('/')

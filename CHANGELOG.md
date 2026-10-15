@@ -2,6 +2,8 @@
 
 ## v1.0.0 — Feature-locked release source (not yet published)
 
+- Added an unauthenticated, locally served privacy and legal notice linked from the gallery and login pages; source includes a project copyright notice. Replaced an obsolete password-setup command in the sign-in help.
+
 - Added tests enforcing restricted provider credential enrollment, saved-token independence, no new legacy TMDB previews, and a fail-closed installer configuration for 1.0.
 - Restricted new TMDB and Wikimedia integrations in the public release: legacy flags/tokens cannot reactivate them, and Setup and UI no longer invite prohibited or unverifiable provider use. Existing on-disk artwork survives upgrades. ThePornDB remains an optional user-token provider subject to separate terms.
 

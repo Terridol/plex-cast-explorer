@@ -45,6 +45,25 @@ class ReleaseGuardrailTests(unittest.TestCase):
             with self.subTest(url=url), self.assertRaisesRegex(ValueError, 'unavailable'):
                 app.verified_portrait_image(url)
 
+    def test_privacy_notice_accessible_without_authentication(self):
+        server = ThreadingHTTPServer(('127.0.0.1', 0), app.Handler)
+        old_port = app.PORT
+        app.PORT = server.server_port
+        worker = threading.Thread(target=server.serve_forever, daemon=True)
+        worker.start()
+        try:
+            with urlopen(f'http://127.0.0.1:{server.server_port}/privacy', timeout=3) as response:
+                text = response.read().decode('utf-8')
+                self.assertEqual(response.status, 200)
+                self.assertIn('Privacy &amp; Legal', text)
+                self.assertIn('ThePornDB', text)
+                self.assertIn('not affiliated', text)
+        finally:
+            server.shutdown()
+            server.server_close()
+            worker.join(timeout=5)
+            app.PORT = old_port
+
     def test_untrusted_host_header_rejected(self):
         server = ThreadingHTTPServer(('127.0.0.1', 0), app.Handler)
         old_port = app.PORT

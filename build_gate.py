@@ -56,6 +56,11 @@ def check_install_contract(root: Path) -> str:
     runner = read(root, 'BUILD-INSTALLER.cmd')
     updater = read(root, 'installer/check_updates.ps1')
 
+    require("if path == '/privacy':" in read(root, 'app.py') and
+            "href=\"/privacy\"" in read(root, 'static/login.html') and
+            "href=\"/privacy\"" in read(root, 'static/index.html') and
+            'Plex Cast Explorer — Privacy & Legal' in read(root, 'static/privacy.html'),
+            'A public privacy/legal notice must be accessible before gallery authentication')
     require('Source: "NOTICE"; DestDir: "{app}"' in spec and
             "bundledLicenses = Join-Path $root 'dist\\PlexCastExplorer\\licenses'" in build and
             'Python-LICENSE.txt' in build and
