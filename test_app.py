@@ -90,7 +90,7 @@ class PlexCastExplorerTests(unittest.TestCase):
         # Plex's Role.thumb may be available even though the first sync only
         # indexed its URL. Cache missing images while indexing, and backfill
         # without requiring the movie's updatedAt timestamp to change.
-        with patch.dict(os.environ, {'PLEX_URL': '', 'PLEX_TOKEN': ''}):
+        with patch.dict(os.environ, {}, clear=True):
             app.save_config('http://127.0.0.1:32400', 'example-token')
             with patch.object(app, 'plex_xml', side_effect=self.fake_xml), \
                  patch.object(app, 'request_plex', return_value=b'\xff\xd8\xffPlex image') as photo:
@@ -110,8 +110,9 @@ class PlexCastExplorerTests(unittest.TestCase):
                 self.assertEqual(app.get_actor('second actor')['image'], '')
 
     def test_sync_repairs_corrupt_plex_actor_cache(self):
-        with patch.dict(os.environ, {'PLEX_URL': '', 'PLEX_TOKEN': ''}):
+        with patch.dict(os.environ, {}, clear=True):
             app.save_config('http://127.0.0.1:32400', 'example-token')
+            self.assertEqual(app.load_config(), {'url': 'http://127.0.0.1:32400', 'token': 'example-token'})
             path = app.plex_portrait_cache_path('/portrait/sample')
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_bytes(b'not an image')
@@ -123,7 +124,7 @@ class PlexCastExplorerTests(unittest.TestCase):
                 self.assertEqual(app.status_snapshot()['phase'], 'Finished')
 
     def test_plex_sync_portrait_download_failure_is_non_destructive_and_retryable(self):
-        with patch.dict(os.environ, {'PLEX_URL': '', 'PLEX_TOKEN': ''}):
+        with patch.dict(os.environ, {}, clear=True):
             app.save_config('http://127.0.0.1:32400', 'example-token')
             with patch.object(app, 'plex_xml', side_effect=self.fake_xml), \
                  patch.object(app, 'request_plex', side_effect=[OSError('temporarily offline'),
@@ -143,7 +144,7 @@ class PlexCastExplorerTests(unittest.TestCase):
             'https://www.themoviedb.org/person/12', 'TMDB')
         with patch.object(app, 'external_image', return_value=(b'\xff\xd8\xffManual','jpg')):
             app.apply_art('sample actor', candidate['id'])
-        with patch.dict(os.environ, {'PLEX_URL': '', 'PLEX_TOKEN': ''}):
+        with patch.dict(os.environ, {}, clear=True):
             app.save_config('http://127.0.0.1:32400', 'example-token')
             with patch.object(app, 'plex_xml', side_effect=self.fake_xml), \
                  patch.object(app, 'request_plex') as image_request:
@@ -173,7 +174,7 @@ class PlexCastExplorerTests(unittest.TestCase):
             return item
         resolved = [(socket.AF_INET, socket.SOCK_STREAM, 6, '',
                      ('93.184.216.34', 443))]
-        with patch.dict(os.environ, {'PLEX_URL': '', 'PLEX_TOKEN': ''}):
+        with patch.dict(os.environ, {}, clear=True):
             app.save_config('http://127.0.0.1:32400', 'example-token')
             with patch.object(app, 'plex_xml', side_effect=custom_xml), \
                  patch.object(app.socket, 'getaddrinfo', return_value=resolved) as dns, \
@@ -248,7 +249,7 @@ class PlexCastExplorerTests(unittest.TestCase):
                     '<Role tag="Second Actor" key="/library/metadata/person-223"/>'
                     '</Video></MediaContainer>')
             return self.fake_xml(path)
-        with patch.dict(os.environ, {'PLEX_URL': '', 'PLEX_TOKEN': ''}):
+        with patch.dict(os.environ, {}, clear=True):
             app.save_config('http://127.0.0.1:32400', 'example-token')
             with patch.object(app, 'plex_xml', side_effect=plex_metadata), \
                  patch.object(app, 'request_plex', return_value=b'\xff\xd8\xffPlex person') as requests:
