@@ -223,6 +223,58 @@ class PlexCastExplorerTests(unittest.TestCase):
                     app.plex_image_bytes(url)
                 plex.assert_not_called()
 
+    def test_custom_scraper_metadata_bundle_role_portrait(self):
+        # Plex's custom/NFO agents can supply metadata:// or media:// URLs
+        # instead of an ordinary HTTPS CDN or library/metadata thumb path.
+        role = ET.Element('Role', {'tag': 'Sample Actor', 'role': 'Hero',
+                                  'thumb': 'metadata://posters/people/sample.jpg'})
+        self.assertEqual(app.plex_role_thumb(role, '101'),
+                         '/library/metadata/101/file?url=metadata%3A%2F%2Fposters%2Fpeople%2Fsample.jpg')
+        role.set('thumb', 'media://photos/people/sample.png')
+        self.assertIn('/library/metadata/101/file?url=media%3A%2F%2F',
+                      app.plex_role_thumb(role, '101'))
+        self.assertEqual(app.plex_role_thumb(role, '../../private'), '')
+
+    def test_plex_role_key_resolves_person_portrait_through_plex(self):
+        # A third-party agent may provide Role.key without Role.thumb. When
+        # Plex's own person metadata advertises a thumb, retrieve through Plex.
+        def plex_metadata(path):
+            if path == '/library/metadata/person-223':
+                return ET.fromstring('<MediaContainer><Directory thumb="media://people/portrait.png"/></MediaContainer>')
+            if path == '/library/metadata/101':
+                return ET.fromstring(
+                    '<MediaContainer><Video ratingKey="101" title="Alpha" year="2024" updatedAt="123">'
+                    '<Role tag="Sample Actor" thumb="/portrait/sample"/>'
+                    '<Role tag="Second Actor" key="/library/metadata/person-223"/>'
+                    '</Video></MediaContainer>')
+            return self.fake_xml(path)
+        with patch.dict(os.environ, {'PLEX_URL': '', 'PLEX_TOKEN': ''}):
+            app.save_config('http://127.0.0.1:32400', 'example-token')
+            with patch.object(app, 'plex_xml', side_effect=plex_metadata), \
+                 patch.object(app, 'request_plex', return_value=b'\xff\xd8\xffPlex person') as requests:
+                app.sync_all(force=True)
+                self.assertEqual(app.status_snapshot()['phase'], 'Finished')
+                person = app.get_actor('second actor')
+                self.assertEqual(person['art']['source'], 'Plex')
+                self.assertEqual(app.image_bytes('actor', 'second actor'), b'\xff\xd8\xffPlex person')
+                paths = [call.args[0] for call in requests.call_args_list]
+                self.assertTrue(any(p.startswith('/library/metadata/person-223/file?url=media%3A%2F%2F')
+                                    for p in paths), paths)
+                requests.reset_mock()
+                app.sync_all(force=False)
+                requests.assert_not_called()
+
+    def test_plex_role_metadata_key_rejects_non_plex_paths(self):
+        for value in ('http://attacker.example/actor', '//evil.example/portrait',
+                      '/library/metadata/../../settings', '/library/metadata/1/children',
+                      '/library/metadata/', '/library/metadata/1?foo=1'):
+            with self.subTest(path=value):
+                role = ET.Element('Role', {'key': value})
+                self.assertEqual(app.plex_role_metadata_path(role), '')
+        role = ET.Element('Role', {'ratingKey': 'person-id_123'})
+        self.assertEqual(app.plex_role_metadata_path(role),
+                         '/library/metadata/person-id_123')
+
     def test_provider_json_reads_large_valid_credit_payload_without_truncating(self):
         # Regression: ThePornDB sometimes returns scene-credit JSON larger
         # than 1,000,001 bytes; older code truncated it mid-string.
