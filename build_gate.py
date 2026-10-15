@@ -57,7 +57,7 @@ def check_install_contract(root: Path) -> str:
     updater = read(root, 'installer/check_updates.ps1')
 
     require('Source: "NOTICE"; DestDir: "{app}"' in spec and
-            "bundledLicenses = Join-Path $root 'dist\PlexCastExplorer\licenses'" in build and
+            "bundledLicenses = Join-Path $root 'dist\\PlexCastExplorer\\licenses'" in build and
             'Python-LICENSE.txt' in build and
             'runtimeLicense' in build,
             'Windows installer must include CPython runtime license and project NOTICE')
