@@ -28,6 +28,14 @@ function Invoke-LocalGate([string]$Stage, [string]$BuildId = '') {
 
 Invoke-LocalGate 'source'
 
+# Fail early, before downloading dependencies or compiling a large EXE.
+# Derive the application version from source; never require hand-editing
+# installer output naming each time the beta version is incremented.
+$appSource = Get-Content -LiteralPath (Join-Path $root 'app.py') -Raw -Encoding UTF8
+$appVersionMatch = [regex]::Match($appSource, "(?m)^VERSION\s*=\s*'(?<version>[0-9]+\.[0-9]+\.[0-9]+(?:-[A-Za-z0-9.]+)?)'")
+if (-not $appVersionMatch.Success) { throw 'Could not determine safe application version from app.py.' }
+$appVersion = $appVersionMatch.Groups['version'].Value
+
 # Compile the standalone application directly: one supported build orchestrator,
 # one source gate, and one executable gate. No nested batch scripts.
 function Invoke-Python([string[]]$Arguments, [string]$Description) {
@@ -104,12 +112,6 @@ function Get-ISCC {
     return $null
 }
 
-# Derive the application version from source; never require hand-editing
-# installer output naming each time the beta version is incremented.
-$appSource = Get-Content -LiteralPath (Join-Path $root 'app.py') -Raw -Encoding UTF8
-$appVersionMatch = [regex]::Match($appSource, "(?m)^VERSION\\s*=\\s*'(?<version>[0-9]+\\.[0-9]+\\.[0-9]+(?:-[A-Za-z0-9.]+)?)'")
-if (-not $appVersionMatch.Success) { throw 'Could not determine safe application version from app.py.' }
-$appVersion = $appVersionMatch.Groups['version'].Value
 
 # Every dev installer receives a unique, filesystem-safe build ID.
 # UTC includes milliseconds, so rebuilding the same commit never overwrites
