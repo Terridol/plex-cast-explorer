@@ -697,9 +697,10 @@ def provider_enabled(name):
     TMDB use must fall within the operator's actual permissions. Wikimedia
     remains off unless the operator handles image-specific rights.
     """
-    flag = {'tmdb': 'CAST_EXPLORER_ENABLE_TMDB',
-            'wikimedia': 'CAST_EXPLORER_ENABLE_WIKIMEDIA'}.get(name)
-    return bool(flag and os.environ.get(flag, '').strip() == '1')
+    # Wikimedia remains unavailable pending image-level licensing support.
+    if name != 'tmdb':
+        return False
+    return os.environ.get('CAST_EXPLORER_ENABLE_TMDB', '').strip() == '1'
 
 
 def artwork_keys():
@@ -749,7 +750,7 @@ class ArtworkRedirects(HTTPRedirectHandler):
 def external_image(url):
     if not allowed_https_image_url(url, IMAGE_HOSTS):
         raise ValueError('Image host not permitted')
-    request = Request(url, headers={'User-Agent': 'PlexCastExplorer/0.4 (home library artwork browser)',
+    request = Request(url, headers={'User-Agent': 'PlexCastExplorer/1.0 (home library artwork browser)',
                                     'Accept': 'image/jpeg,image/png,image/webp'})
     with build_opener(ArtworkRedirects()).open(request, timeout=12) as response:
         mime = response.headers.get_content_type()
@@ -771,7 +772,7 @@ def provider_json(url, bearer=None):
     host = urlsplit(url).hostname
     if urlsplit(url).scheme != 'https' or host not in {'api.themoviedb.org', 'api.theporndb.net', 'www.wikidata.org'}:
         raise ValueError('Unknown metadata provider')
-    headers = {'Accept': 'application/json', 'User-Agent': 'PlexCastExplorer/0.4 (personal library artwork browser)'}
+    headers = {'Accept': 'application/json', 'User-Agent': 'PlexCastExplorer/1.0 (personal library artwork browser)'}
     if bearer:
         headers['Authorization'] = 'Bearer ' + bearer
     req = Request(url, headers=headers)
@@ -1296,6 +1297,21 @@ def retry_enrichment_errors():
     return count
 
 
+def retry_unmatched_enrichment():
+    """Requeue only unmatched performers, without touching accepted portraits."""
+    with ENRICH_LOCK:
+        if ENRICH_STATE['running']:
+            raise ValueError('Pause the running scan before retrying unmatched performers')
+    with db_open() as db:
+        # Skip entries whose actor already has Plex or user-saved artwork.
+        count = db.execute("""DELETE FROM enrichment_results
+            WHERE status='unmatched' AND actor_key IN (
+                SELECT a.actor_key FROM actors a WHERE a.thumb=''
+                  AND NOT EXISTS (SELECT 1 FROM actor_art art WHERE art.actor_key=a.actor_key)
+            )""").rowcount
+    return count
+
+
 def review_single_batch_worker():
     """Apply previously queued, unambiguous one-result portraits in background.
 
@@ -1738,6 +1754,8 @@ class Handler(BaseHTTPRequestHandler):
                 self.respond(200, {'ok': True, 'started': review_single_batch_start()})
             elif path == '/api/enrich/retry-errors':
                 self.respond(200, {'ok': True, 'reset': retry_enrichment_errors()})
+            elif path == '/api/enrich/retry-unmatched':
+                self.respond(200, {'ok': True, 'reset': retry_unmatched_enrichment()})
             elif path == '/api/enrich/approve':
                 key, number = data.get('key'), data.get('i')
                 if not isinstance(key, str) or type(number) is not int:
