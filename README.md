@@ -11,7 +11,7 @@ Self-hosted Plex cast browser for Windows. Index actors across movie and TV libr
 1. On a Windows build machine, clone `Terridol/plex-cast-explorer` with GitHub Desktop and select the **`dev`** branch.
 2. Choose **Fetch origin → Pull origin**, then run **`BUILD-INSTALLER.cmd`** in the repository directory.
 3. The local build validates PowerShell syntax before any other step, runs Python regression/negative tests, builds a self-contained application, smoke-tests that executable with disposable data, compiles Inno Setup, and verifies the installer/checksum.
-4. The uniquely named installer is placed in `output/`: for example, `PlexCastExplorer-Setup-1.0.0-dev-20261014-203512123-g23a496e7-win-x64.exe`.
+4. The uniquely named installer is placed in `output/`: for example, `PlexCastExplorer-Setup-1.0.0-dev-20261014-203512123-g23a496e7-win-x64.exe`. **Every new installer compilation first deletes all previous files and subdirectories in `output/`** (including old setup files and checksums). Copy installers you intend to archive to a different folder.
 5. **Back up `C:\ProgramData\PlexCastExplorer` before an upgrade.** Run Setup as Administrator. Choose the service port, Private-profile Windows Firewall rule, and any explicitly permitted provider/VPN options. Do not uninstall your existing service first.
 6. After installation, use **Start → Plex Cast Explorer → Set Gallery Password** if this is a new installation. On the server, browse `http://127.0.0.1:8765` (or your configured port), configure Plex, and index the libraries. Other trusted LAN devices sign in with the gallery password.
 
