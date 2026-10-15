@@ -2,6 +2,8 @@
 
 ## v1.0.0 — Feature-locked release source (not yet published)
 
+- Updated the local Windows builder to clear every previous installer, checksum and subfolder from the repository's `output/` before packaging a new Setup EXE, with junction/symlink protection and regression tests. All other build and installed-application folders are unaffected.
+
 - Fixed a Windows PowerShell 5.1 native-command quoting bug in CPython license discovery that caused `NameError: name 'LICENSE' is not defined` after the executable smoke gate. The builder now gets only `sys.base_prefix` from Python, constructs `LICENSE.txt` using PowerShell, and verifies the license before expensive packaging. Added source and regression guards.
 
 - Added an unauthenticated, locally served privacy and legal notice linked from the gallery and login pages; source includes a project copyright notice. Replaced an obsolete password-setup command in the sign-in help.
