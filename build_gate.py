@@ -53,6 +53,7 @@ def check_install_contract(root: Path) -> str:
     service = read(root, 'installer/configure_service.ps1')
     build = read(root, 'build_installer_windows.ps1')
     runner = read(root, 'BUILD-INSTALLER.cmd')
+    updater = read(root, 'installer/check_updates.ps1')
 
     require(f'#define AppVersion "{version}"' in spec,
             'Installer version differs from app.py VERSION')
@@ -111,6 +112,8 @@ def check_install_contract(root: Path) -> str:
             '& sc.exe config $serviceName start= delayed-auto' in service and
             '& $wrapper start' in service,
             'Upgrades must validate the installed service and apply supported SCM settings')
+    require('[A-Za-z0-9.]+(?:-[A-Za-z0-9.]+)*' in updater,
+            'Updater must recognize beta release assets bearing a unique dev build ID')
     require('build_installer_windows.ps1' in runner,
             'BUILD-INSTALLER.cmd must use the gated local builder')
     require('build_gate.py' in build and "'source'" in build and
