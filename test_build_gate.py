@@ -125,6 +125,15 @@ class BuildGateRegressionTests(unittest.TestCase):
                                     'Get-CimInstance -ClassName Win32_Service',
                                     'Get-Service -Name $serviceName')
 
+    def test_missing_post_migration_service_verification_is_fatal(self):
+        # Distinct from the original service-registration lookup: an upgrade
+        # must independently re-read SCM after changing the account.
+        self.assert_mutation_blocked(
+            'installer/configure_service.ps1',
+            '        $registered = Get-CimInstance -ClassName Win32_Service',
+            '        $registered = Get-Service -Name $serviceName'
+        )
+
     def test_corrupted_git_revision_regex_is_fatal(self):
         self.assert_mutation_blocked('build_installer_windows.ps1',
                                     "$gitHead[-1] -match '^[0-9a-fA-F]{8}$'",
