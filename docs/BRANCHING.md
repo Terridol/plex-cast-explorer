@@ -25,7 +25,7 @@ The source/build gate is documented in [BUILD_GATES.md](BUILD_GATES.md). An inst
 Run tests locally:
 
 ```powershell
-python -m compileall -q app.py manage.py test_app.py test_security_images.py test_release_guardrails.py
+python -m compileall -q app.py build_gate.py test_app.py test_security_images.py test_release_guardrails.py
 python -m unittest discover -s . -p "test_*.py" -v
 ```
 
