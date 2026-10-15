@@ -32,6 +32,7 @@ class InstallerSpecTests(unittest.TestCase):
         self.assertIn('AppVerName={#AppName} {#AppVersion} ({#DevBuildId})', spec)
         self.assertIn('OutputBaseFilename=PlexCastExplorer-Setup-{#AppVersion}-{#DevBuildId}-win-x64', spec)
         self.assertIn('yyyyMMdd-HHmmssfff', builder)
+        self.assertIn("$appVersionMatch.Groups['version'].Value", builder)
         self.assertIn('rev-parse --verify --short=8 HEAD', builder)
         self.assertIn("'/DDevBuildId=' + $buildId", builder)
         self.assertIn("Invoke-LocalGate 'installer' -BuildId $buildId", builder)
@@ -108,7 +109,7 @@ class InstallerSpecTests(unittest.TestCase):
         self.assertIn('BUILD-EXE.cmd', self.read('build_installer_windows.ps1'))
         self.assertIn('WinSW-x64.exe', self.read('build_installer_windows.ps1'))
         self.assertIn('ISCC.exe', self.read('build_installer_windows.ps1'))
-        self.assertIn('PlexCastExplorer-Setup-0.4.7-beta-$buildId-win-x64.exe', self.read('build_installer_windows.ps1'))
+        self.assertIn('PlexCastExplorer-Setup-$appVersion-$buildId-win-x64.exe', self.read('build_installer_windows.ps1'))
         self.assertEqual(re.search(r"^VERSION = '([^']+)'", self.read('app.py'), re.M).group(1), '0.4.7-beta')
 
 
