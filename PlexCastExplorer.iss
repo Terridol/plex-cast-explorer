@@ -164,6 +164,8 @@ var
   ExitCode: Integer;
   Args: String;
   Started: Boolean;
+  FailureReason: String;
+  FailurePath: String;
 begin
   if CurStep <> ssPostInstall then
     Exit;
@@ -182,7 +184,17 @@ begin
     Args, ExpandConstant('{app}'), SW_HIDE, ewWaitUntilTerminated, ExitCode);
   if not Started then
     RaiseException('Unable to start the Windows service configuration. Setup is incomplete.');
-  if ExitCode <> 0 then
-    RaiseException('Service startup or health check failed (exit code ' +
-      IntToStr(ExitCode) + '). Setup is incomplete. Check ProgramData\PlexCastExplorer\logs and Event Viewer.');
+  if ExitCode <> 0 then begin
+    FailurePath := ExpandConstant('{commonappdata}\PlexCastExplorer\logs\installer-last-error.txt');
+    FailureReason := '';
+    if LoadStringFromFile(FailurePath, FailureReason) then
+      FailureReason := Trim(FailureReason);
+    if Length(FailureReason) > 300 then
+      FailureReason := Copy(FailureReason, 1, 300) + '...';
+    if FailureReason = '' then
+      FailureReason := 'The Windows configuration step did not report an error message.';
+    RaiseException('Service configuration failed (exit code ' +
+      IntToStr(ExitCode) + '): ' + FailureReason +
+      '. See C:\ProgramData\PlexCastExplorer\logs\installer-error-details.log.');
+  end;
 end;
