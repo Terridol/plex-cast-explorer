@@ -35,7 +35,7 @@
 
 - [ ] Audit entire Git **history**, source archive and installer payload for tokens, databases, local portraits, logs, user metadata or unexpected binaries; rotate anything historically leaked.
 - [x] Bundle the original WinSW MIT license notice alongside the installed wrapper; enforce its inclusion through source tests.
-- [x] Require the CPython runtime license from the build interpreter and include project NOTICE in the Windows installer.
+- [x] Require the CPython runtime license from the build interpreter and include project NOTICE in the Windows installer; fix PowerShell 5.1 nested-quote handling and check the license **before** expensive compilation. Source and mutation tests protect this path.
 - [ ] Review Python/PyInstaller versions and all remaining binary dependencies, bundled licenses and third-party attribution; ensure no external/provider artwork is bundled.
 - [x] Restore TMDB as the preferred explicitly opted-in provider with a user-supplied API token, TMDB-first matching, TPDB fallback and the official approved-logo/notice attribution in the application. Wikimedia remains disabled.
 - [ ] Confirm the operator's TMDB authorization covers the precise deployed adult-media use and public distribution (user reports permission resolved; documentation/authorization not independently reviewed). Test official TMDB logo availability in the installed app.
