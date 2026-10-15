@@ -11,11 +11,12 @@
 - [x] Existing upgrades retain ProgramData and manage a Private-profile, subnet-scoped firewall rule.
 - [x] Corrected the PowerShell version-regex error that previously appeared after the packaged-EXE smoke test; version validation now runs before compilation and is regression-tested.
 - [x] Rechecked the one-launcher/six-script repository layout and expanded parser coverage to all six PowerShell files.
+- [x] Corrected source upgrade handling for legacy WinSW services registered as `LocalSystem` by migrating to `LocalService` in place, with explicit verification and fail-closed handling of unexpected accounts.
 
 ## Windows verification needed before public beta
 - [ ] Pull `dev` in GitHub Desktop and run `BUILD-INSTALLER.cmd` on Windows; confirm that the PowerShell preflight, every regression gate, compiler, EXE smoke test and installer checksum all pass. Earlier Windows builds failed because of updater PowerShell syntax, unsupported WinSW `refresh`, and a double-escaped version regex; the source corrections need Windows validation.
 - [ ] Clean Windows installation: confirm configured port, password setup, firewall scope, and service ready **before** Finish.
-- [ ] In-place upgrade from v0.4.6-beta: preserve gallery index, portraits, settings, credentials, and installer choices.
+- [ ] In-place upgrade from v0.4.6-beta, **including a pre-existing `LocalSystem` service identity**, must migrate to `LocalService`, preserve gallery index, portraits, settings, credentials and installer choices, and verify the resulting service identity and running status.
 - [ ] Reboot: service must start without interactive sign-in.
 - [ ] Negative startup test on a disposable machine: occupy the selected port and confirm Setup reports a failure instead of showing normal success.
 - [ ] Uninstall/reinstall: verify removal of service/firewall and retention of user data.
