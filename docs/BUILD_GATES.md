@@ -2,7 +2,7 @@
 
 **Policy:** No GitHub-hosted builds, Actions, deployments or automatic tests. Maintain only `dev` and `main` branches.
 
-Double-click `BUILD-INSTALLER.cmd`. **A PowerShell parse preflight and all three gate stages are mandatory** and return a failing exit code if any required check fails. The builder keeps previous uniquely named installers in `output/`; it deletes any stale artifact for the current build ID before compiling and removes that build's installer/checksum if the final check fails.
+Double-click `BUILD-INSTALLER.cmd`. **A discovery-based PowerShell parse preflight (all six production scripts, including its own validator) and all three gate stages are mandatory** and return a failing exit code if any required check fails. The builder keeps previous uniquely named installers in `output/`; it deletes any stale artifact for the current build ID before compiling and removes that build's installer/checksum if the final check fails.
 
 | Stage | When | What blocks the build |
 |---|---|---|
@@ -11,6 +11,8 @@ Double-click `BUILD-INSTALLER.cmd`. **A PowerShell parse preflight and all three
 | Installer artifact check | After Inno Setup | Compilation fails, Setup EXE missing/malformed/truncated, WinSW hash differs from pinned digest, version filename drifts, checksum sidecar absent/mismatched |
 
 All tests are run on the developer's Windows PC, against a disposable temporary directory and ephemeral HTTP port. **The build does not touch the installed Windows service or your Plex library.** No credentials are read for executable smoke tests. A generated test report never contains access tokens.
+
+Application-version extraction is checked as part of the **source gate** and rechecked in PowerShell before expensive dependency installation or EXE compilation. It must recognize the source `VERSION` declaration and agree with Inno Setup, the update checker, and service defaults. A PowerShell regex string uses single backslashes (e.g. `\s`), not doubled backslashes.
 
 ### Reproduce the gates separately
 
