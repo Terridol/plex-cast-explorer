@@ -2,6 +2,8 @@
 
 ## v1.0.0 — Feature-locked release source (not yet published)
 
+- Permit the final, explicitly invoked stable-named installer to be built from clean `dev` for acceptance testing, without prematurely promoting untested source to `main` or publishing a release.
+
 - Include project NOTICE and the build interpreter's CPython license in Windows Setup, and add release gates protecting both notices.
 
 - Set the final `1.0.0` version consistently across the application, Inno Setup, updater, service, build regression checks and support material.

@@ -42,7 +42,7 @@
 - [ ] Review session, HTTP Host, CSRF, file-path, credential, provider redirect and API handling for general distribution; independent penetration testing recommended.
 - [ ] Confirm restricted LAN/private-VPN HTTP-only deployment; never publicly forward the port or imply native TLS protection.
 - [ ] Confirm **GitHub Actions disabled in repository Settings** before tagging or changing `main` (existing `main` contains workflow triggers).
-- [x] Provide a **stable-release packaging mode** that requires a final version, an approved clean `main` checkout, and produces a Setup filename without the `dev-` suffix; still requires Windows compilation testing.
+- [x] Provide a stable-named installer mode requiring final semver and a clean `dev` or `main` checkout. Build from `dev` for final acceptance; publish only after the exact tested source is approved and promoted to `main`.
 - [ ] Run and validate the stable-named `1.0.0` Setup from the final approved source, sign if possible, calculate SHA-256 and verify an external download.
 - [ ] Verify explicit user-consented update check, released asset digest, publisher identity, release notes, privacy/support/contact instructions and license notices.
 - [ ] Obtain explicit maintainer go/no-go to promote `dev` to `main`, tag and publish the 1.0.0 installer.

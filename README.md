@@ -30,7 +30,7 @@ For details see [Windows installation, service, upgrades and updates](docs/WINDO
 
 External provider support has independent terms. **TMDB and Wikimedia are off by default**; ThePornDB requires an API token. TMDB's restrictions on adult-oriented uses and its attribution/logo requirements remain unresolved. Never present optional provider integration as licensed for every deployment. See [artwork](docs/ARTWORK.md) and [third-party requirements](docs/THIRD_PARTY.md).
 
-Development builds use unique `dev-` installer IDs. The final general-release installer has a separate, opt-in `-Release` build mode that requires an approved clean `main` checkout and a final version number; it cannot be built accidentally from this pre-release branch.
+Development builds use unique `dev-` installer IDs. The final general-release installer has a separate, opt-in `-Release` build mode that requires a clean `dev` or `main` checkout and the final version number. A release-named binary built from `dev` is for final acceptance testing; only the exact source revision accepted for general availability is promoted to `main` and published.
 
 ## 1.0 feature freeze
 

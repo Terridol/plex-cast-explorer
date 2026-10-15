@@ -74,7 +74,7 @@ class BuildGateRegressionTests(unittest.TestCase):
 
     def test_stable_release_requires_main_and_semver(self):
         self.assert_mutation_blocked('build_installer_windows.ps1',
-                                     'Stable Setup must be built from approved main, not dev.',
+                                     'Stable Setup requires an approved clean dev or main checkout.',
                                      'Stable Setup can be built on dev.')
         self.assert_mutation_blocked('build_installer_windows.ps1',
                                      "'/DReleaseBuild=1'", "'/DDevBuildId=' + $buildId")

@@ -119,7 +119,7 @@ def check_install_contract(root: Path) -> str:
             'Windows build script must derive the app version and embed a unique build ID in Setup and validation')
     require("param([switch]$Release)" in build and
             "'/DReleaseBuild=1'" in build and
-            'Stable Setup must be built from approved main, not dev.' in build and
+            'Stable Setup requires an approved clean dev or main checkout.' in build and
             "Stable Setup requires a final MAJOR.MINOR.PATCH version" in build and
             'PlexCastExplorer-Setup-$appVersion-win-x64.exe' in build,
             'Stable Setup builds must require a final version and approved main checkout')

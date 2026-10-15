@@ -54,7 +54,7 @@ class InstallerSpecTests(unittest.TestCase):
         self.assertIn('rev-parse --verify --short=8 HEAD', builder)
         self.assertIn("'/DDevBuildId=' + $buildId", builder)
         self.assertIn("'/DReleaseBuild=1'", builder)
-        self.assertIn('Stable Setup must be built from approved main, not dev.', builder)
+        self.assertIn('Stable Setup requires an approved clean dev or main checkout.', builder)
         self.assertIn("Invoke-LocalGate 'installer' -BuildId $buildId", builder)
         self.assertIn("def validate_build_id(", gate)
 
@@ -65,7 +65,7 @@ class InstallerSpecTests(unittest.TestCase):
         self.assertIn('OutputBaseFilename={#BuildFilename}', spec)
         self.assertIn('param([switch]$Release)', builder)
         self.assertIn('status --porcelain --untracked-files=normal', builder)
-        self.assertIn('Stable Setup must be built from approved main, not dev.', builder)
+        self.assertIn('Stable Setup requires an approved clean dev or main checkout.', builder)
 
     def test_installation_options_and_firewall_scoping(self):
         spec = self.read('PlexCastExplorer.iss')

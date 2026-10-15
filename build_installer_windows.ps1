@@ -45,7 +45,7 @@ if ($Release) {
     $git = Get-Command 'git.exe' -ErrorAction SilentlyContinue
     if (-not $git) { throw 'Stable Setup requires git.exe to verify the approved release branch.' }
     $branchName = (& $git.Source -C $root branch --show-current).Trim()
-    if ($LASTEXITCODE -ne 0 -or $branchName -ne 'main') { throw 'Stable Setup must be built from approved main, not dev.' }
+    if ($LASTEXITCODE -ne 0 -or $branchName -notin @('dev','main')) { throw 'Stable Setup requires an approved clean dev or main checkout.' }
     $status = @(& $git.Source -C $root status --porcelain --untracked-files=normal)
     if ($LASTEXITCODE -ne 0 -or $status.Count -gt 0) { throw 'Stable Setup requires a clean checkout, including no untracked files.' }
 }
