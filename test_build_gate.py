@@ -78,6 +78,16 @@ class BuildGateRegressionTests(unittest.TestCase):
                                      'MAX_PLEX_IMAGE_BYTES = 4_000_000',
                                      'MAX_PLEX_IMAGE_BYTES = 0')
 
+    def test_custom_agent_bundle_uri_support_is_required(self):
+        self.assert_mutation_blocked(
+            'app.py', "'/file?' + urlencode({'url': thumb})",
+            "'/missing?' + urlencode({'url': thumb})")
+
+    def test_custom_agent_person_metadata_is_required(self):
+        self.assert_mutation_blocked(
+            'app.py', 'errors += resolve_plex_actor_refs()',
+            'errors += 0  # disabled reference lookups')
+
     def test_missing_project_notice_is_fatal(self):
         self.assert_mutation_blocked('PlexCastExplorer.iss',
                                      'Source: "NOTICE"; DestDir: "{app}"',
