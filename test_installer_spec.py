@@ -13,6 +13,17 @@ class InstallerSpecTests(unittest.TestCase):
     def read(self, path):
         return (BASE / path).read_text(encoding='utf-8')
 
+    def test_every_installer_build_clears_output_folder(self):
+        builder = self.read('build_installer_windows.ps1')
+        self.assertIn("$outputDir = Join-Path $root 'output'", builder)
+        self.assertIn("Get-ChildItem -LiteralPath $outputDir -Force -ErrorAction Stop |\n        Remove-Item -Force -Recurse -ErrorAction Stop", builder)
+        self.assertIn("Get-ChildItem -LiteralPath $outputDir -Recurse -Force -ErrorAction Stop", builder)
+        self.assertIn("Refusing to clear output: junction or symbolic link found", builder)
+        self.assertIn("Output cleanup failed; refusing to write an installer into a nonempty output folder.", builder)
+        self.assertLess(builder.index("$outputDir = Join-Path $root 'output'"),
+                        builder.index('Write-Host "Compiling Setup.exe'))
+        self.assertNotIn('Keep older build IDs in the output folder', builder)
+
     def test_python_runtime_license_and_notice_are_packaged(self):
         spec = self.read('PlexCastExplorer.iss')
         builder = self.read('build_installer_windows.ps1')
