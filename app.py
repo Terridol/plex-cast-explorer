@@ -245,6 +245,11 @@ def init_db():
             PRIMARY KEY (actor_key, rating_key)
         );
         CREATE INDEX IF NOT EXISTS idx_credits_title ON credits(rating_key);
+        -- Actor metadata keys supplied by Plex/custom agents. This separate
+        -- table upgrades existing databases without rewriting actor rows.
+        CREATE TABLE IF NOT EXISTS actor_plex_refs (
+            actor_key TEXT PRIMARY KEY, metadata_path TEXT NOT NULL
+        );
         CREATE INDEX IF NOT EXISTS idx_titles_section ON titles(section_key);
         CREATE TABLE IF NOT EXISTS actor_art (
             actor_key TEXT PRIMARY KEY, file TEXT NOT NULL, source TEXT NOT NULL,
@@ -326,6 +331,27 @@ def request_plex(path: str, timeout=20, max_bytes=None) -> bytes:
     })
     with build_opener(SameOriginRedirects(config['url'])).open(req, timeout=timeout) as response:
         return response.read(max_bytes + 1) if max_bytes is not None else response.read()
+
+
+def plex_role_metadata_path(role) -> str:
+    """Trust only Plex /library/metadata/<person-id> links from Role records."""
+    path = (role.get('key') or '').strip()
+    key = (role.get('ratingKey') or '').strip()
+    if not path and re.fullmatch(r'[A-Za-z0-9_-]{1,128}', key):
+        path = '/library/metadata/' + key
+    return path if re.fullmatch(r'/library/metadata/[A-Za-z0-9_-]{1,128}', path) else ''
+
+
+def plex_role_thumb(role, rating_key: str) -> str:
+    """Resolve local metadata/media bundle URLs through Plex itself."""
+    thumb = (role.get('thumb') or '').strip()
+    if thumb.startswith(('metadata://', 'media://')):
+        if (not re.fullmatch(r'[A-Za-z0-9_-]{1,128}', str(rating_key)) or
+                len(thumb) > 2048 or any(ord(c) < 32 for c in thumb)):
+            return ''
+        return ('/library/metadata/' + quote(str(rating_key), safe='') +
+                '/file?' + urlencode({'url': thumb}))
+    return thumb
 
 
 def plex_portrait_cache_path(thumb: str, plex_url: str | None = None) -> Path:
@@ -445,6 +471,51 @@ def cached_plex_portrait(thumb: str) -> bytes:
     return raw
 
 
+def resolve_plex_actor_refs() -> int:
+    """Ask Plex for a person's thumb when Role.key exists but Role.thumb does not."""
+    with db_open() as db:
+        rows = db.execute("""SELECT a.actor_key, r.metadata_path
+            FROM actors a JOIN actor_plex_refs r ON r.actor_key=a.actor_key
+            WHERE a.thumb='' AND NOT EXISTS (
+                SELECT 1 FROM actor_art art WHERE art.actor_key=a.actor_key)""").fetchall()
+    if not rows:
+        return 0
+    state_update(phase='Resolving Plex actor artwork', current=0, total=len(rows))
+    failures = 0
+    processed = 0
+    with ThreadPoolExecutor(max_workers=5) as pool:
+        for start in range(0, len(rows), 25):
+            futures = {pool.submit(plex_xml, row['metadata_path']): row
+                       for row in rows[start:start + 25]}
+            for future in as_completed(futures):
+                row = futures[future]
+                try:
+                    metadata = future.result()
+                    person = next((node for node in metadata if node.get('thumb')), None)
+                    thumb = ((person.get('thumb') if person is not None else None) or
+                             metadata.get('thumb') or '').strip()
+                    if thumb:
+                        # The person item (not an unrelated movie) owns this bundle.
+                        person_key = row['metadata_path'].rsplit('/', 1)[-1]
+                        candidate = plex_role_thumb(ET.Element('Role', thumb=thumb), person_key)
+                        if candidate:
+                            with db_open() as db:
+                                db.execute("""UPDATE actors SET thumb=? WHERE actor_key=?
+                                    AND thumb='' AND NOT EXISTS (
+                                        SELECT 1 FROM actor_art art WHERE art.actor_key=?)""",
+                                    (candidate, row['actor_key'], row['actor_key']))
+                except Exception as exc:
+                    failures += 1
+                    if failures <= 3:
+                        logging.warning('Plex person artwork unavailable (%s)', type(exc).__name__)
+                processed += 1
+                state_update(current=processed)
+            if failures >= MAX_PLEX_PORTRAIT_ERRORS_PER_SYNC:
+                state_update(last_error='Plex person artwork lookup paused after repeated errors.')
+                break
+    return failures
+
+
 def cache_plex_portraits() -> int:
     """Backfill missing Plex photos even when no title's updatedAt has changed."""
     config = load_config()
@@ -548,7 +619,12 @@ def upsert_title(db, xml_item, section):
         if not name:
             continue
         key = normal_name(name)
-        thumb = (role.get('thumb') or '').strip()
+        thumb = plex_role_thumb(role, rating_key)
+        person_path = plex_role_metadata_path(role)
+        if person_path:
+            db.execute('''INSERT INTO actor_plex_refs(actor_key,metadata_path) VALUES (?,?)
+                ON CONFLICT(actor_key) DO UPDATE SET metadata_path=excluded.metadata_path''',
+                (key, person_path))
         db.execute('''INSERT INTO actors (actor_key,name,thumb) VALUES (?,?,?)
             ON CONFLICT(actor_key) DO UPDATE SET
             thumb=CASE WHEN excluded.thumb!='' THEN excluded.thumb ELSE actors.thumb END''',
@@ -624,11 +700,13 @@ def sync_all(force=False):
                 db.commit()
 
             db.execute('DELETE FROM actors WHERE actor_key NOT IN (SELECT actor_key FROM credits)')
+            db.execute('DELETE FROM actor_plex_refs WHERE actor_key NOT IN (SELECT actor_key FROM actors)')
             db.commit()
         # A title can be unchanged even though its actor portrait was never
         # downloaded. Recheck the entire indexed Plex thumbnail set on every
         # sync, but fetch only missing cache entries and never replace overrides.
         image_bytes.cache_clear()
+        errors += resolve_plex_actor_refs()
         errors += cache_plex_portraits()
         state_update(errors=errors, phase='Finished' if not errors else 'Finished with warnings')
     except Exception as exc:
