@@ -31,14 +31,16 @@ class BuildGateRegressionTests(unittest.TestCase):
                                     '#define AppVersion "9.0.0"')
 
     def test_powershell_version_regex_double_escaping_is_fatal(self):
-        # This passed older string-only checks, then failed AFTER the EXE
-        # gate because PowerShell preserves backslashes in double quotes.
-        self.assertLess(
-            (build_gate.ROOT / 'build_installer_windows.ps1').read_text(
-                encoding='utf-8-sig').index('$appVersionMatch = [regex]::Match'),
-            (build_gate.ROOT / 'build_installer_windows.ps1').read_text(
-                encoding='utf-8-sig').index("Invoke-Python @('-c'")
-        )
+        # PowerShell preserves backslashes in strings; doubling them silently
+        # prevents .NET regex from recognizing app.py's VERSION declaration.
+        self.assert_mutation_blocked('build_installer_windows.ps1',
+                                     r'(?m)^VERSION\s*=', r'(?m)^VERSION\\s*=')
+
+    def test_version_detection_must_precede_compilation(self):
+        builder = (build_gate.ROOT / 'build_installer_windows.ps1').read_text(
+            encoding='utf-8-sig')
+        self.assertLess(builder.index('$appVersionMatch = [regex]::Match'),
+                        builder.index("Invoke-Python @('-c'"))
 
     def test_updater_version_mismatch_is_fatal(self):
         self.assert_mutation_blocked('installer/check_updates.ps1',
