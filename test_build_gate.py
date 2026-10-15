@@ -36,6 +36,28 @@ class BuildGateRegressionTests(unittest.TestCase):
             "-c 'import pathlib,sys; print(pathlib.Path(sys.base_prefix) / \"LICENSE.txt\")'"
         )
 
+    def test_missing_output_cleanup_is_fatal(self):
+        self.assert_mutation_blocked('build_installer_windows.ps1',
+                                     'Remove-Item -Force -Recurse -ErrorAction Stop',
+                                     'Write-Host "Skipping output cleanup"')
+
+    def test_output_cleanup_cannot_change_target_directory(self):
+        self.assert_mutation_blocked('build_installer_windows.ps1',
+                                     "$outputDir = Join-Path $root 'output'",
+                                     "$outputDir = Join-Path $root 'dist'")
+
+    def test_output_cleanup_must_reject_reparse_points(self):
+        self.assert_mutation_blocked('build_installer_windows.ps1',
+                                     'Refusing to clear output: junction or symbolic link found',
+                                     'Following output junctions is allowed')
+
+    def test_output_cleanup_must_verify_empty_result(self):
+        self.assert_mutation_blocked(
+            'build_installer_windows.ps1',
+            'Output cleanup failed; refusing to write an installer into a nonempty output folder.',
+            'Output cleanup failure ignored.'
+        )
+
     def test_missing_project_notice_is_fatal(self):
         self.assert_mutation_blocked('PlexCastExplorer.iss',
                                      'Source: "NOTICE"; DestDir: "{app}"',
