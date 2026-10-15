@@ -73,6 +73,13 @@ function Get-ISCC {
     return $null
 }
 
+# Derive the application version from source; never require hand-editing
+# installer output naming each time the beta version is incremented.
+$appSource = Get-Content -LiteralPath (Join-Path $root 'app.py') -Raw -Encoding UTF8
+$appVersionMatch = [regex]::Match($appSource, "(?m)^VERSION\\s*=\\s*'(?<version>[0-9]+\\.[0-9]+\\.[0-9]+(?:-[A-Za-z0-9.]+)?)'")
+if (-not $appVersionMatch.Success) { throw 'Could not determine safe application version from app.py.' }
+$appVersion = $appVersionMatch.Groups['version'].Value
+
 # Every dev installer receives a unique, filesystem-safe build ID.
 # UTC includes milliseconds, so rebuilding the same commit never overwrites
 # a previous installer. Prefer the checked-out Git commit, with a local source
@@ -106,7 +113,7 @@ if ($gitCommand) {
 }
 
 # Delete an old artifact first: a failed compile must never look like success.
-$installer = Join-Path $root ("output\PlexCastExplorer-Setup-0.4.7-beta-$buildId-win-x64.exe")
+$installer = Join-Path $root ("output\PlexCastExplorer-Setup-$appVersion-$buildId-win-x64.exe")
 $checksum = $installer + '.sha256'
 # Keep older build IDs in the output folder for side-by-side comparison.
 # Delete only the current ID's artifact to avoid reporting a stale result.
