@@ -32,7 +32,7 @@ External provider support has independent terms. **TMDB and Wikimedia are off by
 
 ## Development rules
 
-All development is committed directly to **`dev`**. Keep only the `dev` and `main` branches; do not push to `main` without explicit maintainer approval. Do **not** run GitHub Actions, hosted CI, deployments or other GitHub-hosted code. The supported build entry point is **`BUILD-INSTALLER.cmd`**; the nested `BUILD-EXE.cmd` is an internal build helper, not another deployment mechanism. Everything is built and tested locally.
+All development is committed directly to **`dev`**. Keep only the `dev` and `main` branches; do not push to `main` without explicit maintainer approval. Do **not** run GitHub Actions, hosted CI, deployments or other GitHub-hosted code. The supported build entry point is **`BUILD-INSTALLER.cmd`**; the PowerShell build orchestrator compiles the EXE and Setup directly without a second batch-file helper. Everything is built and tested locally.
 
 Built executables, service wrappers, local database files, tokens, logs, caches, and portraits must never be committed. Source tests can also be run manually with `python -m unittest discover -s . -p "test_*.py" -v`. Passing source/build gates **does not** replace actual Windows installer/upgrade/reboot tests on a disposable VM.
 
