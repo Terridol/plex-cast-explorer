@@ -63,11 +63,12 @@ def check_install_contract(root: Path) -> str:
             'AppVerName={#AppName} {#AppVersion} ({#DevBuildId})' in spec and
             'OutputBaseFilename=PlexCastExplorer-Setup-{#AppVersion}-{#DevBuildId}-win-x64' in spec,
             'Setup identity, display version and filename must include unique build ID')
-    require(f'PlexCastExplorer-Setup-{version}-$buildId-win-x64.exe' in build and
+    require('PlexCastExplorer-Setup-$appVersion-$buildId-win-x64.exe' in build and
+            "$appVersionMatch.Groups['version'].Value" in build and
             "'/DDevBuildId=' + $buildId" in build and
             "Invoke-LocalGate 'installer' -BuildId $buildId" in build and
             'yyyyMMdd-HHmmssfff' in build and 'rev-parse --verify --short=8 HEAD' in build,
-            'Windows build script must create unique versioned output and pass build ID to Inno Setup and validation')
+            'Windows build script must derive the app version and embed a unique build ID in Setup and validation')
     require('AppId={{974DC3BB-C0AD-46E4-A920-053E710D988C}' in spec,
             'Product AppId changed: this would break in-place upgrades')
     require('UsePreviousAppDir=yes' in spec and 'UsePreviousTasks=yes' in spec,
