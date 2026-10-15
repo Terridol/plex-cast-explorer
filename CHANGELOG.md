@@ -2,6 +2,8 @@
 
 ## v1.0.0 — Feature-locked release source (not yet published)
 
+- Include project NOTICE and the build interpreter's CPython license in Windows Setup, and add release gates protecting both notices.
+
 - Set the final `1.0.0` version consistently across the application, Inno Setup, updater, service, build regression checks and support material.
 - Preserve unique IDs for developer-built packages; official stable naming requires explicit `-Release`, a clean approved `main` checkout, and mandatory source/EXE/installer integrity gates.
 - Keep Windows acceptance, source-history/security, provider-licensing and public binary distribution verification blocking until real evidence exists. This entry is not a claim that a GA release has been published.
