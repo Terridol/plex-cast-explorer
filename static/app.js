@@ -331,16 +331,17 @@
         a.append(poster,elt('strong','',title.title));tile.append(a);tile.append(elt('small','',[(title.year||'Year unknown'),title.library].join(' · ')));if(title.character)tile.append(elt('small','',title.character));grid.append(tile)}host.append(grid);
     }catch(e){$('actorDetail').textContent='Could not load this performer: '+e.message}
   }
-  async function refreshStatus(){try{const s=await api('/api/status');const progress=$('syncBanner');progress.hidden=!s.running&&s.phase==='Not scanned';const hasImageSummary=!!(s.portrait_missing||s.portrait_failed);if(s.running||s.phase==='Sync failed'||s.phase==='Finished with warnings'||hasImageSummary){
+  async function refreshStatus(){try{const s=await api('/api/status');const progress=$('syncBanner');progress.hidden=!s.running&&s.phase==='Not scanned';const hasImageSummary=!!(s.portrait_missing||s.portrait_failed||s.portrait_skipped);if(s.running||s.phase==='Sync failed'||s.phase==='Finished with warnings'||hasImageSummary){
       progress.hidden=false;
       $('syncPhase').textContent=s.phase;
-      const unit=s.phase==='Caching Plex actor portraits'?'portraits':s.phase==='Resolving Plex actor artwork'?'performers':'titles';
+      const unit=s.phase==='Caching Plex actor portraits'||((s.phase==='Finished'||s.phase==='Finished with warnings')&&(s.portrait_downloaded||s.portrait_missing||s.portrait_failed||s.portrait_skipped))?'portraits':s.phase==='Resolving Plex actor artwork'?'performers':'titles';
       $('syncFraction').textContent=s.total?formatNumber(s.current)+' / '+formatNumber(s.total)+' '+unit:'';
       $('syncBar').style.width=s.total?Math.min(100,Math.round(s.current/s.total*100))+'%':'3%';
       const details=[];
       if(s.phase==='Caching Plex actor portraits'||s.portrait_downloaded||s.portrait_missing||s.portrait_failed){
         details.push(formatNumber(s.portrait_downloaded||0)+' downloaded');
         if(s.portrait_missing)details.push(formatNumber(s.portrait_missing)+' missing in Plex');
+        if(s.portrait_skipped)details.push(formatNumber(s.portrait_skipped)+' skipped due to source errors');
       }
       if(s.errors)details.push(formatNumber(s.errors)+' error(s)');
       if(s.last_error)details.push('Latest: '+s.last_error);
