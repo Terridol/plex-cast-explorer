@@ -60,7 +60,9 @@ ART_LOCK = threading.Lock()
 ART_CANDIDATES = {}  # Temporary server-side choices; URLs are never accepted from browser clients.
 IMAGE_HOSTS = {'image.tmdb.org', 'cdn.theporndb.net', 'api.theporndb.net', 'commons.wikimedia.org', 'upload.wikimedia.org'}
 STATE_LOCK = threading.Lock()
-STATE = {'running': False, 'phase': 'Not scanned', 'current': 0, 'total': 0, 'errors': 0, 'last_error': '', 'last_finished': None}
+STATE = {'running': False, 'phase': 'Not scanned', 'current': 0, 'total': 0,
+         'errors': 0, 'portrait_downloaded': 0, 'portrait_missing': 0,
+         'portrait_failed': 0, 'last_error': '', 'last_finished': None}
 logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(message)s', handlers=[
     logging.StreamHandler(),
     RotatingFileHandler(ROOT / 'server.log', maxBytes=2_000_000, backupCount=2, encoding='utf-8'),
@@ -539,12 +541,18 @@ def cache_plex_portraits() -> int:
     pending = [r['thumb'] for r in rows if needs_download(r['thumb'])]
     if not pending:
         return 0
-    state_update(phase='Caching Plex actor portraits', current=0, total=len(pending))
+    baseline_errors = status_snapshot()['errors']
+    state_update(phase='Caching Plex actor portraits', current=0, total=len(pending),
+                 portrait_downloaded=0, portrait_missing=0, portrait_failed=0)
     failures = 0
+    missing = 0
+    downloaded = 0
     processed = 0
-    # Small batches avoid queueing thousands of requests if Plex or its
-    # artwork service becomes unavailable. Keep images as a bounded, best-effort
-    # post-indexing task rather than corrupting or discarding library metadata.
+    stop_reason = ''
+    # Keep batches small. For 401/403 (credentials), 429 (rate limit) or
+    # systemic 5xx failures, do not hammer Plex through a 50k-image queue.
+    # HTTP 404/410 means the referenced artwork is unavailable; record it
+    # separately from connectivity errors and continue with other portraits.
     with ThreadPoolExecutor(max_workers=5) as pool:
         for start in range(0, len(pending), 25):
             futures = {pool.submit(cached_plex_portrait, thumb): thumb
@@ -552,15 +560,38 @@ def cache_plex_portraits() -> int:
             for future in as_completed(futures):
                 try:
                     future.result()
+                    downloaded += 1
+                except HTTPError as exc:
+                    code = int(exc.code)
+                    if code in (404, 410):
+                        missing += 1
+                        if missing == 1:
+                            state_update(last_error=f'Plex image not found (HTTP {code}); other portraits can still be cached.')
+                    else:
+                        failures += 1
+                        if code in (401, 403):
+                            stop_reason = f'Plex portrait downloads paused: HTTP {code} (access denied). Check Plex permissions.'
+                        elif code == 429:
+                            stop_reason = 'Plex portrait downloads paused: HTTP 429 (rate limited). Retry later.'
+                        elif 500 <= code <= 599:
+                            stop_reason = f'Plex portrait downloads paused: HTTP {code} (server error). Retry later.'
+                        if failures <= 3:
+                            # Never log HTTPError itself: its URL may include
+                            # sensitive Plex or provider query parameters.
+                            logging.warning('Plex portrait HTTP %d (image download)', code)
+                            state_update(last_error=f'Plex portrait retrieval failed (HTTP {code}).')
                 except Exception as exc:
                     failures += 1
                     if failures <= 3:
                         logging.warning('Plex portrait download failed (%s)', type(exc).__name__)
-                        # Do not expose provider URLs or token-bearing query strings
-                        # through the browser-visible sync status endpoint.
                         state_update(last_error='Plex portrait retrieval failed (' + type(exc).__name__ + ')')
                 processed += 1
-                state_update(current=processed)
+                state_update(current=processed, errors=baseline_errors + failures,
+                             portrait_downloaded=downloaded, portrait_missing=missing,
+                             portrait_failed=failures)
+            if stop_reason:
+                state_update(last_error=stop_reason)
+                break
             if failures >= MAX_PLEX_PORTRAIT_ERRORS_PER_SYNC:
                 state_update(last_error='Plex portrait downloads paused after repeated errors; retry Sync later.')
                 break
@@ -635,7 +666,8 @@ def upsert_title(db, xml_item, section):
 
 def sync_all(force=False):
     state_update(running=True, phase='Connecting to Plex', current=0, total=0,
-                 errors=0, last_error='')
+                 errors=0, portrait_downloaded=0, portrait_missing=0,
+                 portrait_failed=0, last_error='')
     errors = 0
     try:
         machine_id = plex_xml('/').get('machineIdentifier', '')
@@ -707,6 +739,7 @@ def sync_all(force=False):
         # sync, but fetch only missing cache entries and never replace overrides.
         image_bytes.cache_clear()
         errors += resolve_plex_actor_refs()
+        state_update(errors=errors)
         errors += cache_plex_portraits()
         state_update(errors=errors, phase='Finished' if not errors else 'Finished with warnings')
     except Exception as exc:
