@@ -102,6 +102,7 @@ def check_install_contract(root: Path) -> str:
             "errors=baseline_errors + failures" in app_source and
             "HTTP 429 (rate limited)" in app_source and
             "portrait_downloaded=downloaded" in app_source and
+            "def plex_portrait_source_label(thumb: str) -> str:" in app_source and
             "'portraits'" in read(root, 'static/app.js') and
             "hasImageSummary" in read(root, 'static/app.js'),
             'Portrait sync must distinguish missing art, authentication and rate-limit errors with live counts')
