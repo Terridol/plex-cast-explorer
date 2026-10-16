@@ -332,7 +332,19 @@
     }catch(e){$('actorDetail').textContent='Could not load this performer: '+e.message}
   }
   async function refreshStatus(){try{const s=await api('/api/status');const progress=$('syncBanner');progress.hidden=!s.running&&s.phase==='Not scanned';if(s.running||s.phase==='Sync failed'||s.phase==='Finished with warnings'){
-      progress.hidden=false;$('syncPhase').textContent=s.phase;$('syncFraction').textContent=s.total?formatNumber(s.current)+' / '+formatNumber(s.total)+' titles':'';$('syncBar').style.width=s.total?Math.min(100,Math.round(s.current/s.total*100))+'%':'3%';$('syncError').textContent=s.last_error?(s.errors+' error(s). Latest: '+s.last_error):'';
+      progress.hidden=false;
+      $('syncPhase').textContent=s.phase;
+      const unit=s.phase==='Caching Plex actor portraits'?'portraits':s.phase==='Resolving Plex actor artwork'?'performers':'titles';
+      $('syncFraction').textContent=s.total?formatNumber(s.current)+' / '+formatNumber(s.total)+' '+unit:'';
+      $('syncBar').style.width=s.total?Math.min(100,Math.round(s.current/s.total*100))+'%':'3%';
+      const details=[];
+      if(s.phase==='Caching Plex actor portraits'||s.portrait_downloaded||s.portrait_missing||s.portrait_failed){
+        details.push(formatNumber(s.portrait_downloaded||0)+' downloaded');
+        if(s.portrait_missing)details.push(formatNumber(s.portrait_missing)+' missing in Plex');
+      }
+      if(s.errors)details.push(formatNumber(s.errors)+' error(s)');
+      if(s.last_error)details.push('Latest: '+s.last_error);
+      $('syncError').textContent=details.join(' · ');
     }else if(!s.running)progress.hidden=true;
     $('refreshBtn').disabled=!!s.running;
     if(s.running){state.wasRunning=true;}else if(state.wasRunning){state.wasRunning=false;notify(s.errors?'Index completed with warnings.':'Your cast directory is up to date.');await loadStats();await loadActors(false)}
