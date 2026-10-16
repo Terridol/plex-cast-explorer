@@ -170,7 +170,12 @@ class PlexCastExplorerTests(unittest.TestCase):
         def custom_xml(path):
             item = self.fake_xml(path)
             if path == '/library/metadata/101':
-                item.find('Role').set('thumb', custom_url)
+                # Plex metadata responses are MediaContainer -> Video -> Role.
+                # A direct find('Role') returns None and makes the sync report
+                # an indexing warning instead of exercising image retrieval.
+                role = item.find('./Video/Role')
+                self.assertIsNotNone(role, 'Expected Plex cast Role inside Video')
+                role.set('thumb', custom_url)
             return item
         # Test image-transcoding and caching independently of the DNS guard.
         # Public/private hostname decisions have their own deterministic tests.
