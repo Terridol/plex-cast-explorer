@@ -331,7 +331,7 @@
         a.append(poster,elt('strong','',title.title));tile.append(a);tile.append(elt('small','',[(title.year||'Year unknown'),title.library].join(' · ')));if(title.character)tile.append(elt('small','',title.character));grid.append(tile)}host.append(grid);
     }catch(e){$('actorDetail').textContent='Could not load this performer: '+e.message}
   }
-  async function refreshStatus(){try{const s=await api('/api/status');const progress=$('syncBanner');progress.hidden=!s.running&&s.phase==='Not scanned';if(s.running||s.phase==='Sync failed'||s.phase==='Finished with warnings'){
+  async function refreshStatus(){try{const s=await api('/api/status');const progress=$('syncBanner');progress.hidden=!s.running&&s.phase==='Not scanned';const hasImageSummary=!!(s.portrait_missing||s.portrait_failed);if(s.running||s.phase==='Sync failed'||s.phase==='Finished with warnings'||hasImageSummary){
       progress.hidden=false;
       $('syncPhase').textContent=s.phase;
       const unit=s.phase==='Caching Plex actor portraits'?'portraits':s.phase==='Resolving Plex actor artwork'?'performers':'titles';
