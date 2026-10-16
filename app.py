@@ -598,6 +598,8 @@ def cache_plex_portraits() -> int:
         for (source_label, _origin), group_thumbs in groups.items():
             group_denied = 0
             group_server_errors = 0
+            last_denied_code = 403
+            last_server_code = 500
             group_attempted = 0
             for start in range(0, len(group_thumbs), 25):
                 batch = group_thumbs[start:start + 25]
@@ -617,10 +619,12 @@ def cache_plex_portraits() -> int:
                             failures += 1
                             if code in (401, 403):
                                 group_denied += 1
+                                last_denied_code = code
                             elif code == 429:
                                 stop_reason = 'Plex portrait caching paused: HTTP 429 rate limit. Retry later.'
                             elif 500 <= code <= 599:
                                 group_server_errors += 1
+                                last_server_code = code
                             if failures <= 3:
                                 # Do not stringify HTTPError; the exception may
                                 # include full paths and access-token parameters.
@@ -652,9 +656,10 @@ def cache_plex_portraits() -> int:
                         severe * 2 >= group_attempted):
                     remaining = len(group_thumbs) - start - len(batch)
                     skipped += remaining
+                    blocked_code = last_denied_code if group_denied >= MAX_PLEX_SOURCE_DENIALS else last_server_code
                     state_update(current=attempted,
                                  portrait_skipped=skipped,
-                                 last_error=f'HTTP 403/401 or server errors from {source_label}; skipped {remaining} same-origin portraits this run. Other origins continue.')
+                                 last_error=f'HTTP {blocked_code} from {source_label}; skipped {remaining} same-origin portraits this run. Other origins continue.')
                     logging.warning('Paused failing Plex artwork origin: %s (%d attempted, %d skipped)',
                                     source_label, group_attempted, remaining)
                     break
