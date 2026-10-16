@@ -93,6 +93,18 @@ def check_install_contract(root: Path) -> str:
             'NOT EXISTS (' in app_source and
             'plex-portraits/' in read(root, '.gitignore'),
             'Plex actor images must be safely fetched via Plex for both built-in and custom agents')
+    # The status endpoint must show image failures *during* a 50k+ portrait
+    # scan. HTTP 404/410 is missing artwork; 401/403/429/5xx is diagnostic
+    # and must not hide its numerical status or expose a URL/token.
+    require("except HTTPError as exc:" in app_source and
+            "if code in (404, 410):" in app_source and
+            "portrait_missing=missing" in app_source and
+            "errors=baseline_errors + failures" in app_source and
+            "HTTP 429 (rate limited)" in app_source and
+            "portrait_downloaded=downloaded" in app_source and
+            "'portraits'" in read(root, 'static/app.js') and
+            "hasImageSummary" in read(root, 'static/app.js'),
+            'Portrait sync must distinguish missing art, authentication and rate-limit errors with live counts')
     require('CREATE TABLE IF NOT EXISTS actor_plex_refs' in app_source and
             'def plex_role_thumb(role, rating_key:' in app_source and
             'def plex_role_metadata_path(role)' in app_source and

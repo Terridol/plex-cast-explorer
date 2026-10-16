@@ -2,6 +2,8 @@
 
 ## v1.0.0 — Feature-locked release source (not yet published)
 
+- Fixed Plex portrait sync diagnostics for large libraries: live downloaded/missing/failed counts, exact non-sensitive HTTP status codes, and correct “portraits” progress units. HTTP 404/410 unavailable images are counted separately; HTTP 401/403, 429, and server 5xx conditions pause further image requests rather than flooding Plex. The UI retains the final missing-art summary.
+
 - Added Plex custom-agent `metadata://` and `media://` bundle portrait support plus lookup through valid Plex person metadata keys when Role records omit `thumb`. The additional actor-person reference table upgrades in place; existing user artwork overrides and cached portraits are preserved.
 
 - Added scraper-independent support for Plex actor `Role.thumb` URLs from custom metadata agents, using Plex's own authenticated image transcoder for validated public HTTPS custom hosts. Public DNS/IP checks reject loopback, private LAN, link-local, and reserved destinations; cache and manual override priority are unchanged. Includes regression coverage and a mandatory real-Plex custom-scraper acceptance check.

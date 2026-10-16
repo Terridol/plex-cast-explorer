@@ -73,6 +73,16 @@ class BuildGateRegressionTests(unittest.TestCase):
                                      'raw = plex_transcoded_image(thumb)',
                                      "raise ValueError('Unknown artwork source')")
 
+    def test_plex_portrait_http_errors_cannot_hide_status_code(self):
+        self.assert_mutation_blocked('app.py',
+                                     "if code in (404, 410):",
+                                     "if code in ():  # no missing-art handling")
+
+    def test_plex_portrait_live_failure_counts_required(self):
+        self.assert_mutation_blocked('app.py',
+                                     "errors=baseline_errors + failures",
+                                     "errors=baseline_errors")
+
     def test_plex_actor_cache_must_remain_size_bounded(self):
         self.assert_mutation_blocked('app.py',
                                      'MAX_PLEX_IMAGE_BYTES = 4_000_000',
