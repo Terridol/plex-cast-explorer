@@ -518,6 +518,23 @@ def resolve_plex_actor_refs() -> int:
     return failures
 
 
+def plex_portrait_source_label(thumb: str) -> str:
+    """Safe diagnostic category only; never expose image URLs or query tokens."""
+    if thumb.startswith('/') and not thumb.startswith('//'):
+        return 'Plex internal'
+    try:
+        target = urlsplit(thumb)
+        origin = urlsplit(load_config()['url'])
+        if (target.scheme == origin.scheme and target.netloc == origin.netloc and
+                not target.username and not target.password):
+            return 'Plex server'
+        if allowed_https_image_url(thumb, ALLOWED_REMOTE_IMAGES):
+            return 'Plex CDN'
+    except ValueError:
+        pass
+    return 'custom scraper'
+
+
 def cache_plex_portraits() -> int:
     """Backfill missing Plex photos even when no title's updatedAt has changed."""
     config = load_config()
@@ -566,7 +583,7 @@ def cache_plex_portraits() -> int:
                     if code in (404, 410):
                         missing += 1
                         if missing == 1:
-                            state_update(last_error=f'Plex image not found (HTTP {code}); other portraits can still be cached.')
+                            state_update(last_error=f'Plex image not found (HTTP {code}, {plex_portrait_source_label(futures[future])}); other portraits can still be cached.')
                     else:
                         failures += 1
                         if code in (401, 403):
@@ -579,7 +596,7 @@ def cache_plex_portraits() -> int:
                             # Never log HTTPError itself: its URL may include
                             # sensitive Plex or provider query parameters.
                             logging.warning('Plex portrait HTTP %d (image download)', code)
-                            state_update(last_error=f'Plex portrait retrieval failed (HTTP {code}).')
+                            state_update(last_error=f'Plex portrait retrieval failed (HTTP {code}, {plex_portrait_source_label(futures[future])}).')
                 except Exception as exc:
                     failures += 1
                     if failures <= 3:
