@@ -152,6 +152,7 @@ class PlexCastExplorerTests(unittest.TestCase):
                 self.assertEqual(snap['portrait_downloaded'], 0)
                 self.assertEqual(snap['portrait_failed'], 0)
                 self.assertIn('HTTP 404', snap['last_error'])
+                self.assertIn('Plex internal', snap['last_error'])
                 self.assertNotIn('private', snap['last_error'])
                 image.assert_called_once_with('/portrait/sample')
                 self.assertEqual(app.get_stats()['actors'], 2)
@@ -175,6 +176,22 @@ class PlexCastExplorerTests(unittest.TestCase):
                 self.assertTrue(any(call.kwargs.get('portrait_failed') == 1 and
                                     call.kwargs.get('errors') == 1
                                     for call in state.call_args_list))
+
+    def test_plex_image_source_diagnostics_never_expose_urls_or_tokens(self):
+        sources = {
+            '/library/metadata/101/thumb?token=private': 'Plex internal',
+            'http://127.0.0.1:32400/actor.jpg?token=private': 'Plex server',
+            'https://metadata-static.plex.tv/p.jpg?token=private': 'Plex CDN',
+            'https://cdn.custom-provider.org/p.jpg?token=private': 'custom scraper',
+        }
+        with patch.object(app, 'load_config', return_value={
+            'url': 'http://127.0.0.1:32400', 'token': 'private'}):
+            for thumb, expected in sources.items():
+                with self.subTest(expected=expected):
+                    label = app.plex_portrait_source_label(thumb)
+                    self.assertEqual(label, expected)
+                    self.assertNotIn('private', label)
+                    self.assertNotIn('http', label)
 
     def test_plex_sync_pauses_on_http_429_rate_limit(self):
         with patch.dict(os.environ, {}, clear=True):
