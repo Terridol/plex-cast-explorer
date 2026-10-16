@@ -7,6 +7,7 @@ import ipaddress
 import unittest
 import socket
 from pathlib import Path
+from urllib.error import HTTPError
 from urllib.parse import parse_qs, urlsplit
 from unittest.mock import patch
 import xml.etree.ElementTree as ET
@@ -135,6 +136,58 @@ class PlexCastExplorerTests(unittest.TestCase):
                 app.sync_all(force=False)
                 self.assertEqual(app.status_snapshot()['phase'], 'Finished')
                 self.assertTrue(app.plex_portrait_cache_path('/portrait/sample').is_file())
+
+    def test_plex_sync_treats_http_404_as_missing_art_not_sync_error(self):
+        with patch.dict(os.environ, {}, clear=True):
+            app.save_config('http://127.0.0.1:32400', 'test-token')
+            missing = HTTPError('https://portrait.example.invalid/?X-Plex-Token=private',
+                                404, 'Not Found', {}, None)
+            with patch.object(app, 'plex_xml', side_effect=self.fake_xml), \
+                 patch.object(app, 'cached_plex_portrait', side_effect=missing) as image:
+                app.sync_all(force=True)
+                snap = app.status_snapshot()
+                self.assertEqual(snap['phase'], 'Finished', snap)
+                self.assertEqual(snap['errors'], 0)
+                self.assertEqual(snap['portrait_missing'], 1)
+                self.assertEqual(snap['portrait_downloaded'], 0)
+                self.assertEqual(snap['portrait_failed'], 0)
+                self.assertIn('HTTP 404', snap['last_error'])
+                self.assertNotIn('private', snap['last_error'])
+                image.assert_called_once_with('/portrait/sample')
+                self.assertEqual(app.get_stats()['actors'], 2)
+
+    def test_plex_sync_reports_http_403_with_live_error_count(self):
+        with patch.dict(os.environ, {}, clear=True):
+            app.save_config('http://127.0.0.1:32400', 'test-token')
+            denied = HTTPError('https://example.invalid/private?token=private',
+                               403, 'Forbidden', {}, None)
+            with patch.object(app, 'plex_xml', side_effect=self.fake_xml), \
+                 patch.object(app, 'cached_plex_portrait', side_effect=denied), \
+                 patch.object(app, 'state_update', wraps=app.state_update) as state:
+                app.sync_all(force=True)
+                snap = app.status_snapshot()
+                self.assertEqual(snap['phase'], 'Finished with warnings', snap)
+                self.assertEqual(snap['errors'], 1)
+                self.assertEqual(snap['portrait_failed'], 1)
+                self.assertEqual(snap['portrait_missing'], 0)
+                self.assertIn('HTTP 403', snap['last_error'])
+                self.assertNotIn('private', snap['last_error'])
+                self.assertTrue(any(call.kwargs.get('portrait_failed') == 1 and
+                                    call.kwargs.get('errors') == 1
+                                    for call in state.call_args_list))
+
+    def test_plex_sync_pauses_on_http_429_rate_limit(self):
+        with patch.dict(os.environ, {}, clear=True):
+            app.save_config('http://127.0.0.1:32400', 'test-token')
+            throttled = HTTPError('https://example.invalid/portrait',
+                                  429, 'Too Many Requests', {}, None)
+            with patch.object(app, 'plex_xml', side_effect=self.fake_xml), \
+                 patch.object(app, 'cached_plex_portrait', side_effect=throttled):
+                app.sync_all(force=True)
+                snap = app.status_snapshot()
+                self.assertEqual(snap['phase'], 'Finished with warnings', snap)
+                self.assertEqual(snap['errors'], 1)
+                self.assertIn('HTTP 429 (rate limited)', snap['last_error'])
 
     def test_plex_sync_never_replaces_manual_portrait_override(self):
         with patch.object(app, 'plex_xml', side_effect=self.fake_xml):
