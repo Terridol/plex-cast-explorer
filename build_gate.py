@@ -6,6 +6,7 @@ This does NOT replace an actual Windows service installation test on an isolated
 from __future__ import annotations
 
 import argparse
+import ast
 import json
 import os
 from pathlib import Path
@@ -112,6 +113,32 @@ def check_install_contract(root: Path) -> str:
             "'portraits'" in read(root, 'static/app.js') and
             "hasImageSummary" in read(root, 'static/app.js'),
             'Portrait sync must distinguish missing art, authentication and rate-limit errors with live counts')
+    # Do not accept the mere presence of 'portrait_skipped=skipped' somewhere
+    # in the file: the download loop has THREE distinct reporting paths. A
+    # regression that silently zeros any one of them must block the build.
+    try:
+        app_tree = ast.parse(app_source, filename='app.py')
+    except SyntaxError as exc:
+        raise GateFailure(f'Invalid application Python syntax: {exc}') from exc
+    cache_functions = [
+        node for node in app_tree.body
+        if isinstance(node, ast.FunctionDef) and node.name == 'cache_plex_portraits'
+    ]
+    require(len(cache_functions) == 1, 'Expected exactly one Plex portrait caching function')
+    skip_reports = [
+        call for call in ast.walk(cache_functions[0])
+        if isinstance(call, ast.Call) and isinstance(call.func, ast.Name) and
+           call.func.id == 'state_update' and
+           any(keyword.arg == 'portrait_skipped' for keyword in call.keywords)
+    ]
+    require(len(skip_reports) == 4 and
+            sum(
+                any(keyword.arg == 'portrait_skipped' and
+                    isinstance(keyword.value, ast.Name) and
+                    keyword.value.id == 'skipped' for keyword in call.keywords)
+                for call in skip_reports
+            ) == 3,
+            'Plex portrait skip count must be updated in per-item, source-breaker, and global-stop paths')
     require('CREATE TABLE IF NOT EXISTS actor_plex_refs' in app_source and
             'def plex_role_thumb(role, rating_key:' in app_source and
             'def plex_role_metadata_path(role)' in app_source and
