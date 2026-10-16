@@ -235,7 +235,7 @@ class PlexCastExplorerTests(unittest.TestCase):
             self.assertEqual(state['portrait_failed'], 25, state)
             self.assertEqual(state['portrait_skipped'], 35, state)
             self.assertEqual(state['total'], 62, state)
-            self.assertEqual(state['current'], 62, state)
+            self.assertEqual(state['current'], 27, state)
             self.assertEqual(len(requests), 27)
             self.assertEqual(len([x for x in requests if 'assets.plex.tv' in x]), 2)
             self.assertIn('Plex CDN', state['last_error'])
