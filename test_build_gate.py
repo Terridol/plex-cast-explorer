@@ -10,15 +10,19 @@ class BuildGateRegressionTests(unittest.TestCase):
         self.assertEqual(build_gate.check_install_contract(build_gate.ROOT),
                          build_gate.app_version(build_gate.ROOT))
 
-    def assert_mutation_blocked(self, file, original, modified):
+    def assert_mutation_blocked(self, file, original, modified, occurrence=1):
         root = build_gate.ROOT
         path = root / file
         text = path.read_text(encoding='utf-8-sig')
-        self.assertIn(original, text)
+        self.assertGreaterEqual(text.count(original), occurrence)
         with patch.object(build_gate, 'read') as read:
             def altered(root_arg, path_arg):
                 result = (root_arg / path_arg).read_text(encoding='utf-8-sig')
-                return result.replace(original, modified, 1) if path_arg == file else result
+                if path_arg != file:
+                    return result
+                parts = result.split(original)
+                return (original.join(parts[:occurrence]) + modified +
+                        original.join(parts[occurrence:]))
             read.side_effect = altered
             with self.assertRaises(build_gate.GateFailure):
                 build_gate.check_install_contract(root)
@@ -85,10 +89,14 @@ class BuildGateRegressionTests(unittest.TestCase):
             "groups.setdefault(('all', ''), []).append(thumb)")
 
     def test_plex_failed_source_skipped_count_is_required(self):
-        self.assert_mutation_blocked(
-            'app.py',
-            'portrait_skipped=skipped',
-            'portrait_skipped=0')
+        # All three calls are safety-critical: per-image update, per-origin
+        # breaker and global stop. A string-contains gate used to miss the
+        # first mutation because the other two calls remained unchanged.
+        for occurrence in (1, 2, 3):
+            with self.subTest(report_path=occurrence):
+                self.assert_mutation_blocked(
+                    'app.py', 'portrait_skipped=skipped',
+                    'portrait_skipped=0', occurrence=occurrence)
 
     def test_plex_portrait_live_failure_counts_required(self):
         self.assert_mutation_blocked('app.py',
