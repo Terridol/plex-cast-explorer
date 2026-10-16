@@ -172,27 +172,30 @@ class PlexCastExplorerTests(unittest.TestCase):
             if path == '/library/metadata/101':
                 item.find('Role').set('thumb', custom_url)
             return item
-        resolved = [(socket.AF_INET, socket.SOCK_STREAM, 6, '',
-                     ('93.184.216.34', 443))]
+        # Test image-transcoding and caching independently of the DNS guard.
+        # Public/private hostname decisions have their own deterministic tests.
+        # The source URL still must reach the eligibility gate before Plex.
         with patch.dict(os.environ, {}, clear=True):
             app.save_config('http://127.0.0.1:32400', 'example-token')
             with patch.object(app, 'plex_xml', side_effect=custom_xml), \
-                 patch.object(app.socket, 'getaddrinfo', return_value=resolved) as dns, \
+                 patch.object(app, 'public_custom_plex_thumb', return_value=True) as approved, \
                  patch.object(app, 'request_plex',
                               return_value=b'\xff\xd8\xffCustom') as plex:
                 app.sync_all(force=True)
-                self.assertEqual(app.status_snapshot()['phase'], 'Finished')
-                self.assertEqual(plex.call_count, 1)
+                self.assertEqual(app.status_snapshot()['phase'], 'Finished',
+                                 app.status_snapshot())
+                approved.assert_called_once_with(custom_url)
+                plex.assert_called_once()
                 proxied = plex.call_args.args[0]
                 self.assertTrue(proxied.startswith('/photo/:/transcode?'))
                 self.assertEqual(parse_qs(urlsplit(proxied).query)['url'], [custom_url])
                 self.assertNotIn('X-Plex-Token', proxied)
-                dns.assert_called_once_with('cdn.custom-actor-images.org', 443,
-                                            type=socket.SOCK_STREAM)
+                self.assertEqual(plex.call_args.kwargs['max_bytes'],
+                                 app.MAX_PLEX_IMAGE_BYTES)
                 app.image_bytes.cache_clear()
                 self.assertEqual(app.image_bytes('actor', 'sample actor'),
                                  b'\xff\xd8\xffCustom')
-                self.assertEqual(plex.call_count, 1)
+                plex.assert_called_once()
 
     def test_private_custom_scraper_image_is_not_proxied_through_plex(self):
         urls = ('http://192.168.1.20:3000/actors/a.jpg',
@@ -206,6 +209,15 @@ class PlexCastExplorerTests(unittest.TestCase):
                     with self.assertRaisesRegex(ValueError, 'public HTTPS'):
                         app.plex_image_bytes(url)
             plex.assert_not_called()
+
+    def test_custom_scraper_public_dns_accepts_only_global_addresses(self):
+        url = 'https://cdn.custom-actor-images.org/actors/sample.jpg'
+        resolved = [(socket.AF_INET, socket.SOCK_STREAM, 6, '',
+                     ('8.8.8.8', 443))]
+        with patch.object(app.socket, 'getaddrinfo', return_value=resolved) as dns:
+            self.assertTrue(app.public_custom_plex_thumb(url))
+            dns.assert_called_once_with('cdn.custom-actor-images.org', 443,
+                                        type=socket.SOCK_STREAM)
 
     def test_custom_scraper_dns_must_resolve_only_public_addresses(self):
         url = 'https://cdn.custom-actor-images.org/actors/sample.jpg'
