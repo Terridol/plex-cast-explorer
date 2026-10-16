@@ -206,6 +206,42 @@ class PlexCastExplorerTests(unittest.TestCase):
                 self.assertEqual(snap['errors'], 1)
                 self.assertIn('HTTP 429 (rate limited)', snap['last_error'])
 
+    def test_plex_cdn_403_breaker_skips_only_failing_origin(self):
+        # One broken Plex metadata CDN must not block another approved CDN.
+        # The failure source URL may include secrets; never surface it.
+        with patch.dict(os.environ, {}, clear=True):
+            app.save_config('http://127.0.0.1:32400', 'example-token')
+            with app.db_open() as db:
+                for i in range(60):
+                    db.execute('INSERT INTO actors(actor_key,name,thumb) VALUES (?,?,?)',
+                               (f'denied-{i}', f'Denied {i}',
+                                f'https://metadata-static.plex.tv/people/{i}.jpg'))
+                for i in range(2):
+                    db.execute('INSERT INTO actors(actor_key,name,thumb) VALUES (?,?,?)',
+                               (f'ok-{i}', f'Allowed {i}',
+                                f'https://assets.plex.tv/people/{i}.jpg'))
+            requests = []
+            def fake_image(thumb):
+                requests.append(thumb)
+                if 'metadata-static.plex.tv' in thumb:
+                    raise HTTPError(thumb + '?token=secret', 403, 'Forbidden', {}, None)
+                return b'\xff\xd8\xffDownloaded'
+            app.state_update(errors=0, last_error='')
+            with patch.object(app, 'cached_plex_portrait', side_effect=fake_image):
+                count = app.cache_plex_portraits()
+            state = app.status_snapshot()
+            self.assertEqual(count, 25, state)
+            self.assertEqual(state['portrait_downloaded'], 2, state)
+            self.assertEqual(state['portrait_failed'], 25, state)
+            self.assertEqual(state['portrait_skipped'], 35, state)
+            self.assertEqual(state['total'], 62, state)
+            self.assertEqual(state['current'], 62, state)
+            self.assertEqual(len(requests), 27)
+            self.assertEqual(len([x for x in requests if 'assets.plex.tv' in x]), 2)
+            self.assertIn('Plex CDN', state['last_error'])
+            self.assertNotIn('secret', state['last_error'])
+            self.assertNotIn('metadata-static.plex.tv', state['last_error'])
+
     def test_plex_sync_never_replaces_manual_portrait_override(self):
         with patch.object(app, 'plex_xml', side_effect=self.fake_xml):
             app.sync_all(force=True)
