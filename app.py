@@ -621,7 +621,7 @@ def cache_plex_portraits() -> int:
                                 group_denied += 1
                                 last_denied_code = code
                             elif code == 429:
-                                stop_reason = 'Plex portrait caching paused: HTTP 429 rate limit. Retry later.'
+                                stop_reason = 'Plex portrait caching paused: HTTP 429 (rate limited). Retry later.'
                             elif 500 <= code <= 599:
                                 group_server_errors += 1
                                 last_server_code = code
