@@ -576,6 +576,8 @@ def cache_plex_portraits() -> int:
     pending = [r['thumb'] for r in rows if needs_download(r['thumb'])]
     if not pending:
         return 0
+    # Progress counts actually attempted portraits; skipped ones are shown
+    # separately so a stopped scan never appears fully downloaded.
     # A denied provider/CDN is not evidence that *all* Plex images are
     # inaccessible. Group by source so a circuit breaker only skips the
     # affected route, while valid images from other origins are still saved.
@@ -632,7 +634,7 @@ def cache_plex_portraits() -> int:
                             state_update(last_error=f'Plex portrait retrieval failed ({source_label}, {type(exc).__name__}).')
                     attempted += 1
                     group_attempted += 1
-                    state_update(current=attempted + skipped,
+                    state_update(current=attempted,
                                  errors=baseline_errors + failures,
                                  portrait_downloaded=downloaded,
                                  portrait_missing=missing,
@@ -650,7 +652,7 @@ def cache_plex_portraits() -> int:
                         severe * 2 >= group_attempted):
                     remaining = len(group_thumbs) - start - len(batch)
                     skipped += remaining
-                    state_update(current=attempted + skipped,
+                    state_update(current=attempted,
                                  portrait_skipped=skipped,
                                  last_error=f'HTTP 403/401 or server errors from {source_label}; skipped {remaining} same-origin portraits this run. Other origins continue.')
                     logging.warning('Paused failing Plex artwork origin: %s (%d attempted, %d skipped)',
@@ -661,7 +663,7 @@ def cache_plex_portraits() -> int:
                     break
             if stop_reason:
                 skipped = len(pending) - attempted
-                state_update(current=attempted + skipped, portrait_skipped=skipped,
+                state_update(current=attempted, portrait_skipped=skipped,
                              last_error=stop_reason)
                 break
     return failures
