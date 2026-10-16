@@ -2,6 +2,8 @@
 
 ## v1.0.0 — Feature-locked release source (not yet published)
 
+- Fixed high-volume portrait synchronization stopping after a single 25-item batch containing unrelated HTTP 403 images. Failed origins now have separate circuit breakers; only repeated high-rate denials or 5xx responses pause that image route, with unrelated Plex and custom-agent sources continuing. HTTP 429 still pauses the whole image scan. Added accurate attempted/skipped accounting, safe source-status messages, an integration fixture with two independent Plex CDN domains, and matching source gates.
+
 - Fixed Plex portrait sync diagnostics for large libraries: live downloaded/missing/failed counts, exact non-sensitive HTTP status codes, and correct “portraits” progress units. HTTP 404/410 unavailable images are counted separately and the warning identifies the failed image-source category without exposing URLs or credentials; HTTP 401/403, 429, and server 5xx conditions pause further image requests rather than flooding Plex. The UI retains the final missing-art summary.
 
 - Added Plex custom-agent `metadata://` and `media://` bundle portrait support plus lookup through valid Plex person metadata keys when Role records omit `thumb`. The additional actor-person reference table upgrades in place; existing user artwork overrides and cached portraits are preserved.

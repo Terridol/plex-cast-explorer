@@ -102,6 +102,12 @@ def check_install_contract(root: Path) -> str:
             "errors=baseline_errors + failures" in app_source and
             "HTTP 429 (rate limited)" in app_source and
             "portrait_downloaded=downloaded" in app_source and
+            'def plex_portrait_source_group(thumb: str)' in app_source and
+            "MAX_PLEX_SOURCE_DENIALS = 10" in app_source and
+            "groups.setdefault(plex_portrait_source_group(thumb), []).append(thumb)" in app_source and
+            "portrait_skipped=skipped" in app_source and
+            "current=attempted" in app_source and
+            "' skipped due to source errors'" in read(root, 'static/app.js') and
             "def plex_portrait_source_label(thumb: str) -> str:" in app_source and
             "'portraits'" in read(root, 'static/app.js') and
             "hasImageSummary" in read(root, 'static/app.js'),

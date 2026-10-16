@@ -78,6 +78,18 @@ class BuildGateRegressionTests(unittest.TestCase):
                                      "if code in (404, 410):",
                                      "if code in ():  # no missing-art handling")
 
+    def test_plex_cdn_errors_cannot_stop_all_other_sources(self):
+        self.assert_mutation_blocked(
+            'app.py',
+            'groups.setdefault(plex_portrait_source_group(thumb), []).append(thumb)',
+            "groups.setdefault(('all', ''), []).append(thumb)")
+
+    def test_plex_failed_source_skipped_count_is_required(self):
+        self.assert_mutation_blocked(
+            'app.py',
+            'portrait_skipped=skipped',
+            'portrait_skipped=0')
+
     def test_plex_portrait_live_failure_counts_required(self):
         self.assert_mutation_blocked('app.py',
                                      "errors=baseline_errors + failures",
