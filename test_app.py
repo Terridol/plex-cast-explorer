@@ -220,11 +220,16 @@ class PlexCastExplorerTests(unittest.TestCase):
                     db.execute('INSERT INTO actors(actor_key,name,thumb) VALUES (?,?,?)',
                                (f'ok-{i}', f'Allowed {i}',
                                 f'https://assets.plex.tv/people/{i}.jpg'))
+                db.execute('INSERT INTO actors(actor_key,name,thumb) VALUES (?,?,?)',
+                           ('later-missing', 'Later missing',
+                            'https://zz-custom.invalid-example.org/missing.jpg'))
             requests = []
             def fake_image(thumb):
                 requests.append(thumb)
                 if 'metadata-static.plex.tv' in thumb:
                     raise HTTPError(thumb + '?token=secret', 403, 'Forbidden', {}, None)
+                if 'zz-custom.invalid-example.org' in thumb:
+                    raise HTTPError(thumb, 404, 'Not Found', {}, None)
                 return b'\xff\xd8\xffDownloaded'
             app.state_update(errors=0, last_error='')
             with patch.object(app, 'cached_plex_portrait', side_effect=fake_image):
@@ -233,12 +238,15 @@ class PlexCastExplorerTests(unittest.TestCase):
             self.assertEqual(count, 25, state)
             self.assertEqual(state['portrait_downloaded'], 2, state)
             self.assertEqual(state['portrait_failed'], 25, state)
+            self.assertEqual(state['portrait_missing'], 1, state)
             self.assertEqual(state['portrait_skipped'], 35, state)
-            self.assertEqual(state['total'], 62, state)
-            self.assertEqual(state['current'], 27, state)
-            self.assertEqual(len(requests), 27)
+            self.assertEqual(state['total'], 63, state)
+            self.assertEqual(state['current'], 28, state)
+            self.assertEqual(len(requests), 28)
             self.assertEqual(len([x for x in requests if 'assets.plex.tv' in x]), 2)
             self.assertIn('Plex CDN', state['last_error'])
+            self.assertIn('HTTP 403', state['last_error'])
+            self.assertNotIn('HTTP 404', state['last_error'])
             self.assertNotIn('secret', state['last_error'])
             self.assertNotIn('metadata-static.plex.tv', state['last_error'])
 
