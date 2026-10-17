@@ -50,12 +50,20 @@ To install or **update** the local IMDb identity dataset:
 1. Download `name.basics.tsv.gz` and `title.basics.tsv.gz` from
    https://datasets.imdbws.com/ on your own computer, subject to IMDb's
    current personal/non-commercial dataset terms. Do not redistribute these files.
-2. Open a terminal in the installation directory and execute:
+2. Stop the Windows **Plex Cast Explorer** service temporarily. Open an
+   elevated Command Prompt (Run as administrator). Set the exact installed
+   data folder before launching the EXE:
 
-   `PlexCastExplorer.exe --update-imdb "C:\\Downloads\\name.basics.tsv.gz" "C:\\Downloads\\title.basics.tsv.gz"`
+   ```bat
+   set "CAST_EXPLORER_DATA_DIR=%ProgramData%\PlexCastExplorer"
+   cd /d "C:\Program Files\Plex Cast Explorer"
+   PlexCastExplorer.exe --update-imdb "C:\Downloads\name.basics.tsv.gz" "C:\Downloads\title.basics.tsv.gz"
+   ```
 
-   Use the actual download locations. On source installs run
-   `python app.py --update-imdb ...` instead.
+   Adjust the installation/download paths. If the EXE is in another directory,
+   navigate there instead. For a source checkout, set `CAST_EXPLORER_DATA_DIR`
+   as needed and use `python app.py --update-imdb ...`.
+   Restart the service after the update finishes.
 3. Repeat the same command whenever you want fresher IMDb data. It writes
    `imdb-identity.sqlite` in the configured application data folder and
    atomically replaces the previous dataset only after successful import.
