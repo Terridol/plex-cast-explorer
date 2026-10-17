@@ -884,6 +884,42 @@ class PlexCastExplorerTests(unittest.TestCase):
             self.assertNotIn('sample actor', app.pending_enrichment_keys())
             self.assertIn('second actor', app.pending_enrichment_keys())
 
+    def test_sync_wrapper_starts_enrichment_only_after_successful_sync(self):
+        with patch.object(app, 'sync_all') as sync, \
+             patch.object(app, 'status_snapshot', return_value={'phase': 'Finished'}), \
+             patch.object(app, 'enrichment_start') as enrich:
+            app.sync_and_enrich(force=True)
+        sync.assert_called_once_with(force=True)
+        enrich.assert_called_once()
+
+    def test_completed_enrichment_results_are_not_requeued(self):
+        with patch.object(app, 'plex_xml', side_effect=self.fake_xml):
+            app.sync_all(force=True)
+        self.assertIn('sample actor', app.pending_enrichment_keys())
+        app.remember_enrichment('sample actor', 'auto')
+        app.remember_enrichment('second actor', 'unmatched')
+        self.assertEqual(app.pending_enrichment_keys(), [])
+        self.assertEqual(app.enrichment_status()['remaining'], 0)
+
+    @patch.object(app, 'provider_enabled', new=lambda name: name == 'tmdb')
+    def test_tpdb_is_considered_before_existing_plex_fallback(self):
+        with patch.object(app, 'plex_xml', side_effect=self.fake_xml):
+            app.sync_all(force=True)
+        def provider(url, token):
+            if '/search/person?' in url:
+                return {'results': []}
+            if '/performers?' in url:
+                return {'data': [{'_id': 'p9', 'name': 'Sample Actor',
+                                  'image': 'https://cdn.theporndb.net/a.jpg'}]}
+            if '/performers/p9/scenes?' in url:
+                return {'data': [{'title': 'Alpha', 'year': 2024}]}
+            raise AssertionError(url)
+        with patch.object(app, 'artwork_keys', return_value={'tmdb': 't', 'theporndb': 'p'}), \
+             patch.object(app, 'paced_provider_json', side_effect=provider):
+            choices, errors = app.verified_portrait_candidates('sample actor')
+        self.assertEqual(errors, [])
+        self.assertEqual([choice['source'] for choice in choices], ['ThePornDB'])
+
     def test_background_enrichment_auto_applies_and_resumes(self):
         with patch.object(app, 'plex_xml', side_effect=self.fake_xml):
             app.sync_all(force=True)
