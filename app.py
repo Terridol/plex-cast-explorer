@@ -1434,8 +1434,7 @@ def credit_matches(local_titles, remote_credits, source):
 
 def is_strong_match(item):
     matches = item.get('matches', [])
-    return (len(matches) >= 2 and sum(bool(m['year_verified']) for m in matches) >= 1
-            and not any(credit_has_conflict(m, item.get('name', '')) for m in matches))
+    return (len(matches) >= 2 and sum(bool(m.get('year_verified')) for m in matches) >= 1)
 
 
 def actor_titles_for_matching(key):
@@ -1561,8 +1560,8 @@ def singleton_is_verified(actor_name, candidates, warning=''):
     """A unique candidate with *an actual Plex credit overlap*, not just one name result.
 
     An external provider can return one incorrect namesake. Require matching
-    performer names, a shared title, compatible dates, no conflicting credited
-    roles, an allowed image host, and no incomplete provider lookups.
+    performer names, shared productions, compatible dates, an allowed image
+    host, and no incomplete provider lookups. Role labels are not identity proof.
     """
     if warning or len(candidates) != 1:
         return False
@@ -1580,7 +1579,7 @@ def singleton_is_verified(actor_name, candidates, warning=''):
     if not isinstance(matches, list) or not matches:
         return False
     for m in matches:
-        if not isinstance(m, dict) or not normalize_title(m.get('title')) or credit_has_conflict(m, entry['name']):
+        if not isinstance(m, dict) or not normalize_title(m.get('title')):
             return False
         ya, yb = credit_year({'year': m.get('year')}), credit_year({'year': m.get('external_year')})
         if ya is not None and yb is not None and abs(ya-yb) > 1:
@@ -1601,8 +1600,8 @@ def confident_portrait_replacement(actor_name, candidates, errors=None):
     if len(matches) != 1:
         return False
     credit = matches[0]
-    # One credit qualifies only with an exact verified release year,
-    # no role conflict, and no competing corroborated candidate.
+    # One credit qualifies with an exact verified release year and no
+    # competing candidate. Character labels do not veto filmography.
     return (credit.get('year_verified') is True and
             credit_year({'year': credit.get('year')}) is not None and
             credit_year({'year': credit.get('external_year')}) is not None)
