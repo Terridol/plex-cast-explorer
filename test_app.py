@@ -961,9 +961,9 @@ class PlexCastExplorerTests(unittest.TestCase):
         def fake_provider(url, token):
             requested.append(url)
             if '/search/person?' in url:
-                return {'results': [{'id': 24, 'name': 'Sample Actor', 'profile_path': None}]}
+                return {'results': [{'id': 24, 'name': 'Second Actor', 'profile_path': None}]}
             if '/performers?' in url:
-                return {'data': [{'_id': 'p123', 'name': 'Sample Actor',
+                return {'data': [{'_id': 'p123', 'name': 'Second Actor',
                                   'image': 'https://cdn.theporndb.net/p.jpg'}]}
             if '/performers/p123/scenes?' in url:
                 return {'data': [{'title': 'Alpha', 'year': 2024}]}
@@ -971,7 +971,7 @@ class PlexCastExplorerTests(unittest.TestCase):
         with patch.object(app, 'artwork_keys', return_value={'tmdb': 'tmdb-key',
                                                               'theporndb': 'tpdb-key'}), \
              patch.object(app, 'paced_provider_json', side_effect=fake_provider):
-            candidates, errors = app.verified_portrait_candidates('sample actor')
+            candidates, errors = app.verified_portrait_candidates('second actor')
         self.assertEqual(errors, [])
         self.assertEqual([x['source'] for x in candidates], ['ThePornDB'])
         self.assertEqual(len(requested), 3)
