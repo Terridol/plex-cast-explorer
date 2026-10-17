@@ -845,6 +845,23 @@ class PlexCastExplorerTests(unittest.TestCase):
         self.assertEqual(len(calls), 2)
 
     @patch.object(app, 'provider_enabled', new=lambda name: name == 'tmdb')
+    def test_plex_portrait_blocks_tpdb_fallback_after_tmdb_miss(self):
+        with patch.object(app, 'plex_xml', side_effect=self.fake_xml):
+            app.sync_all(force=True)
+        calls = []
+        def fake_provider(url, token):
+            calls.append(url)
+            if '/search/person?' in url:
+                return {'results': []}
+            raise AssertionError('TPDB must not be queried while Plex has artwork')
+        with patch.object(app, 'artwork_keys', return_value={'tmdb': 't', 'theporndb': 'p'}), \
+             patch.object(app, 'paced_provider_json', side_effect=fake_provider):
+            candidates, errors = app.verified_portrait_candidates('sample actor')
+        self.assertEqual((candidates, errors), ([], []))
+        self.assertEqual(len(calls), 1)
+        self.assertEqual(app.get_actor('sample actor')['art']['source'], 'Plex')
+
+    @patch.object(app, 'provider_enabled', new=lambda name: name == 'tmdb')
     def test_verified_candidates_fall_back_to_tpdb_if_tmdb_lacks_portrait(self):
         with patch.object(app, 'plex_xml', side_effect=self.fake_xml):
             app.sync_all(force=True)
