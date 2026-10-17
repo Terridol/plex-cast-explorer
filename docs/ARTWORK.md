@@ -2,12 +2,16 @@
 
 Plex Cast Explorer first uses actor portraits supplied by **your own Plex server**. It never bundles downloaded provider portraits or credentials inside Setup.
 
-## Provider priority
+## Automatic sync and portrait selection
 
-1. **Plex:** Use an existing Plex actor image without contacting an *additional metadata provider*. This includes images provided to Plex by a nonstandard metadata agent when Plex includes the image reference in the cast `Role.thumb` field. Plex-relative URLs are fetched directly from Plex when requested; custom-scraper public HTTPS URLs are resolved through Plex's authenticated photo-transcode endpoint after destination safety checks. `metadata://` and `media://` portrait references are requested from Plex's own metadata-file endpoint. If `Role.thumb` is absent but Plex provides a valid person metadata link in `Role.key` or `Role.ratingKey`, sync checks the Plex person record for an image. Where neither contains a portrait, the external TMDB-first enrichment path remains necessary. Arbitrary private-network image hosts remain blocked. Custom provider portraits may require that Plex itself can reach and transcode the image.
-2. **TMDB (preferred when enabled):** For actors with or without existing artwork, query TMDB **only when enabled through the Windows installer** and a TMDB API token is configured. This is the preferred external artwork provider. Require a matching performer name, a nonempty profile image, and corroborating Plex credits for automatic enrichment. If no matching TMDB portrait is found, proceed to step 3.
-3. **ThePornDB:** Queried only when TMDB produces no verified portrait, Plex has no thumbnail, and TMDB did not report a provider error. Existing Plex artwork is never replaced by TPDB. Requires its own API token, independent of TMDB. Title/credit overlap is still required for automatic saving.
-4. **Review / unmatched:** Uncertain matches stay for manual review. A provider error blocks automatic assignment. Unmatched actors can be explicitly rescanned after improving provider settings. Successfully applied portraits, skipped/review decisions and Plex metadata are not reset by the unmatched-rescan action.
+After Plex library synchronization completes, a background enrichment scan examines each new actor. The catalog saves the result in `enrichment_results`; completed matches, review decisions, and unmatched actors are not re-queried on ordinary subsequent syncs. Newly indexed actors are added automatically. Provider errors remain retryable, and operators can explicitly rescan unmatched actors.
+
+1. **TMDB:** Preferred when explicitly enabled and configured. Name plus corroborating Plex credits are required; uncertain identities are sent to review.
+2. **ThePornDB:** Second choice when TMDB has no corroborated candidate and its lookup did not fail. It may supersede a Plex-supplied portrait when identity confidence is sufficient.
+3. **Plex:** Final fallback. Images from Plex Role metadata, person references and approved scraper URLs are retrieved on demand through the secured Plex image path rather than bulk-cached during sync.
+4. **Review:** Ambiguous or conflicting external matches are queued without automatically changing the current image. A verified single credit with matching release year can qualify; name-only matches cannot.
+
+The sync runs without waiting for tens of thousands of API lookups; the background enrichment worker reports its own progress. Previously completed actors do not consume provider calls on routine syncs. Changing provider availability or revisiting prior misses requires an explicit rescan operation.
 
 TMDB lookups remain **disabled by default**: a saved token alone does not turn them on. Choose **Enable TMDB lookups** during Windows Setup and configure the API Read Access Token in Settings. The installer writes `CAST_EXPLORER_ENABLE_TMDB=1` to the WinSW service environment when selected. Prior installer settings may be remembered on upgrade. A valid authorization covering the actual media categories and distribution is necessary; the operator confirms this requirement has been resolved for their deployment. The project cannot independently certify third-party permission from a configuration toggle.
 
