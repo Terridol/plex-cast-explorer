@@ -145,6 +145,30 @@ def check_install_contract(root: Path) -> str:
                 for call in skip_reports
             ) == 3,
             'Plex portrait skip count must be updated in per-item, source-breaker, and global-stop paths')
+    # Both Plex transcoder paths are required: CDN auth-denial fallback and
+    # custom-scraper public HTTPS host. A substring check missed removal of
+    # one path because the other call still existed.
+    image_functions = [
+        node for node in app_tree.body
+        if isinstance(node, ast.FunctionDef) and node.name == 'plex_image_bytes'
+    ]
+    require(len(image_functions) == 1,
+            'Expected exactly one Plex image-fetch function')
+    transcoder_assignments = [
+        node for node in ast.walk(image_functions[0])
+        if isinstance(node, ast.Assign) and
+        len(node.targets) == 1 and
+        isinstance(node.targets[0], ast.Name) and
+        node.targets[0].id == 'raw' and
+        isinstance(node.value, ast.Call) and
+        isinstance(node.value.func, ast.Name) and
+        node.value.func.id == 'plex_transcoded_image' and
+        len(node.value.args) == 1 and
+        isinstance(node.value.args[0], ast.Name) and
+        node.value.args[0].id == 'thumb'
+    ]
+    require(len(transcoder_assignments) == 2,
+            'Plex image fetch requires both CDN authentication fallback and custom-scraper proxy')
     require('CREATE TABLE IF NOT EXISTS actor_plex_refs' in app_source and
             'def plex_role_thumb(role, rating_key:' in app_source and
             'def plex_role_metadata_path(role)' in app_source and
