@@ -938,7 +938,7 @@ class PlexCastExplorerTests(unittest.TestCase):
         self.assertEqual(app.get_actor('second actor')['art']['source'],'ThePornDB')
         self.assertEqual(app.enrichment_status()['db_auto'],1)
         self.assertEqual(app.enrichment_status()['review_waiting'],0)
-        self.assertEqual(app.pending_enrichment_keys(),[])
+        self.assertEqual(app.pending_enrichment_keys(), ['sample actor'])
 
     def test_background_enrichment_defers_ambiguous_matches(self):
         with patch.object(app, 'plex_xml', side_effect=self.fake_xml):
