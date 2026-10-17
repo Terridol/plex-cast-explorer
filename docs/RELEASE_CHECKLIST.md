@@ -29,7 +29,7 @@
 - [ ] Uninstall/reinstall on disposable Windows; verify service/firewall cleanup and **ProgramData survives**.
 - [ ] Confirm VPN-restricted administrator logins reject unauthorized networks and gallery-only sessions cannot access admin controls.
 - [ ] Validate offline/no Plex connection behavior, invalid credentials, corrupt configuration and recovery instructions.
-- [ ] Verify a bulk portrait pass with one blocked Plex metadata CDN (HTTP 403) continues to retrieve artwork from another origin, reports skipped images separately, and does not expose source URLs or tokens in the status panel.
+- [ ] Verify a bulk portrait pass with one blocked Plex metadata CDN (HTTP 403) retries authorized artwork through Plex's own photo transcoder, samples large URL groups across their full range, continues past interspersed failures, and reports skipped images and their primary cause without leaking source URLs or tokens.
 - [ ] Run a real Plex sync with known cast `Role.thumb` images, including **custom-agent/THDB portraits** stored as public HTTPS, `metadata://` or `media://` bundle references, plus a Plex person record whose Role has a key but no thumb. Verify both direct Plex images and Plex photo-transcoded custom images are cached, gallery image URLs display, unchanged-title incremental sync avoids duplicate requests, and manual artwork overrides remain unchanged. Confirm Plex rejects blocked/private image hosts without exposing its token.
 - [ ] Validate live ThePornDB enrichment for performers with large scene-credit responses (previously truncated at 1,000,001 bytes), then confirm retrying failed lookups processes saved errors without deleting applied portraits.
 

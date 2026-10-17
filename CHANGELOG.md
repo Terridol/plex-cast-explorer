@@ -2,6 +2,8 @@
 
 ## v1.0.0 — Feature-locked release source (not yet published)
 
+- Prevented nearly 50,000 Plex portrait requests from being skipped because the first 25 images of an enormous source group failed: sample across the source's full index and pause only after broader probing finds no working images. Trusted Plex CDN 401/403 downloads retry through the Plex-authenticated photo transcoder without exposing the token to remote hosts. The most impactful blocked-source status now remains visible even if a later isolated 404 occurs. Added corresponding regression and source-gate checks.
+
 - Fixed high-volume portrait synchronization stopping after a single 25-item batch containing unrelated HTTP 403 images. Failed origins now have separate circuit breakers; only repeated high-rate denials or 5xx responses pause that image route, with unrelated Plex and custom-agent sources continuing. HTTP 429 still pauses the whole image scan. Added accurate attempted/skipped accounting, safe source-status messages, an integration fixture with two independent Plex CDN domains, and matching source gates.
 
 - Fixed Plex portrait sync diagnostics for large libraries: live downloaded/missing/failed counts, exact non-sensitive HTTP status codes, and correct “portraits” progress units. HTTP 404/410 unavailable images are counted separately and the warning identifies the failed image-source category without exposing URLs or credentials; HTTP 401/403, 429, and server 5xx conditions pause further image requests rather than flooding Plex. The UI retains the final missing-art summary.

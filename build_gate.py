@@ -105,6 +105,12 @@ def check_install_contract(root: Path) -> str:
             "portrait_downloaded=downloaded" in app_source and
             'def plex_portrait_source_group(thumb: str)' in app_source and
             "MAX_PLEX_SOURCE_DENIALS = 10" in app_source and
+            "def spread_plex_portrait_probes(thumbnails: list[str]) -> list[str]:" in app_source and
+            "groups[source] = spread_plex_portrait_probes(thumbs)" in app_source and
+            "group_attempted >= min_probe and group_success == 0" in app_source and
+            "raw = plex_transcoded_image(thumb)" in app_source and
+            "blocked_groups.append((remaining, blocked_note))" in app_source and
+            "max(blocked_groups, key=lambda item: item[0])[1]" in app_source and
             "groups.setdefault(plex_portrait_source_group(thumb), []).append(thumb)" in app_source and
             "portrait_skipped=skipped" in app_source and
             "current=attempted" in app_source and

@@ -88,6 +88,18 @@ class BuildGateRegressionTests(unittest.TestCase):
             'groups.setdefault(plex_portrait_source_group(thumb), []).append(thumb)',
             "groups.setdefault(('all', ''), []).append(thumb)")
 
+    def test_plex_circuit_breaker_requires_representative_probes(self):
+        self.assert_mutation_blocked(
+            'app.py',
+            'group_attempted >= min_probe and group_success == 0',
+            'group_attempted >= 1 and group_success >= 0')
+
+    def test_large_plex_source_must_spread_probes(self):
+        self.assert_mutation_blocked(
+            'app.py',
+            'groups[source] = spread_plex_portrait_probes(thumbs)',
+            'groups[source] = thumbs')
+
     def test_plex_failed_source_skipped_count_is_required(self):
         # All three calls are safety-critical: per-image update, per-origin
         # breaker and global stop. A string-contains gate used to miss the
