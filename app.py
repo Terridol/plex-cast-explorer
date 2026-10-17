@@ -1674,11 +1674,18 @@ def diagnostic_export():
                                       if isinstance(m, dict)),
             } for c in options if isinstance(c, dict)][:8],
         })
+    index = status_snapshot()
+    enrich = enrichment_status()
+    # Free-text network errors may contain provider URLs or credentials.
+    index.pop('last_error', None)
+    enrich.pop('last_error', None)
+    if isinstance(enrich.get('single_batch'), dict):
+        enrich['single_batch'].pop('last_error', None)
     return {
         'format': 'plex-cast-diagnostics-v1',
         'generated_at': datetime.now(timezone.utc).isoformat(),
-        'index': status_snapshot(),
-        'enrichment': enrichment_status(),
+        'index': index,
+        'enrichment': enrich,
         'counts': counts,
         'sample_limit': 500,
         'sample_count': len(samples),
