@@ -1438,6 +1438,12 @@ def verified_portrait_candidates(actor_key):
         return [], ['Actor no longer exists']
     keys = artwork_keys()
     found, errors = [], []
+    # A Plex portrait is the fallback after TMDB. TPDB is only eligible
+    # when neither provider has usable artwork.
+    with db_open() as db:
+        plex_row = db.execute('SELECT thumb FROM actors WHERE actor_key=?',
+                              (actor_key,)).fetchone()
+    has_plex_portrait = bool(plex_row and plex_row['thumb'])
     if keys['tmdb'] and provider_enabled('tmdb'):
         try:
             search = paced_provider_json('https://api.themoviedb.org/3/search/person?' + urlencode({
@@ -1463,7 +1469,7 @@ def verified_portrait_candidates(actor_key):
     # Fall back to ThePornDB only when TMDB produced no corroborated portrait
     # candidate. An errored TMDB lookup retains its warning, preventing
     # automatic assignment from an unverified, degraded provider comparison.
-    if keys['theporndb'] and not found:
+    if keys['theporndb'] and not found and not has_plex_portrait and not errors:
         try:
             response = paced_provider_json('https://api.theporndb.net/performers?' + urlencode({'q': name}), keys['theporndb'])
             for item in (response.get('data') or [])[:10]:
@@ -1626,12 +1632,6 @@ def enrichment_worker():
                 break
             try:
                 choices, errors = verified_portrait_candidates(key)
-                # Existing Plex artwork remains the fallback when TMDB cannot
-                # verify a match; never auto-replace it with ThePornDB.
-                with db_open() as db:
-                    plex_row = db.execute('SELECT thumb FROM actors WHERE actor_key=?', (key,)).fetchone()
-                if plex_row and plex_row['thumb']:
-                    choices = [choice for choice in choices if choice['source'] == 'TMDB']
                 # Avoid burning through a large library on bad credentials, outages,
                 # or rate limits. The administrator can fix the provider and retry.
                 if errors and not choices:
