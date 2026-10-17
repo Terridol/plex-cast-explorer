@@ -714,6 +714,7 @@ class PlexCastExplorerTests(unittest.TestCase):
         self.assertTrue(app.is_strong_match(matches[0]))
 
     def test_imdb_known_for_breaks_tied_tmdb_identity_candidates(self):
+        (Path(self.temp.name) / 'imdb.sqlite').touch()
         with patch.object(app, 'plex_xml', side_effect=self.fake_xml):
             app.sync_all(force=True)
         first = {'name': 'Sample Actor', 'source': 'TMDB',
@@ -725,7 +726,7 @@ class PlexCastExplorerTests(unittest.TestCase):
                       url='https://image.tmdb.org/t/p/w342/b.jpg')
         def external(url, token):
             return {'imdb_id': 'nm111' if '/10/' in url else 'nm222'}
-        with patch.object(app, 'IMDB_INDEX_PATH', Path(self.temp.name)), \
+        with patch.object(app, 'IMDB_INDEX_PATH', Path(self.temp.name) / 'imdb.sqlite'), \
              patch.object(app, 'paced_provider_json', side_effect=external), \
              patch.object(app.imdb_identity, 'supporting_credits',
                           side_effect=lambda path, ident, local: 1 if ident == 'nm222' else 0):
@@ -733,6 +734,7 @@ class PlexCastExplorerTests(unittest.TestCase):
         self.assertEqual(winner['reference'], second['reference'])
 
     def test_imdb_unknown_does_not_resolve_competing_identities(self):
+        (Path(self.temp.name) / 'imdb.sqlite').touch()
         with patch.object(app, 'plex_xml', side_effect=self.fake_xml):
             app.sync_all(force=True)
         first = {'name': 'Sample Actor', 'source': 'TMDB',
@@ -742,7 +744,7 @@ class PlexCastExplorerTests(unittest.TestCase):
                               'external_year': 2024, 'year_verified': True}]}
         second = dict(first, url='https://image.tmdb.org/t/p/w342/b.jpg',
                       reference='https://www.themoviedb.org/person/20')
-        with patch.object(app, 'IMDB_INDEX_PATH', Path(self.temp.name)), \
+        with patch.object(app, 'IMDB_INDEX_PATH', Path(self.temp.name) / 'imdb.sqlite'), \
              patch.object(app, 'paced_provider_json', return_value={'imdb_id': 'nm111'}), \
              patch.object(app.imdb_identity, 'supporting_credits', return_value=0):
             self.assertIsNone(app.imdb_resolve_candidates([first, second], 'sample actor'))
