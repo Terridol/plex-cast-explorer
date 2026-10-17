@@ -713,6 +713,40 @@ class PlexCastExplorerTests(unittest.TestCase):
         self.assertEqual(len(matches[0]['matches']), 2)
         self.assertTrue(app.is_strong_match(matches[0]))
 
+    def test_imdb_known_for_breaks_tied_tmdb_identity_candidates(self):
+        with patch.object(app, 'plex_xml', side_effect=self.fake_xml):
+            app.sync_all(force=True)
+        first = {'name': 'Sample Actor', 'source': 'TMDB',
+                 'url': 'https://image.tmdb.org/t/p/w342/a.jpg',
+                 'reference': 'https://www.themoviedb.org/person/10',
+                 'matches': [{'title': 'Alpha', 'year': 2024,
+                              'external_year': 2024, 'year_verified': True}]}
+        second = dict(first, reference='https://www.themoviedb.org/person/20',
+                      url='https://image.tmdb.org/t/p/w342/b.jpg')
+        def external(url, token):
+            return {'imdb_id': 'nm111' if '/10/' in url else 'nm222'}
+        with patch.object(app.IMDB_INDEX_PATH, 'is_file', return_value=True), \
+             patch.object(app, 'paced_provider_json', side_effect=external), \
+             patch.object(app.imdb_identity, 'supporting_credits',
+                          side_effect=lambda path, ident, local: 1 if ident == 'nm222' else 0):
+            winner = app.imdb_resolve_candidates([first, second], 'sample actor')
+        self.assertEqual(winner['reference'], second['reference'])
+
+    def test_imdb_unknown_does_not_resolve_competing_identities(self):
+        with patch.object(app, 'plex_xml', side_effect=self.fake_xml):
+            app.sync_all(force=True)
+        first = {'name': 'Sample Actor', 'source': 'TMDB',
+                 'url': 'https://image.tmdb.org/t/p/w342/a.jpg',
+                 'reference': 'https://www.themoviedb.org/person/10',
+                 'matches': [{'title': 'Alpha', 'year': 2024,
+                              'external_year': 2024, 'year_verified': True}]}
+        second = dict(first, url='https://image.tmdb.org/t/p/w342/b.jpg',
+                      reference='https://www.themoviedb.org/person/20')
+        with patch.object(app.IMDB_INDEX_PATH, 'is_file', return_value=True), \
+             patch.object(app, 'paced_provider_json', return_value={'imdb_id': 'nm111'}), \
+             patch.object(app.imdb_identity, 'supporting_credits', return_value=0):
+            self.assertIsNone(app.imdb_resolve_candidates([first, second], 'sample actor'))
+
     def test_duplicate_tmdb_portraits_keep_only_one_candidate_without_merging_credits(self):
         first = {'name':'Troy Brown','source':'TMDB',
                  'url':'https://image.tmdb.org/t/p/w342/same.jpg',
