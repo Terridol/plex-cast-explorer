@@ -1,17 +1,19 @@
 """Plex Cast Explorer: LAN-served, read-only Plex cast directory.
 
 Run with Python 3.10+: python app.py
+
+Copyright (c) 2026 Terridol. See LICENSE and NOTICE for rights and limitations.
 """
 from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
-import base64
 import hashlib
 import hmac
 import secrets
 import time
 import ipaddress
+import socket
 import subprocess
 import re
 from functools import lru_cache
@@ -20,8 +22,8 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
 import logging
 from logging.handlers import RotatingFileHandler
-import mimetypes
 import os
+import sys
 from pathlib import Path
 import sqlite3
 import threading
@@ -30,27 +32,41 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import parse_qs, quote, urlencode, urlsplit
 from urllib.request import Request, urlopen, build_opener, HTTPRedirectHandler
 import xml.etree.ElementTree as ET
+import imdb_identity
 
-ROOT = Path(__file__).resolve().parent
+ASSET_ROOT = Path(getattr(sys, '_MEIPASS', Path(__file__).resolve().parent))
+ROOT = Path(os.environ['CAST_EXPLORER_DATA_DIR']).expanduser().resolve() if os.getenv('CAST_EXPLORER_DATA_DIR') else Path(__file__).resolve().parent
+ROOT.mkdir(parents=True, exist_ok=True)
+ADMIN_AUTH_PATH = ROOT / 'admin_auth.json'
 DB_PATH = ROOT / 'cast_explorer.db'
 CONFIG_PATH = ROOT / 'config.json'
 AUTH_PATH = ROOT / 'auth.json'
 ART_CONFIG_PATH = ROOT / 'artwork_config.json'
 PORTRAIT_DIR = ROOT / 'portraits'
+PLEX_PORTRAIT_DIR = ROOT / 'plex-portraits'
+IMDB_INDEX_PATH = ROOT / 'imdb-identity.sqlite'
 NETWORK_CONFIG_PATH = ROOT / 'network.json'
 HOST = os.getenv('CAST_EXPLORER_HOST', '0.0.0.0')
 PORT = int(os.getenv('CAST_EXPLORER_PORT', '8765'))
-VERSION = '0.4.2'
+VERSION = '1.0.0'
 SESSION_SECONDS = 14 * 24 * 60 * 60
+ADMIN_SESSION_SECONDS = 60 * 60
+ARTWORK_MAX_AGE_SECONDS = 180 * 24 * 60 * 60  # Under any six-calendar-month window.
+MAX_PROVIDER_JSON_BYTES = 8 * 1024 * 1024  # Bound metadata downloads; large credit pages exceed 1 MiB.
+MAX_PLEX_IMAGE_BYTES = 4_000_000
+MAX_PLEX_PORTRAIT_ERRORS_PER_SYNC = 20  # Circuit-break consistently failing image origins.
+MAX_PLEX_SOURCE_DENIALS = 10  # Do not abandon other artwork origins on a 403.
+MAX_PLEX_TOTAL_FAILURES_PER_SYNC = 1000  # Absolute protection for very large libraries.
 LOGIN_LOCK = threading.Lock()
 LOGIN_ATTEMPTS = {}
-LOCAL_HOSTS = {'localhost', '127.0.0.1', '[::1]'}
 ALLOWED_REMOTE_IMAGES = {'metadata-static.plex.tv', 'image.tmdb.org', 'assets.plex.tv', 'metadata.provider.plex.tv'}
 ART_LOCK = threading.Lock()
 ART_CANDIDATES = {}  # Temporary server-side choices; URLs are never accepted from browser clients.
 IMAGE_HOSTS = {'image.tmdb.org', 'cdn.theporndb.net', 'api.theporndb.net', 'commons.wikimedia.org', 'upload.wikimedia.org'}
 STATE_LOCK = threading.Lock()
-STATE = {'running': False, 'phase': 'Not scanned', 'current': 0, 'total': 0, 'errors': 0, 'last_error': '', 'last_finished': None}
+STATE = {'running': False, 'phase': 'Not scanned', 'current': 0, 'total': 0,
+         'errors': 0, 'portrait_downloaded': 0, 'portrait_missing': 0,
+         'portrait_failed': 0, 'portrait_skipped': 0, 'last_error': '', 'last_finished': None}
 logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(message)s', handlers=[
     logging.StreamHandler(),
     RotatingFileHandler(ROOT / 'server.log', maxBytes=2_000_000, backupCount=2, encoding='utf-8'),
@@ -110,6 +126,67 @@ def valid_session(cookie):
                             f'{deadline}:{nonce}'.encode(), hashlib.sha256).hexdigest()
         return hmac.compare_digest(expected, signature)
     except (KeyError, ValueError, AttributeError):
+        return False
+
+
+def set_admin_password(password):
+    if len(password) < 16:
+        raise ValueError('Choose a distinct administrator password of at least 16 characters.')
+    salt = secrets.token_bytes(24)
+    digest = hashlib.pbkdf2_hmac('sha256', password.encode('utf-8'), salt, 360_000)
+    payload = {'salt': salt.hex(), 'hash': digest.hex(), 'session_secret': secrets.token_hex(32)}
+    tmp = ADMIN_AUTH_PATH.with_suffix('.tmp')
+    tmp.write_text(json.dumps(payload, indent=2), encoding='utf-8')
+    os.replace(tmp, ADMIN_AUTH_PATH)
+    if os.name != 'nt':
+        ADMIN_AUTH_PATH.chmod(0o600)
+
+
+def admin_auth():
+    try:
+        return json.loads(ADMIN_AUTH_PATH.read_text(encoding='utf-8'))
+    except (OSError, ValueError):
+        return {}
+
+
+def verify_admin_password(password):
+    data = admin_auth()
+    try:
+        actual = hashlib.pbkdf2_hmac('sha256', password.encode('utf-8'), bytes.fromhex(data['salt']), 360_000)
+        return hmac.compare_digest(actual, bytes.fromhex(data['hash']))
+    except (TypeError, KeyError, ValueError):
+        return False
+
+
+def make_admin_session():
+    deadline = int(time.time()) + ADMIN_SESSION_SECONDS
+    nonce = secrets.token_hex(16)
+    payload = f'{deadline}:{nonce}'
+    signature = hmac.new(bytes.fromhex(admin_auth()['session_secret']), payload.encode(), hashlib.sha256).hexdigest()
+    return f'{payload}:{signature}'
+
+
+def valid_admin_session(value):
+    try:
+        deadline, nonce, signature = value.split(':', 2)
+        if not deadline.isdigit() or int(deadline) < time.time() or len(nonce) != 32:
+            return False
+        expected = hmac.new(bytes.fromhex(admin_auth()['session_secret']), f'{deadline}:{nonce}'.encode(), hashlib.sha256).hexdigest()
+        return hmac.compare_digest(expected, signature)
+    except (ValueError, KeyError, TypeError, AttributeError):
+        return False
+
+
+def approved_admin_address(value):
+    """Never infer remote-admin permissions from proxy headers or HTTP Host."""
+    configured = os.getenv('CAST_EXPLORER_REMOTE_ADMIN_CIDRS', '').strip()
+    if not configured:
+        return False
+    try:
+        addr = ipaddress.ip_address(value)
+        return any(addr in ipaddress.ip_network(item.strip(), strict=False)
+                   for item in configured.split(',') if item.strip())
+    except ValueError:
         return False
 
 
@@ -174,6 +251,11 @@ def init_db():
             PRIMARY KEY (actor_key, rating_key)
         );
         CREATE INDEX IF NOT EXISTS idx_credits_title ON credits(rating_key);
+        -- Actor metadata keys supplied by Plex/custom agents. This separate
+        -- table upgrades existing databases without rewriting actor rows.
+        CREATE TABLE IF NOT EXISTS actor_plex_refs (
+            actor_key TEXT PRIMARY KEY, metadata_path TEXT NOT NULL
+        );
         CREATE INDEX IF NOT EXISTS idx_titles_section ON titles(section_key);
         CREATE TABLE IF NOT EXISTS actor_art (
             actor_key TEXT PRIMARY KEY, file TEXT NOT NULL, source TEXT NOT NULL,
@@ -187,6 +269,34 @@ def init_db():
         );
         CREATE INDEX IF NOT EXISTS idx_enrichment_status ON enrichment_results(status);
         ''')
+
+
+def prune_old_artwork(now=None):
+    """Remove stale external metadata, and TMDB portraits after 180 days.
+
+    This is an expiry safeguard, not permission to use a provider or its art.
+    Plex images and user-selected non-TMDB portraits are not deleted.
+    """
+    now = time.time() if now is None else float(now)
+    cutoff_ms = int((now - ARTWORK_MAX_AGE_SECONDS) * 1000)
+    cutoff_iso = datetime.fromtimestamp(now - ARTWORK_MAX_AGE_SECONDS, timezone.utc).isoformat()
+    with db_open() as db:
+        expired = db.execute(
+            "SELECT file FROM actor_art WHERE source='TMDB' AND version < ?", (cutoff_ms,)
+        ).fetchall()
+        db.execute("DELETE FROM actor_art WHERE source='TMDB' AND version < ?", (cutoff_ms,))
+        # Provider lookup records can include cached TMDB credits and images.
+        db.execute("DELETE FROM enrichment_results WHERE checked_at < ?", (cutoff_iso,))
+    for row in expired:
+        filename = row['file']
+        if re.fullmatch(r'[0-9a-f]{64}\.(jpg|png|webp)', filename):
+            try:
+                (PORTRAIT_DIR / filename).unlink(missing_ok=True)
+            except OSError as exc:
+                logging.warning('Could not expire an old artwork cache file: %s', exc)
+    if expired:
+        image_bytes.cache_clear()
+    return len(expired)
 
 
 def load_config():
@@ -214,7 +324,7 @@ def save_config(url: str, token: str | None):
     image_bytes.cache_clear()
 
 
-def request_plex(path: str, timeout=20) -> bytes:
+def request_plex(path: str, timeout=20, max_bytes=None) -> bytes:
     config = load_config()
     if not config['url'] or not config['token']:
         raise ValueError('Set your Plex URL and token in Settings first.')
@@ -226,8 +336,390 @@ def request_plex(path: str, timeout=20) -> bytes:
         'Accept': 'application/xml',
     })
     with build_opener(SameOriginRedirects(config['url'])).open(req, timeout=timeout) as response:
-        return response.read()
+        return response.read(max_bytes + 1) if max_bytes is not None else response.read()
 
+
+def plex_role_metadata_path(role) -> str:
+    """Trust only Plex /library/metadata/<person-id> links from Role records."""
+    path = (role.get('key') or '').strip()
+    key = (role.get('ratingKey') or '').strip()
+    if not path and re.fullmatch(r'[A-Za-z0-9_-]{1,128}', key):
+        path = '/library/metadata/' + key
+    return path if re.fullmatch(r'/library/metadata/[A-Za-z0-9_-]{1,128}', path) else ''
+
+
+def plex_role_thumb(role, rating_key: str) -> str:
+    """Resolve local metadata/media bundle URLs through Plex itself."""
+    thumb = (role.get('thumb') or '').strip()
+    if thumb.startswith(('metadata://', 'media://')):
+        if (not re.fullmatch(r'[A-Za-z0-9_-]{1,128}', str(rating_key)) or
+                len(thumb) > 2048 or any(ord(c) < 32 for c in thumb)):
+            return ''
+        return ('/library/metadata/' + quote(str(rating_key), safe='') +
+                '/file?' + urlencode({'url': thumb}))
+    return thumb
+
+
+def plex_portrait_cache_path(thumb: str, plex_url: str | None = None) -> Path:
+    """Opaque filename scoped to this Plex server and its metadata-image URL."""
+    if plex_url is None:
+        plex_url = load_config()['url']
+    digest = hashlib.sha256((plex_url + '\n' + thumb).encode('utf-8')).hexdigest()
+    return PLEX_PORTRAIT_DIR / (digest + '.img')
+
+
+def public_custom_plex_thumb(url: str) -> bool:
+    """Gate custom-scraper URLs before allowing Plex to resolve an image.
+
+    Plex's photo transcoder can fetch a remote source URL. Never feed it
+    loopback/LAN, metadata-service, literal-IP, or unresolvable addresses.
+    Modern Plex also applies its own destination checks at fetch time.
+    This is not a general-purpose authenticated image proxy.
+    """
+    if len(url) > 2048 or any(ord(char) < 32 for char in url):
+        return False
+    try:
+        target = urlsplit(url)
+        host = (target.hostname or '').rstrip('.').lower()
+        if (target.scheme != 'https' or target.port not in (None, 443) or
+                not host or not target.path.startswith('/') or
+                target.username is not None or target.password is not None or
+                target.fragment or host.endswith('.') or
+                '.' not in host or not re.fullmatch(r'[a-z0-9.-]+', host)):
+            return False
+        if host.split('.')[-1] in {'local', 'localhost', 'internal', 'lan',
+                                   'test', 'invalid', 'example', 'arpa', 'onion'}:
+            return False
+        try:
+            ipaddress.ip_address(host)
+            return False
+        except ValueError:
+            pass
+        addresses = socket.getaddrinfo(host, 443, type=socket.SOCK_STREAM)
+        return bool(addresses) and all(
+            ipaddress.ip_address(result[4][0]).is_global for result in addresses)
+    except (ValueError, OSError, IndexError):
+        return False
+
+
+def plex_transcoded_image(url: str) -> bytes:
+    """Resolve custom provider images through Plex without leaking its token."""
+    if not public_custom_plex_thumb(url):
+        raise ValueError('Custom Plex artwork must use a public HTTPS image host')
+    # The image URL is sourced from Plex metadata, not browser-supplied input.
+    # Only an authenticated request to our configured Plex origin contains the
+    # Plex token. Never put that token in the transcoder's source URL.
+    path = '/photo/:/transcode?' + urlencode({
+        'url': url, 'width': 300, 'height': 450, 'format': 'jpeg',
+    })
+    return request_plex(path, timeout=15, max_bytes=MAX_PLEX_IMAGE_BYTES)
+
+
+def plex_image_bytes(thumb: str) -> bytes:
+    """Fetch an image Plex advertises; never forward its token to other hosts."""
+    if thumb.startswith('/') and not thumb.startswith('//'):
+        raw = request_plex(thumb, timeout=12, max_bytes=MAX_PLEX_IMAGE_BYTES)
+    else:
+        target = urlsplit(thumb)
+        source = urlsplit(load_config()['url'])
+        if (target.scheme in ('http', 'https') and target.scheme == source.scheme and
+                target.hostname == source.hostname and target.port == source.port and
+                not target.username and not target.password):
+            raw = request_plex(target.path + ('?' + target.query if target.query else ''),
+                               timeout=12, max_bytes=MAX_PLEX_IMAGE_BYTES)
+        elif allowed_https_image_url(thumb, ALLOWED_REMOTE_IMAGES):
+            # Plex-owned CDN artwork can reject unauthenticated direct fetches.
+            # Try Plex's own authenticated photo transcoder once before treating
+            # HTTP 401/403 as a permanent denial. The token stays on Plex.
+            req = Request(thumb, headers={'User-Agent': 'PlexCastExplorer/1.0'})
+            try:
+                with build_opener(ArtworkRedirects(ALLOWED_REMOTE_IMAGES)).open(req, timeout=12) as response:
+                    raw = response.read(MAX_PLEX_IMAGE_BYTES + 1)
+            except HTTPError as direct_error:
+                if direct_error.code not in (401, 403):
+                    raise
+                try:
+                    raw = plex_transcoded_image(thumb)
+                except (HTTPError, URLError, ValueError):
+                    # Preserve the actionable original 403; a Plex photo
+                    # transcoder 404 does not mean the source image is missing.
+                    raise direct_error from None
+        else:
+            # A custom scraper may advertise an HTTPS portrait host Plex
+            # knows about but that is absent from our hardcoded CDN list.
+            # Let Plex transcode it only after a strict public-origin check.
+            raw = plex_transcoded_image(thumb)
+    if len(raw) > MAX_PLEX_IMAGE_BYTES:
+        raise ValueError('Plex portrait exceeds 4 MB safety limit')
+    if not valid_plex_image(raw):
+        raise ValueError('Plex image is not JPEG, PNG, or WebP')
+    return raw
+
+
+def valid_plex_image(raw: bytes) -> bool:
+    return bool(raw) and (raw.startswith(b'\xff\xd8\xff') or
+                          raw.startswith(b'\x89PNG\r\n\x1a\n') or
+                          (raw.startswith(b'RIFF') and raw[8:12] == b'WEBP'))
+
+
+def cached_plex_portrait(thumb: str) -> bytes:
+    """Cache verified Plex thumbnails without changing manual artwork overrides."""
+    path = plex_portrait_cache_path(thumb)
+    try:
+        if path.is_file() and not path.is_symlink():
+            raw = path.read_bytes()
+            if len(raw) <= MAX_PLEX_IMAGE_BYTES and valid_plex_image(raw):
+                return raw
+    except OSError:
+        pass  # A damaged cache must not prevent a fresh Plex image request.
+    raw = plex_image_bytes(thumb)
+    temp_path = None
+    try:
+        PLEX_PORTRAIT_DIR.mkdir(parents=True, exist_ok=True)
+        temp_path = path.with_name(path.name + '.' + secrets.token_hex(6) + '.tmp')
+        temp_path.write_bytes(raw)
+        os.replace(temp_path, path)
+    except OSError as exc:
+        logging.warning('Could not save Plex portrait cache (%s)', type(exc).__name__)
+    finally:
+        if temp_path is not None:
+            try:
+                temp_path.unlink(missing_ok=True)
+            except OSError:
+                pass
+    return raw
+
+
+def resolve_plex_actor_refs() -> int:
+    """Ask Plex for a person's thumb when Role.key exists but Role.thumb does not."""
+    with db_open() as db:
+        rows = db.execute("""SELECT a.actor_key, r.metadata_path
+            FROM actors a JOIN actor_plex_refs r ON r.actor_key=a.actor_key
+            WHERE a.thumb='' AND NOT EXISTS (
+                SELECT 1 FROM actor_art art WHERE art.actor_key=a.actor_key)""").fetchall()
+    if not rows:
+        return 0
+    state_update(phase='Resolving Plex actor artwork', current=0, total=len(rows))
+    failures = 0
+    processed = 0
+    with ThreadPoolExecutor(max_workers=5) as pool:
+        for start in range(0, len(rows), 25):
+            futures = {pool.submit(plex_xml, row['metadata_path']): row
+                       for row in rows[start:start + 25]}
+            for future in as_completed(futures):
+                row = futures[future]
+                try:
+                    metadata = future.result()
+                    person = next((node for node in metadata if node.get('thumb')), None)
+                    thumb = ((person.get('thumb') if person is not None else None) or
+                             metadata.get('thumb') or '').strip()
+                    if thumb:
+                        # The person item (not an unrelated movie) owns this bundle.
+                        person_key = row['metadata_path'].rsplit('/', 1)[-1]
+                        candidate = plex_role_thumb(ET.Element('Role', thumb=thumb), person_key)
+                        if candidate:
+                            with db_open() as db:
+                                db.execute("""UPDATE actors SET thumb=? WHERE actor_key=?
+                                    AND thumb='' AND NOT EXISTS (
+                                        SELECT 1 FROM actor_art art WHERE art.actor_key=?)""",
+                                    (candidate, row['actor_key'], row['actor_key']))
+                except Exception as exc:
+                    failures += 1
+                    if failures <= 3:
+                        logging.warning('Plex person artwork unavailable (%s)', type(exc).__name__)
+                processed += 1
+                state_update(current=processed)
+            if failures >= MAX_PLEX_PORTRAIT_ERRORS_PER_SYNC:
+                state_update(last_error='Plex person artwork lookup paused after repeated errors.')
+                break
+    return failures
+
+
+def plex_portrait_source_label(thumb: str) -> str:
+    """Safe diagnostic category only; never expose image URLs or query tokens."""
+    if thumb.startswith('/') and not thumb.startswith('//'):
+        return 'Plex internal'
+    try:
+        target = urlsplit(thumb)
+        origin = urlsplit(load_config()['url'])
+        if (target.scheme == origin.scheme and target.netloc == origin.netloc and
+                not target.username and not target.password):
+            return 'Plex server'
+        if allowed_https_image_url(thumb, ALLOWED_REMOTE_IMAGES):
+            return 'Plex CDN'
+    except ValueError:
+        pass
+    return 'custom scraper'
+
+
+def plex_portrait_source_group(thumb: str) -> tuple[str, str]:
+    """Group failures by artwork origin without ever exposing hostnames in status."""
+    label = plex_portrait_source_label(thumb)
+    if label == 'Plex internal':
+        path = urlsplit(thumb).path
+        if re.fullmatch(r'/library/metadata/[^/]+/file', path):
+            return label, 'metadata bundle'
+        if path.startswith('/photo/:/transcode'):
+            return label, 'photo transcode'
+        return label, 'ordinary thumb'
+    try:
+        return label, (urlsplit(thumb).hostname or '').lower()
+    except ValueError:
+        return label, 'invalid origin'
+
+
+def spread_plex_portrait_probes(thumbnails: list[str]) -> list[str]:
+    """Interleave a sorted source list so initial probes span the entire group.
+
+    Plex metadata URLs are frequently sorted by library and ID. Testing only
+    the first 25 makes a single bad section look like a 50k-image outage.
+    This is deterministic and does not add network requests.
+    """
+    if len(thumbnails) <= 25:
+        return thumbnails
+    stride = (len(thumbnails) + 24) // 25
+    return [thumbnails[part * stride + offset]
+            for offset in range(stride)
+            for part in range(25)
+            if part * stride + offset < len(thumbnails)]
+
+
+def cache_plex_portraits() -> int:
+    """Backfill missing Plex photos even when no title's updatedAt has changed."""
+    config = load_config()
+    if not config['url'] or not config['token']:
+        return 0
+    with db_open() as db:
+        rows = db.execute("""SELECT a.thumb FROM actors a
+            WHERE a.thumb != '' AND NOT EXISTS (
+                SELECT 1 FROM actor_art art WHERE art.actor_key = a.actor_key)
+            GROUP BY a.thumb""").fetchall()
+    def needs_download(thumb):
+        path = plex_portrait_cache_path(thumb, config['url'])
+        try:
+            if not path.is_file() or path.is_symlink() or not 0 < path.stat().st_size <= MAX_PLEX_IMAGE_BYTES:
+                return True
+            with path.open('rb') as cached:
+                return not valid_plex_image(cached.read(16))
+        except OSError:
+            return True
+
+    pending = [r['thumb'] for r in rows if needs_download(r['thumb'])]
+    if not pending:
+        return 0
+    # Progress counts actually attempted portraits; skipped ones are shown
+    # separately so a stopped scan never appears fully downloaded.
+    # Group by origin, but spread probes across each group: Plex IDs and
+    # metadata links are sorted, and one early blocked library is not
+    # representative of 50,000 later portraits.
+    groups = {}
+    for thumb in pending:
+        groups.setdefault(plex_portrait_source_group(thumb), []).append(thumb)
+    for source, thumbs in groups.items():
+        groups[source] = spread_plex_portrait_probes(thumbs)
+    baseline_errors = status_snapshot()['errors']
+    state_update(phase='Caching Plex actor portraits', current=0, total=len(pending),
+                 portrait_downloaded=0, portrait_missing=0,
+                 portrait_failed=0, portrait_skipped=0)
+    failures = 0
+    missing = 0
+    downloaded = 0
+    attempted = 0
+    skipped = 0
+    stop_reason = ''
+    blocked_groups = []
+    with ThreadPoolExecutor(max_workers=5) as pool:
+        for (source_label, _origin), group_thumbs in groups.items():
+            group_denied = 0
+            group_server_errors = 0
+            group_success = 0
+            last_denied_code = 403
+            last_server_code = 500
+            group_attempted = 0
+            # Large sources must be sampled broadly. Never discard a source
+            # after only 20 failures among tens of thousands of images.
+            min_probe = min(len(group_thumbs),
+                            max(25, min(100, len(group_thumbs) // 4)))
+            for start in range(0, len(group_thumbs), 25):
+                batch = group_thumbs[start:start + 25]
+                futures = {pool.submit(cached_plex_portrait, thumb): thumb
+                           for thumb in batch}
+                for future in as_completed(futures):
+                    try:
+                        future.result()
+                        downloaded += 1
+                        group_success += 1
+                    except HTTPError as exc:
+                        code = int(exc.code)
+                        if code in (404, 410):
+                            missing += 1
+                            if missing == 1:
+                                state_update(last_error=f'Plex image not found (HTTP {code}, {source_label}); other sources still work.')
+                        else:
+                            failures += 1
+                            if code in (401, 403):
+                                group_denied += 1
+                                last_denied_code = code
+                            elif code == 429:
+                                stop_reason = 'Plex portrait caching paused: HTTP 429 (rate limited). Retry later.'
+                            elif 500 <= code <= 599:
+                                group_server_errors += 1
+                                last_server_code = code
+                            if failures <= 3:
+                                # Do not stringify HTTPError; the exception may
+                                # include full paths and access-token parameters.
+                                logging.warning('Plex portrait HTTP %d (%s)', code, source_label)
+                                state_update(last_error=f'Plex portrait HTTP {code} ({source_label}).')
+                    except Exception as exc:
+                        failures += 1
+                        if failures <= 3:
+                            logging.warning('Plex portrait retrieval failed (%s, %s)',
+                                            source_label, type(exc).__name__)
+                            state_update(last_error=f'Plex portrait retrieval failed ({source_label}, {type(exc).__name__}).')
+                    attempted += 1
+                    group_attempted += 1
+                    state_update(current=attempted,
+                                 errors=baseline_errors + failures,
+                                 portrait_downloaded=downloaded,
+                                 portrait_missing=missing,
+                                 portrait_failed=failures,
+                                 portrait_skipped=skipped)
+                if stop_reason:
+                    break
+                # A few bad images are not proof of a source-wide outage.
+                # Break only after broad probing with zero successful images.
+                # Mixed sources continue up to the global failure ceiling.
+                severe = group_denied + group_server_errors
+                if (group_attempted >= min_probe and group_success == 0 and
+                        ((group_denied >= MAX_PLEX_SOURCE_DENIALS and
+                          severe * 2 >= group_attempted) or
+                         (group_server_errors >= MAX_PLEX_PORTRAIT_ERRORS_PER_SYNC and
+                          severe * 2 >= group_attempted))):
+                    remaining = len(group_thumbs) - start - len(batch)
+                    skipped += remaining
+                    blocked_code = last_denied_code if group_denied >= MAX_PLEX_SOURCE_DENIALS else last_server_code
+                    blocked_note = f'HTTP {blocked_code} ({source_label}): {remaining} portraits skipped after {group_attempted} varied probes.'
+                    blocked_groups.append((remaining, blocked_note))
+                    state_update(current=attempted,
+                                 portrait_skipped=skipped,
+                                 last_error=blocked_note + ' Other origins continue.')
+                    logging.warning('Paused failing Plex artwork origin: %s (%d attempted, %d skipped)',
+                                    source_label, group_attempted, remaining)
+                    break
+                if failures >= MAX_PLEX_TOTAL_FAILURES_PER_SYNC:
+                    stop_reason = 'Portrait caching paused after many failed requests. Retry after checking artwork providers.'
+                    break
+            if stop_reason:
+                skipped = len(pending) - attempted
+                state_update(current=attempted, portrait_skipped=skipped,
+                             last_error=stop_reason)
+                break
+    if blocked_groups and not stop_reason:
+        # Do not allow a later unrelated 404 to mask the reason thousands of
+        # portraits were skipped. Report the largest blocked origin first.
+        primary = max(blocked_groups, key=lambda item: item[0])[1]
+        state_update(last_error=primary + ' Check this Plex artwork source.')
+    return failures
 
 def plex_xml(path: str):
     return ET.fromstring(request_plex(path))
@@ -281,7 +773,12 @@ def upsert_title(db, xml_item, section):
         if not name:
             continue
         key = normal_name(name)
-        thumb = (role.get('thumb') or '').strip()
+        thumb = plex_role_thumb(role, rating_key)
+        person_path = plex_role_metadata_path(role)
+        if person_path:
+            db.execute('''INSERT INTO actor_plex_refs(actor_key,metadata_path) VALUES (?,?)
+                ON CONFLICT(actor_key) DO UPDATE SET metadata_path=excluded.metadata_path''',
+                (key, person_path))
         db.execute('''INSERT INTO actors (actor_key,name,thumb) VALUES (?,?,?)
             ON CONFLICT(actor_key) DO UPDATE SET
             thumb=CASE WHEN excluded.thumb!='' THEN excluded.thumb ELSE actors.thumb END''',
@@ -292,7 +789,8 @@ def upsert_title(db, xml_item, section):
 
 def sync_all(force=False):
     state_update(running=True, phase='Connecting to Plex', current=0, total=0,
-                 errors=0, last_error='')
+                 errors=0, portrait_downloaded=0, portrait_missing=0,
+                 portrait_failed=0, portrait_skipped=0, last_error='')
     errors = 0
     try:
         machine_id = plex_xml('/').get('machineIdentifier', '')
@@ -315,12 +813,28 @@ def sync_all(force=False):
                             f"&X-Plex-Container-Start={start}&X-Plex-Container-Size={page_size}")
                     root = plex_xml(path)
                     batch = [node for node in root if node.tag in ('Video', 'Directory') and node.get('ratingKey')]
+                    # Some Plex endpoints return short pages before the final
+                    # page. Never treat a short page as proof of completion.
+                    reported = root.get('totalSize')
+                    if reported is None:
+                        raise ValueError(f"Library {section['name']}: Plex omitted totalSize; refusing incomplete sync")
+                    total_size = int(reported)
+                    if total_size < 0:
+                        raise ValueError(f"Library {section['name']}: invalid Plex totalSize")
+                    keys = [node.get('ratingKey') for node in batch]
+                    if len(keys) != len(set(keys)) or any(key in seen for key in keys):
+                        raise ValueError(f"Library {section['name']}: duplicate ratingKey in paginated listing")
+                    if not batch and start < total_size:
+                        raise ValueError(f"Library {section['name']}: empty page at {start}/{total_size}")
                     all_entries.extend(batch)
-                    seen.update(node.get('ratingKey') for node in batch)
+                    seen.update(keys)
                     start += len(batch)
-                    total_size = int(root.get('totalSize') or root.get('size') or len(batch))
-                    if not batch or start >= total_size or len(batch) < page_size:
+                    if start > total_size:
+                        raise ValueError(f"Library {section['name']}: page count exceeds totalSize")
+                    if start == total_size:
                         break
+                if len(seen) != total_size:
+                    raise ValueError(f"Library {section['name']}: discovered {len(seen)} of {total_size}; refusing deletions")
 
                 existing = {r['rating_key']: r for r in db.execute('''
                     SELECT t.rating_key,t.updated_at,
@@ -357,8 +871,19 @@ def sync_all(force=False):
                 db.commit()
 
             db.execute('DELETE FROM actors WHERE actor_key NOT IN (SELECT actor_key FROM credits)')
+            db.execute('DELETE FROM actor_plex_refs WHERE actor_key NOT IN (SELECT actor_key FROM actors)')
             db.commit()
-        state_update(phase='Finished' if not errors else 'Finished with warnings')
+        # A title can be unchanged even though its actor portrait was never
+        # downloaded. Recheck the entire indexed Plex thumbnail set on every
+        # sync, but fetch only missing cache entries and never replace overrides.
+        image_bytes.cache_clear()
+        errors += resolve_plex_actor_refs()
+        state_update(errors=errors)
+        # Bulk Plex artwork download is disabled by default. TMDB enrichment
+        # chooses verified portraits; Plex thumbnails load only when viewed.
+        if os.environ.get('CAST_EXPLORER_BULK_PLEX_CACHE') == '1':
+            errors += cache_plex_portraits()
+        state_update(errors=errors, phase='Finished' if not errors else 'Finished with warnings')
     except Exception as exc:
         logging.exception('Sync failed')
         state_update(phase='Sync failed', last_error=str(exc), errors=errors + 1)
@@ -366,12 +891,22 @@ def sync_all(force=False):
         state_update(running=False, last_finished=datetime.now(timezone.utc).isoformat())
 
 
+def sync_and_enrich(force=False):
+    sync_all(force=force)
+    # The initial catalog scan and later incremental scans share one durable
+    # queue; confirmed/reviewed/unmatched actors are not searched repeatedly.
+    if status_snapshot()['phase'] in ('Finished', 'Finished with warnings'):
+        try:
+            enrichment_start()
+        except ValueError:
+            pass  # External providers are optional; Plex still works.
+
 def sync_start(force=False):
     with STATE_LOCK:
         if STATE['running']:
             return False
         STATE['running'] = True
-    threading.Thread(target=sync_all, args=(force,), daemon=True).start()
+    threading.Thread(target=sync_and_enrich, args=(force,), daemon=True).start()
     return True
 
 
@@ -484,26 +1019,9 @@ def image_bytes(kind, key):
     if not row or not row['thumb']:
         raise ValueError('No portrait available')
     thumb = row['thumb']
-    if thumb.startswith('/') and not thumb.startswith('//'):
-        raw = request_plex(thumb, timeout=12)
-    else:
-        target = urlsplit(thumb)
-        source = urlsplit(load_config()['url'])
-        if target.scheme != 'https' or not target.hostname:
-            raise ValueError('Unsupported image URL')
-        if target.hostname == source.hostname and target.port == source.port:
-            raw = request_plex(target.path + ('?' + target.query if target.query else ''), timeout=12)
-        elif allowed_https_image_url(thumb, ALLOWED_REMOTE_IMAGES):
-            # Restrict both the original URL and *every redirect*. The Plex token
-            # is never included in this request or sent to external image hosts.
-            req = Request(thumb, headers={'User-Agent': 'PlexCastExplorer/0.4'})
-            with build_opener(ArtworkRedirects(ALLOWED_REMOTE_IMAGES)).open(req, timeout=12) as response:
-                raw = response.read(4_000_001)
-        else:
-            raise ValueError('External image source not allowed')
-    if len(raw) > 4_000_000:
-        raise ValueError('Image too large')
-    return raw
+    if kind == 'actor':
+        return cached_plex_portrait(thumb)
+    return plex_image_bytes(thumb)
 
 
 # Only classify a browser as on-LAN when the *actual TCP peer* is in an
@@ -596,6 +1114,18 @@ def plex_link_config(peer, server_ip):
     return {'mode': 'local', 'base': base + '/web/index.html'}
 
 
+def provider_enabled(name):
+    """Explicit provider opt-ins. A token alone does not activate TMDB.
+
+    TMDB use must fall within the operator's actual permissions. Wikimedia
+    remains off unless the operator handles image-specific rights.
+    """
+    # Wikimedia remains unavailable pending image-level licensing support.
+    if name != 'tmdb':
+        return False
+    return os.environ.get('CAST_EXPLORER_ENABLE_TMDB', '').strip() == '1'
+
+
 def artwork_keys():
     try:
         obj = json.loads(ART_CONFIG_PATH.read_text(encoding='utf-8'))
@@ -643,7 +1173,7 @@ class ArtworkRedirects(HTTPRedirectHandler):
 def external_image(url):
     if not allowed_https_image_url(url, IMAGE_HOSTS):
         raise ValueError('Image host not permitted')
-    request = Request(url, headers={'User-Agent': 'PlexCastExplorer/0.4 (home library artwork browser)',
+    request = Request(url, headers={'User-Agent': 'PlexCastExplorer/1.0 (home library artwork browser)',
                                     'Accept': 'image/jpeg,image/png,image/webp'})
     with build_opener(ArtworkRedirects()).open(request, timeout=12) as response:
         mime = response.headers.get_content_type()
@@ -663,15 +1193,30 @@ def external_image(url):
 
 def provider_json(url, bearer=None):
     host = urlsplit(url).hostname
-    if urlsplit(url).scheme != 'https' or host not in {'api.themoviedb.org','api.theporndb.net','www.wikidata.org'}:
+    # Enforce the TMDB consent/installer opt-in at the network boundary as
+    # well as in provider selection, so no indirect caller bypasses it.
+    if host == 'api.themoviedb.org' and not provider_enabled('tmdb'):
+        raise ValueError('TMDB lookup requires explicit installer opt-in')
+    if host == 'www.wikidata.org':
+        raise ValueError('Wikimedia lookups are unavailable in version 1.0')
+    if urlsplit(url).scheme != 'https' or host not in {'api.themoviedb.org', 'api.theporndb.net'}:
         raise ValueError('Unknown metadata provider')
-    headers = {'Accept': 'application/json', 'User-Agent': 'PlexCastExplorer/0.4 (personal library artwork browser)'}
+    headers = {'Accept': 'application/json', 'User-Agent': 'PlexCastExplorer/1.0 (personal library artwork browser)'}
     if bearer:
         headers['Authorization'] = 'Bearer ' + bearer
     req = Request(url, headers=headers)
     # Metadata host may not redirect, to avoid forwarding a bearer token.
     with build_opener(SameOriginRedirects(f'https://{host}')).open(req, timeout=13) as res:
-        return json.loads(res.read(1_000_001))
+        # A 1 MiB read truncated valid ThePornDB performer-scene pages and
+        # produced misleading JSONDecodeError: Unterminated string. Read at
+        # most one byte past the bounded limit to distinguish an oversized
+        # complete response from malformed JSON. Never parse truncated bytes.
+        payload = res.read(MAX_PROVIDER_JSON_BYTES + 1)
+    if len(payload) > MAX_PROVIDER_JSON_BYTES:
+        raise ValueError('Metadata provider response exceeds the 8 MiB safety limit')
+    if not payload:
+        raise ValueError('Metadata provider returned an empty response')
+    return json.loads(payload)
 
 
 def new_art_candidate(actor_key, name, url, source, reference, credit):
@@ -715,7 +1260,7 @@ def find_art(key):
         choice = new_art_candidate(key, name_found, image, source, reference, credit)
         if choice:
             results.append(choice)
-    if keys['tmdb']:
+    if keys['tmdb'] and provider_enabled('tmdb'):
         try:
             response = provider_json('https://api.themoviedb.org/3/search/person?' + urlencode({'query': name, 'include_adult': 'true'}), keys['tmdb'])
             for item in response.get('results', [])[:12]:
@@ -726,7 +1271,9 @@ def find_art(key):
         except Exception as exc:
             logging.warning('TMDB portrait search failed: %s', exc)
             warnings.append('TMDB lookup unavailable: ' + str(exc)[:140])
-    if keys['theporndb']:
+    # TMDB is the primary source. Only query TPDB if no exact-name TMDB
+    # candidate with an image was returned.
+    if keys['theporndb'] and not results:
         try:
             response = provider_json('https://api.theporndb.net/performers?' + urlencode({'q': name}), keys['theporndb'])
             for item in response.get('data', [])[:12]:
@@ -740,31 +1287,32 @@ def find_art(key):
         except Exception as exc:
             logging.warning('ThePornDB portrait search failed: %s', exc)
             warnings.append('ThePornDB lookup unavailable: ' + str(exc)[:140])
-    try:
-        response = provider_json('https://www.wikidata.org/w/api.php?' + urlencode({
-            'action': 'wbsearchentities', 'search': name, 'language': 'en', 'format': 'json', 'limit': 6}))
-        hits = [x for x in response.get('search', []) if normal_name(x.get('label', '')) == normal_name(name)][:3]
-        if hits:
-            more = provider_json('https://www.wikidata.org/w/api.php?' + urlencode({
-                'action': 'wbgetentities', 'ids': '|'.join(x['id'] for x in hits), 'props': 'claims', 'format': 'json'}))
-            for hit in hits:
-                claims = more.get('entities', {}).get(hit['id'], {}).get('claims', {}).get('P18', [])
-                for claim in claims[:1]:
-                    try:
-                        filename = claim['mainsnak']['datavalue']['value']
-                        if not isinstance(filename, str) or not filename.lower().endswith(('.jpg','.jpeg','.png','.webp')):
+    if provider_enabled('wikimedia'):
+        try:
+            response = provider_json('https://www.wikidata.org/w/api.php?' + urlencode({
+                'action': 'wbsearchentities', 'search': name, 'language': 'en', 'format': 'json', 'limit': 6}))
+            hits = [x for x in response.get('search', []) if normal_name(x.get('label', '')) == normal_name(name)][:3]
+            if hits:
+                more = provider_json('https://www.wikidata.org/w/api.php?' + urlencode({
+                    'action': 'wbgetentities', 'ids': '|'.join(x['id'] for x in hits), 'props': 'claims', 'format': 'json'}))
+                for hit in hits:
+                    claims = more.get('entities', {}).get(hit['id'], {}).get('claims', {}).get('P18', [])
+                    for claim in claims[:1]:
+                        try:
+                            filename = claim['mainsnak']['datavalue']['value']
+                            if not isinstance(filename, str) or not filename.lower().endswith(('.jpg','.jpeg','.png','.webp')):
+                                continue
+                            file_id = filename.replace(' ', '_')
+                            image = 'https://commons.wikimedia.org/wiki/Special:Redirect/file/' + quote(file_id, safe='') + '?width=300'
+                            reference = 'https://commons.wikimedia.org/wiki/File:' + quote(file_id, safe='')
+                            add(hit['label'], image, 'Wikimedia Commons', reference, 'Wikimedia Commons — review image license and attribution')
+                        except (KeyError, TypeError):
                             continue
-                        file_id = filename.replace(' ', '_')
-                        image = 'https://commons.wikimedia.org/wiki/Special:Redirect/file/' + quote(file_id, safe='') + '?width=300'
-                        reference = 'https://commons.wikimedia.org/wiki/File:' + quote(file_id, safe='')
-                        add(hit['label'], image, 'Wikimedia Commons', reference, 'Wikimedia Commons — review image license and attribution')
-                    except (KeyError, TypeError):
-                        continue
-    except Exception as exc:
-        logging.warning('Wikimedia portrait search failed: %s', exc)
-        warnings.append('Wikimedia lookup unavailable: ' + str(exc)[:140])
+        except Exception as exc:
+            logging.warning('Wikimedia portrait search failed: %s', exc)
+            warnings.append('Wikimedia lookup unavailable: ' + str(exc)[:140])
     return {'actor': name, 'results': results[:25], 'warnings': warnings,
-            'configured': {'tmdb': bool(keys['tmdb']), 'theporndb': bool(keys['theporndb']), 'wikimedia': True}}
+            'configured': {'tmdb': bool(keys['tmdb']) and provider_enabled('tmdb'), 'theporndb': bool(keys['theporndb']), 'wikimedia': provider_enabled('wikimedia')}}
 
 
 def apply_art(actor_key, choice_token):
@@ -824,6 +1372,30 @@ def credit_year(row):
     return int(date[:4]) if re.match(r'^\d{4}', date) else None
 
 
+SELF_CREDIT_LABELS = {'self', 'himself', 'herself', 'themself', 'themselves'}
+
+
+def credit_role_conflict(plex_role, provider_role, performer_name=''):
+    """Self credits may use 'Himself' on Plex and the real name on TMDB."""
+    left, right = normalize_title(plex_role), normalize_title(provider_role)
+    if not left or not right or left == right:
+        return False
+    name = normalize_title(performer_name)
+    if name and {left, right} <= (SELF_CREDIT_LABELS | {name}):
+        return False
+    return True
+
+
+def credit_has_conflict(credit, performer_name=''):
+    """Also reinterpret stored review records created by older role rules."""
+    if not credit.get('role_conflict'):
+        return False
+    left, right = credit.get('plex_character'), credit.get('provider_character')
+    if not left or not right:
+        return True  # Missing evidence must not undo an existing conflict.
+    return credit_role_conflict(left, right, performer_name)
+
+
 def credit_matches(local_titles, remote_credits, source):
     """Require real title equality and compatible dates; never infer identity from a name alone."""
     matched = {}
@@ -853,7 +1425,7 @@ def credit_matches(local_titles, remote_credits, source):
             key = (local['title'].casefold(), year_a, local['media_type'])
             p_role = str(local.get('character') or '').strip()
             e_role = str(remote.get('character') or '').strip()
-            conflict = bool(p_role and e_role and normalize_title(p_role) != normalize_title(e_role))
+            conflict = credit_role_conflict(p_role, e_role, '')
             matched[key] = {'title': local['title'], 'year': year_a,
                             'external_year': year_b, 'year_verified': exact_year,
                             'plex_character': p_role, 'provider_character': e_role,
@@ -864,8 +1436,7 @@ def credit_matches(local_titles, remote_credits, source):
 
 def is_strong_match(item):
     matches = item.get('matches', [])
-    return (len(matches) >= 2 and sum(bool(m['year_verified']) for m in matches) >= 1
-            and not any(m.get('role_conflict') for m in matches))
+    return (len(matches) >= 2 and sum(bool(m.get('year_verified')) for m in matches) >= 1)
 
 
 def actor_titles_for_matching(key):
@@ -915,13 +1486,42 @@ def portrait_from_tpdb(item):
     return image if isinstance(image, str) else ''
 
 
+def deduplicate_portrait_candidates(candidates):
+    """Collapse identical provider images without combining identity evidence.
+
+    Two provider person IDs can reuse a portrait. Keep the strongest single
+    record's credits instead of adding unrelated records' filmographies.
+    """
+    unique = {}
+    for candidate in candidates:
+        source = candidate.get('source', '')
+        url = candidate.get('url', '')
+        name = normal_name(candidate.get('name', ''))
+        # Missing image URL must never count as a shared identity.
+        key = (source, name, url) if url else (source, name, id(candidate))
+        current = unique.get(key)
+        score = (len(candidate.get('matches', [])),
+                 sum(m.get('year_verified') is True for m in candidate.get('matches', [])))
+        if current is None or score > (len(current.get('matches', [])),
+                 sum(m.get('year_verified') is True for m in current.get('matches', []))):
+            unique[key] = candidate
+    return list(unique.values())
+
+
 def verified_portrait_candidates(actor_key):
     name, local = actor_titles_for_matching(actor_key)
     if not name:
         return [], ['Actor no longer exists']
     keys = artwork_keys()
     found, errors = [], []
-    if keys['tmdb']:
+    # A Plex portrait is the fallback after TMDB. TPDB is only eligible
+    # when neither provider has usable artwork.
+    with db_open() as db:
+        existing = db.execute('''SELECT a.thumb, art.actor_key AS saved_art
+            FROM actors a LEFT JOIN actor_art art ON art.actor_key=a.actor_key
+            WHERE a.actor_key=?''', (actor_key,)).fetchone()
+    has_existing_art = bool(existing and (existing['thumb'] or existing['saved_art']))
+    if keys['tmdb'] and provider_enabled('tmdb'):
         try:
             search = paced_provider_json('https://api.themoviedb.org/3/search/person?' + urlencode({
                 'query': name, 'include_adult': 'true'}), keys['tmdb'])
@@ -943,7 +1543,10 @@ def verified_portrait_candidates(actor_key):
                     errors.append('TMDB credits: ' + str(exc)[:100])
         except Exception as exc:
             errors.append('TMDB search: ' + str(exc)[:100])
-    if keys['theporndb']:
+    # TPDB is second priority even when Plex already has a thumbnail.
+    # Plex artwork is retained only if neither external provider has a
+    # sufficiently corroborated match. Provider errors must be retryable.
+    if keys['theporndb'] and not found and not errors:
         try:
             response = paced_provider_json('https://api.theporndb.net/performers?' + urlencode({'q': name}), keys['theporndb'])
             for item in (response.get('data') or [])[:10]:
@@ -973,6 +1576,7 @@ def verified_portrait_candidates(actor_key):
         except Exception as exc:
             errors.append('ThePornDB search: ' + str(exc)[:100])
     # Best verified credit overlap first. Name-only matches never enter auto approval.
+    found = deduplicate_portrait_candidates(found)
     found.sort(key=lambda c: (len(c['matches']), sum(bool(m['year_verified']) for m in c['matches'])), reverse=True)
     return found[:8], errors
 
@@ -981,8 +1585,8 @@ def singleton_is_verified(actor_name, candidates, warning=''):
     """A unique candidate with *an actual Plex credit overlap*, not just one name result.
 
     An external provider can return one incorrect namesake. Require matching
-    performer names, a shared title, compatible dates, no conflicting credited
-    roles, an allowed image host, and no incomplete provider lookups.
+    performer names, shared productions, compatible dates, an allowed image
+    host, and no incomplete provider lookups. Role labels are not identity proof.
     """
     if warning or len(candidates) != 1:
         return False
@@ -1000,12 +1604,32 @@ def singleton_is_verified(actor_name, candidates, warning=''):
     if not isinstance(matches, list) or not matches:
         return False
     for m in matches:
-        if not isinstance(m, dict) or not normalize_title(m.get('title')) or m.get('role_conflict'):
+        if not isinstance(m, dict) or not normalize_title(m.get('title')):
             return False
         ya, yb = credit_year({'year': m.get('year')}), credit_year({'year': m.get('external_year')})
         if ya is not None and yb is not None and abs(ya-yb) > 1:
             return False
     return True
+
+
+def confident_portrait_replacement(actor_name, candidates, errors=None):
+    """Require corroborated identity before replacing existing artwork."""
+    if errors or len(candidates) != 1:
+        return False
+    entry = candidates[0]
+    if not singleton_is_verified(actor_name, candidates):
+        return False
+    if is_strong_match(entry):
+        return True
+    matches = entry['matches']
+    if len(matches) != 1:
+        return False
+    credit = matches[0]
+    # One credit qualifies with an exact verified release year and no
+    # competing candidate. Character labels do not veto filmography.
+    return (credit.get('year_verified') is True and
+            credit_year({'year': credit.get('year')}) is not None and
+            credit_year({'year': credit.get('external_year')}) is not None)
 
 
 def choose_automatic_candidate(candidates, actor_name=None, errors=None):
@@ -1027,8 +1651,47 @@ def choose_automatic_candidate(candidates, actor_name=None, errors=None):
     return best if primary != secondary else None
 
 
+def imdb_resolve_candidates(choices, actor_key):
+    """Tie-break genuinely competing candidates with locally indexed IMDb IDs.
+
+    IMDb knownForTitles contains only selected titles, not full filmography.
+    Therefore only unique positive IMDb evidence can break a tie; absence
+    of evidence never rules out a candidate.
+    """
+    if not IMDB_INDEX_PATH.is_file():
+        return None
+    actor_name, local = actor_titles_for_matching(actor_key)
+    if not actor_name:
+        return None
+    scored = []
+    for choice in choices:
+        if choice.get('source') != 'TMDB' or not singleton_is_verified(actor_name, [choice]):
+            scored.append((0, choice))
+            continue
+        match = re.fullmatch(r'https://www\.themoviedb\.org/person/([0-9]+)',
+                             choice.get('reference', ''))
+        if not match:
+            scored.append((0, choice))
+            continue
+        try:
+            external = paced_provider_json(
+                'https://api.themoviedb.org/3/person/' + match[1] + '/external_ids',
+                artwork_keys()['tmdb'])
+            imdb_id = external.get('imdb_id')
+            support = imdb_identity.supporting_credits(IMDB_INDEX_PATH, imdb_id, local)
+        except Exception as exc:
+            logging.info('Optional IMDb identity lookup unavailable: %s', type(exc).__name__)
+            return None
+        scored.append((support, choice))
+    scored.sort(key=lambda pair: pair[0], reverse=True)
+    if len(scored) < 2 or scored[0][0] < 1 or scored[0][0] <= scored[1][0]:
+        return None
+    winner = scored[0][1]
+    return winner if confident_portrait_replacement(actor_name, [winner]) else None
+
+
 def verified_portrait_image(url):
-    """Prefer a higher-resolution TMDB profile and fall back to legacy size."""
+    """Prefer higher-resolution TMDB portraits and preserve safe fallback."""
     if url.startswith('https://image.tmdb.org/t/p/w342/'):
         try:
             return external_image(url.replace('/t/p/w342/', '/t/p/h632/', 1))
@@ -1068,20 +1731,81 @@ def enrichment_status():
             data['db_' + row['status']] = row['n']
         data['review_waiting'] = db.execute("SELECT COUNT(*) FROM enrichment_results WHERE status='review'").fetchone()[0]
         data['remaining'] = db.execute('''SELECT COUNT(*) FROM actors a
-            WHERE a.thumb='' AND NOT EXISTS(SELECT 1 FROM actor_art art WHERE art.actor_key=a.actor_key)
-            AND NOT EXISTS(SELECT 1 FROM enrichment_results r WHERE r.actor_key=a.actor_key)''').fetchone()[0]
+            WHERE NOT EXISTS(SELECT 1 FROM enrichment_results r WHERE r.actor_key=a.actor_key)''').fetchone()[0]
     return data
+
+
+def diagnostic_export():
+    """Read-only, redacted snapshot of index/enrichment progress for support."""
+    with db_open() as db:
+        counts = {r['status']: r['n'] for r in db.execute(
+            'SELECT status, COUNT(*) AS n FROM enrichment_results GROUP BY status')}
+        counts['actors_total'] = db.execute('SELECT COUNT(*) FROM actors').fetchone()[0]
+        counts['actors_without_plex_thumb'] = db.execute(
+            "SELECT COUNT(*) FROM actors WHERE thumb=''").fetchone()[0]
+        counts['without_external_art'] = db.execute(
+            'SELECT COUNT(*) FROM actors a WHERE NOT EXISTS '
+            '(SELECT 1 FROM actor_art art WHERE art.actor_key=a.actor_key)').fetchone()[0]
+        counts['unprocessed'] = db.execute(
+            'SELECT COUNT(*) FROM actors a WHERE NOT EXISTS '
+            '(SELECT 1 FROM enrichment_results e WHERE e.actor_key=a.actor_key)').fetchone()[0]
+        counts['art_by_source'] = {r['source']: r['n'] for r in db.execute(
+            'SELECT source, COUNT(*) AS n FROM actor_art GROUP BY source')}
+        rows = db.execute("""SELECT a.name,e.status,e.candidates,e.checked_at
+            FROM enrichment_results e JOIN actors a ON a.actor_key=e.actor_key
+            WHERE e.status IN ('review','error','unmatched')
+            ORDER BY CASE e.status WHEN 'error' THEN 0 WHEN 'review' THEN 1 ELSE 2 END,
+                     e.checked_at DESC LIMIT 500""").fetchall()
+    samples = []
+    for row in rows:
+        try:
+            options = json.loads(row['candidates'])
+            if not isinstance(options, list):
+                options = []
+        except (ValueError, TypeError):
+            options = []
+        samples.append({
+            'actor': row['name'], 'status': row['status'],
+            'checked_at': row['checked_at'],
+            'candidates': [{
+                'source': c.get('source', ''),
+                'name': c.get('name', ''),
+                'matching_credits': len(c.get('matches', [])),
+                'verified_years': sum(bool(m.get('year_verified')) for m in c.get('matches', [])
+                                      if isinstance(m, dict)),
+                'role_conflicts': sum(bool(m.get('role_conflict')) for m in c.get('matches', [])
+                                      if isinstance(m, dict)),
+            } for c in options if isinstance(c, dict)][:8],
+        })
+    index = status_snapshot()
+    enrich = enrichment_status()
+    # Free-text network errors may contain provider URLs or credentials.
+    index.pop('last_error', None)
+    enrich.pop('last_error', None)
+    if isinstance(enrich.get('single_batch'), dict):
+        enrich['single_batch'].pop('last_error', None)
+    return {
+        'format': 'plex-cast-diagnostics-v1',
+        'generated_at': datetime.now(timezone.utc).isoformat(),
+        'index': index,
+        'enrichment': enrich,
+        'counts': counts,
+        'indexed_catalog': {key: value for key, value in get_stats().items() if key != 'machine_id'},
+        'sample_limit': 500,
+        'sample_count': len(samples),
+        'samples': samples,
+    }
 
 
 def pending_enrichment_keys():
     with db_open() as db:
         return [r[0] for r in db.execute('''SELECT a.actor_key FROM actors a JOIN credits c ON c.actor_key=a.actor_key
-            WHERE a.thumb='' AND NOT EXISTS(SELECT 1 FROM actor_art art WHERE art.actor_key=a.actor_key)
-            AND NOT EXISTS(SELECT 1 FROM enrichment_results r WHERE r.actor_key=a.actor_key)
+            WHERE NOT EXISTS(SELECT 1 FROM enrichment_results r WHERE r.actor_key=a.actor_key)
             GROUP BY a.actor_key ORDER BY COUNT(c.rating_key) DESC,a.actor_key''')]
 
 
 def remember_enrichment(actor_key, status, candidates=None, message=''):
+    candidates = deduplicate_portrait_candidates(candidates or [])
     with db_open() as db:
         db.execute('''INSERT INTO enrichment_results(actor_key,status,candidates,checked_at,message)
             VALUES (?,?,?,?,?) ON CONFLICT(actor_key) DO UPDATE SET status=excluded.status,
@@ -1110,6 +1834,17 @@ def enrichment_worker():
                     consecutive_provider_failures = 0
                 actor_name, _ = actor_titles_for_matching(key)
                 automatic = choose_automatic_candidate(choices, actor_name=actor_name, errors=errors)
+                if automatic is None and len(choices) > 1 and not errors:
+                    automatic = imdb_resolve_candidates(choices, key)
+                # Replacing an existing portrait requires stronger corroboration
+                # than a single overlapping title. Leave ambiguous matches for review.
+                with db_open() as db:
+                    existing = db.execute('''SELECT a.thumb, art.actor_key AS saved_art
+                        FROM actors a LEFT JOIN actor_art art ON art.actor_key=a.actor_key
+                        WHERE a.actor_key=?''', (key,)).fetchone()
+                if (automatic and existing and (existing['thumb'] or existing['saved_art'])
+                        and not confident_portrait_replacement(actor_name, [automatic], errors)):
+                    automatic = None
                 if automatic:
                     try:
                         save_verified_art(key, automatic)
@@ -1151,8 +1886,9 @@ def enrichment_start():
     with ENRICH_LOCK:
         if ENRICH_STATE['running']:
             return False
-        if not any(artwork_keys().values()):
-            raise ValueError('Configure TMDB or ThePornDB first')
+        keys = artwork_keys()
+        if not ((keys['tmdb'] and provider_enabled('tmdb')) or keys['theporndb']):
+            raise ValueError('Configure an enabled TMDB token or ThePornDB token first')
         ENRICH_STOP.clear()
         ENRICH_STATE['running'] = True
         ENRICH_STATE['phase'] = 'Preparing'
@@ -1174,13 +1910,44 @@ def retry_enrichment_errors():
     return count
 
 
+def retry_unmatched_enrichment():
+    """Requeue only unmatched performers, without touching accepted portraits."""
+    with ENRICH_LOCK:
+        if ENRICH_STATE['running']:
+            raise ValueError('Pause the running scan before retrying unmatched performers')
+    with db_open() as db:
+        count = db.execute("DELETE FROM enrichment_results WHERE status='unmatched'").rowcount
+    return count
+
+
+def deduplicate_saved_reviews():
+    """Upgrade existing review rows in place without querying external providers."""
+    updated = 0
+    with db_open() as db:
+        rows = db.execute("SELECT actor_key,candidates FROM enrichment_results WHERE status='review'").fetchall()
+        for row in rows:
+            try:
+                entries = json.loads(row['candidates'])
+            except (ValueError, TypeError):
+                continue
+            if not isinstance(entries, list):
+                continue
+            distinct = deduplicate_portrait_candidates(entries)
+            if len(distinct) != len(entries):
+                db.execute("UPDATE enrichment_results SET candidates=? WHERE actor_key=? AND status='review'",
+                           (json.dumps(distinct, ensure_ascii=False), row['actor_key']))
+                updated += 1
+    return updated
+
+
 def review_single_batch_worker():
     """Apply previously queued, unambiguous one-result portraits in background.
 
-    Items with historical provider errors, mismatched names/roles, or incomplete
-    evidence stay in the queue. No Plex metadata is modified.
+    Historical duplicate portraits are consolidated before verifying. Existing
+    identity evidence is never merged across different provider person IDs.
     """
     try:
+        deduplicate_saved_reviews()
         with db_open() as db:
             rows = db.execute("""SELECT e.actor_key, a.name FROM enrichment_results e
                 JOIN actors a ON a.actor_key=e.actor_key WHERE e.status='review'
@@ -1201,10 +1968,24 @@ def review_single_batch_worker():
                         choices = json.loads(current['candidates'])
                     except (ValueError, TypeError):
                         choices = []
-                    if not singleton_is_verified(row['name'], choices, current['message']):
+                    if current['message']:
                         with REVIEW_BATCH_LOCK: REVIEW_BATCH_STATE['skipped'] += 1
                         continue
-                    save_verified_art(row['actor_key'], choices[0])
+                    selected = (choices[0] if singleton_is_verified(row['name'], choices) else
+                                imdb_resolve_candidates(choices, row['actor_key'])
+                                if len(choices) > 1 else None)
+                    if selected is None:
+                        with REVIEW_BATCH_LOCK: REVIEW_BATCH_STATE['skipped'] += 1
+                        continue
+                    with db_open() as db:
+                        existing = db.execute('''SELECT a.thumb, art.actor_key AS saved_art
+                            FROM actors a LEFT JOIN actor_art art ON art.actor_key=a.actor_key
+                            WHERE a.actor_key=?''', (row['actor_key'],)).fetchone()
+                    if (existing and (existing['thumb'] or existing['saved_art'])
+                            and not confident_portrait_replacement(row['name'], [selected])):
+                        with REVIEW_BATCH_LOCK: REVIEW_BATCH_STATE['skipped'] += 1
+                        continue
+                    save_verified_art(row['actor_key'], selected)
                     remember_enrichment(row['actor_key'], 'auto', [], 'Unique credit-matched candidate auto-accepted')
                     with REVIEW_BATCH_LOCK: REVIEW_BATCH_STATE['applied'] += 1
             except Exception as exc:
@@ -1340,15 +2121,46 @@ class Handler(BaseHTTPRequestHandler):
         except ValueError:
             return False
 
+    def valid_host(self):
+        """Reject unexpected Host headers to reduce DNS rebinding risks.
+
+        Never use user-provided forwarding headers to determine admin rights.
+        """
+        header = self.headers.get('Host', '')
+        try:
+            parsed = urlsplit('http://' + header)
+            if (not header or parsed.username or parsed.password or parsed.path or
+                    parsed.query or parsed.fragment or parsed.port != PORT):
+                return False
+            hostname = (parsed.hostname or '').lower().rstrip('.')
+            allowed = {'localhost', '127.0.0.1', '::1'}
+            allowed.add(self.connection.getsockname()[0].lower())
+            allowed.update(x.strip().lower() for x in
+                           os.getenv('CAST_EXPLORER_ALLOWED_HOSTS', '').split(',') if x.strip())
+            return hostname in allowed
+        except (ValueError, AttributeError):
+            return False
+
+    def cookie(self, key):
+        for entry in self.headers.get('Cookie', '').split(';'):
+            name, sep, value = entry.strip().partition('=')
+            if sep and name == key:
+                return value
+        return ''
+
+    def remote_admin_allowed(self):
+        return (not self.is_local() and approved_admin_address(self.client_address[0])
+                and bool(admin_auth().get('hash')))
+
+    def is_admin(self):
+        return self.is_local() or (self.remote_admin_allowed()
+                                   and self.logged_in()
+                                   and valid_admin_session(self.cookie('cast_admin_session')))
+
     def logged_in(self):
         if self.is_local():
             return True
-        cookie = self.headers.get('Cookie', '')
-        for pair in cookie.split(';'):
-            name, sep, value = pair.strip().partition('=')
-            if sep and name == 'cast_session':
-                return valid_session(value)
-        return False
+        return valid_session(self.cookie('cast_session'))
 
     def respond(self, status, data, content_type='application/json; charset=utf-8', cache='no-store', extra_headers=()):
         if isinstance(data, (dict, list)):
@@ -1375,69 +2187,94 @@ class Handler(BaseHTTPRequestHandler):
         self.respond(302, b'', 'text/plain', extra_headers=(('Location', path),))
 
     def valid_origin(self):
-        # The browser's Origin must match the Host header used to reach this service.
+        """Deny cross-site browser writes, including requests omitting Origin."""
+        if self.headers.get('Sec-Fetch-Site', '').lower() in ('cross-site', 'same-site'):
+            return False
         origin = self.headers.get('Origin', '')
         if not origin:
-            return True  # non-browser clients; further checked by session auth
+            # Only JSON is accepted for POST, so browser forms and no-CORS
+            # cross-site fetches cannot use the missing-Origin exception.
+            return True
         target = urlsplit(origin)
         host = self.headers.get('Host', '').lower()
         return target.scheme in ('http', 'https') and target.netloc.lower() == host
 
     def do_GET(self):
+        if not self.valid_host():
+            return self.respond(400, {'error': 'Unrecognized host'})
         parts = urlsplit(self.path)
         path, params = parts.path, parse_qs(parts.query)
+        # A public privacy notice is available before entering a password,
+        # as required for transparent operation of Plex interfacing software.
+        if path == '/privacy':
+            return self.respond(200, (ASSET_ROOT / 'static' / 'privacy.html').read_bytes(),
+                                'text/html; charset=utf-8')
         if path == '/login':
             if self.logged_in():
                 return self.redirect('/')
-            return self.respond(200, (ROOT / 'static' / 'login.html').read_bytes(), 'text/html; charset=utf-8')
+            return self.respond(200, (ASSET_ROOT / 'static' / 'login.html').read_bytes(), 'text/html; charset=utf-8')
         if path == '/api/session':
-            return self.respond(200, {'logged_in': self.logged_in(), 'admin': self.is_local(),
+            return self.respond(200, {'logged_in': self.logged_in(), 'admin': self.is_admin(),
+                                      'admin_login_available': self.remote_admin_allowed(),
                                       'password_set': bool(load_auth().get('hash'))})
         if not self.logged_in():
             if path == '/' or path.startswith('/static/'):
                 return self.redirect('/login')
             return self.respond(401, {'error': 'Authentication required'})
         try:
+            if path == '/admin/login':
+                if not self.remote_admin_allowed():
+                    return self.respond(403, {'error': 'Remote administration unavailable'})
+                if self.is_admin():
+                    return self.redirect('/')
+                return self.respond(200, (ASSET_ROOT / 'static' / 'admin-login.html').read_bytes(), 'text/html; charset=utf-8')
             if path == '/':
-                self.respond(200, (ROOT / 'static' / 'index.html').read_bytes(), 'text/html; charset=utf-8')
+                self.respond(200, (ASSET_ROOT / 'static' / 'index.html').read_bytes(), 'text/html; charset=utf-8')
             elif path == '/static/app.js':
-                self.respond(200, (ROOT / 'static' / 'app.js').read_bytes(), 'text/javascript; charset=utf-8')
+                self.respond(200, (ASSET_ROOT / 'static' / 'app.js').read_bytes(), 'text/javascript; charset=utf-8')
             elif path == '/static/style.css':
-                self.respond(200, (ROOT / 'static' / 'style.css').read_bytes(), 'text/css; charset=utf-8')
+                self.respond(200, (ASSET_ROOT / 'static' / 'style.css').read_bytes(), 'text/css; charset=utf-8')
             elif path == '/api/config':
                 config = load_config()
                 # LAN clients can see that Plex is configured, but never the actual URL or secret.
-                self.respond(200, {'url': config['url'] if self.is_local() else '',
-                                   'admin': self.is_local(),
+                self.respond(200, {'url': config['url'] if self.is_admin() else '',
+                                   'admin': self.is_admin(),
+                                   'admin_login_available': self.remote_admin_allowed(),
                                    'token_set': bool(config['token']), 'version': VERSION})
             elif path == '/api/links':
                 server_ip = self.connection.getsockname()[0]
                 self.respond(200, plex_link_config(self.client_address[0], server_ip))
             elif path == '/api/art/config':
-                if not self.is_local():
+                if not self.is_admin():
                     return self.respond(403, {'error': 'Server-only settings'})
                 art_keys = artwork_keys()
-                self.respond(200, {'tmdb_set': bool(art_keys['tmdb']), 'theporndb_set': bool(art_keys['theporndb'])})
+                self.respond(200, {'tmdb_set': bool(art_keys['tmdb']), 'tmdb_enabled': bool(art_keys['tmdb']) and provider_enabled('tmdb'), 'theporndb_set': bool(art_keys['theporndb']), 'wikimedia_enabled': provider_enabled('wikimedia')})
             elif path == '/api/art/search':
-                if not self.is_local():
+                if not self.is_admin():
                     return self.respond(403, {'error': 'Art searches can be started only on the server'})
                 self.respond(200, find_art(params.get('key', [''])[0]))
             elif path == '/api/art/preview':
-                if not self.is_local():
+                if not self.is_admin():
                     return self.respond(403, {'error': 'Server-only artwork previews'})
                 entry = candidate(params.get('id', [''])[0])
                 raw, ext = external_image(entry['url'])
                 self.respond(200, raw, {'png':'image/png','jpg':'image/jpeg','webp':'image/webp'}[ext], 'private, max-age=300')
+            elif path == '/api/diagnostics/export':
+                if not self.is_admin():
+                    return self.respond(403, {'error': 'Server-only diagnostics'})
+                self.respond(200, diagnostic_export(), extra_headers=(
+                    ('Content-Disposition', 'attachment; filename="plex-cast-diagnostics.json"'),
+                ))
             elif path == '/api/enrich/status':
-                if not self.is_local():
+                if not self.is_admin():
                     return self.respond(403, {'error': 'Server-only artwork administration'})
                 self.respond(200, enrichment_status())
             elif path == '/api/enrich/review':
-                if not self.is_local():
+                if not self.is_admin():
                     return self.respond(403, {'error': 'Server-only artwork administration'})
                 self.respond(200, {'results': review_enrichment()})
             elif path == '/api/enrich/preview':
-                if not self.is_local():
+                if not self.is_admin():
                     return self.respond(403, {'error': 'Server-only artwork administration'})
                 raw, ext = get_enrichment_preview(params.get('key', [''])[0], int(params.get('i', ['-1'])[0]))
                 self.respond(200, raw, {'png':'image/png','jpg':'image/jpeg','webp':'image/webp'}[ext], 'private, max-age=120')
@@ -1460,17 +2297,28 @@ class Handler(BaseHTTPRequestHandler):
             else:
                 self.respond(404, {'error': 'Not found'})
         except Exception as exc:
-            logging.warning('GET %s: %s', path, exc)
-            self.respond(404 if path == '/api/image' else 500, {'error': str(exc)})
+            logging.warning('GET %s failed (%s)', path, type(exc).__name__)
+            # Do not expose filesystem paths, provider URLs, or token-bearing
+            # library exception details to authenticated LAN browsers.
+            status = 404 if path == '/api/image' else 500
+            self.respond(status, {'error': 'Image unavailable' if status == 404 else 'Request failed'})
 
     def do_POST(self):
+        if not self.valid_host():
+            return self.respond(400, {'error': 'Unrecognized host'})
         parts = urlsplit(self.path)
         path = parts.path
         if not self.valid_origin():
             return self.respond(403, {'error': 'Cross-origin request rejected'})
+        # Require a non-simple browser content type to prevent CSRF via HTML
+        # forms and no-CORS requests, including loopback auto-admin sessions.
+        if self.headers.get('Content-Type', '').split(';', 1)[0].strip().lower() != 'application/json':
+            return self.respond(415, {'error': 'Use application/json for API requests'})
+        if self.headers.get('Transfer-Encoding'):
+            return self.respond(400, {'error': 'Chunked requests not supported'})
         if not self.logged_in() and path != '/api/login':
             return self.respond(401, {'error': 'Authentication required'})
-        if path in ('/api/config', '/api/sync', '/api/art/config', '/api/art/apply', '/api/art/remove', '/api/enrich/start', '/api/enrich/stop', '/api/enrich/approve', '/api/enrich/skip', '/api/enrich/reject', '/api/enrich/retry-errors', '/api/enrich/accept-unique') and not self.is_local():
+        if path in ('/api/config', '/api/sync', '/api/art/config', '/api/art/apply', '/api/art/remove', '/api/enrich/start', '/api/enrich/stop', '/api/enrich/approve', '/api/enrich/skip', '/api/enrich/reject', '/api/enrich/retry-errors', '/api/enrich/accept-unique') and not self.is_admin():
             return self.respond(403, {'error': 'Server setup and indexing can only be initiated on the Plex server itself.'})
         try:
             length = int(self.headers.get('Content-Length', '0'))
@@ -1496,8 +2344,25 @@ class Handler(BaseHTTPRequestHandler):
                     'Set-Cookie', f'cast_session={session}; Path=/; HttpOnly; SameSite=Strict; Max-Age={SESSION_SECONDS}'
                 ),))
             elif path == '/api/logout':
+                self.respond(200, {'ok': True}, extra_headers=(
+                    ('Set-Cookie', 'cast_session=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0'),
+                    ('Set-Cookie', 'cast_admin_session=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0'),
+                ))
+            elif path == '/api/admin/login':
+                if not self.remote_admin_allowed():
+                    return self.respond(403, {'error': 'Remote administration unavailable'})
+                if not can_try_login('admin:' + self.client_address[0]):
+                    return self.respond(429, {'error': 'Too many failed attempts. Try again later.'})
+                password = data.get('password', '')
+                if not isinstance(password, str) or not verify_admin_password(password):
+                    record_failed_login('admin:' + self.client_address[0])
+                    return self.respond(401, {'error': 'Invalid administrator password'})
                 self.respond(200, {'ok': True}, extra_headers=((
-                    'Set-Cookie', 'cast_session=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0'
+                    'Set-Cookie', f'cast_admin_session={make_admin_session()}; Path=/; HttpOnly; SameSite=Strict; Max-Age={ADMIN_SESSION_SECONDS}'
+                ),))
+            elif path == '/api/admin/logout':
+                self.respond(200, {'ok': True}, extra_headers=((
+                    'Set-Cookie', 'cast_admin_session=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0'
                 ),))
             elif path == '/api/config':
                 url = str(data.get('url', '')).strip().rstrip('/')
@@ -1538,6 +2403,8 @@ class Handler(BaseHTTPRequestHandler):
                 self.respond(200, {'ok': True, 'started': review_single_batch_start()})
             elif path == '/api/enrich/retry-errors':
                 self.respond(200, {'ok': True, 'reset': retry_enrichment_errors()})
+            elif path == '/api/enrich/retry-unmatched':
+                self.respond(200, {'ok': True, 'reset': retry_unmatched_enrichment()})
             elif path == '/api/enrich/approve':
                 key, number = data.get('key'), data.get('i')
                 if not isinstance(key, str) or type(number) is not int:
@@ -1561,23 +2428,25 @@ class Handler(BaseHTTPRequestHandler):
                 self.respond(200, {'ok': True, 'started': started})
             else:
                 self.respond(404, {'error': 'Not found'})
-        except Exception as exc:
+        except Exception:
             logging.exception('POST failed')
-            self.respond(500, {'error': str(exc)})
+            self.respond(500, {'error': 'Request failed'})
 
 
 def main():
     init_db()
+    prune_old_artwork()
     address = f'http://{HOST}:{PORT}'
     print(f'Plex Cast Explorer v{VERSION} — {address}', flush=True)
     print('LAN server listening. Access from other devices at http://SERVER-IP:' + str(PORT), flush=True)
     if not load_auth().get('hash'):
-        print('LAN access locked until a gallery password is set. Run set_password_windows.bat.', flush=True)
+        print('LAN access locked until a gallery password is set. Use the Start Menu: Plex Cast Explorer > Set Gallery Password.', flush=True)
     server = ThreadingHTTPServer((HOST, PORT), Handler)
     # Incremental refresh on startup and every 12 hours by default.
     def background_refresh():
         interval = max(1, float(os.getenv('CAST_EXPLORER_SYNC_HOURS', '12'))) * 3600
         while True:
+            prune_old_artwork()
             if load_config()['url'] and load_config()['token']:
                 sync_start()
             time.sleep(interval)
@@ -1591,4 +2460,21 @@ def main():
 
 
 if __name__ == '__main__':
-    main()
+    if sys.argv[1:] == ['--version']:
+        print(VERSION)
+    elif sys.argv[1:] in (['--set-admin-password'], ['--set-password']):
+        import getpass
+        admin_mode = sys.argv[1] == '--set-admin-password'
+        first = getpass.getpass('New ' + ('administrator' if admin_mode else 'gallery') + ' password: ')
+        confirm = getpass.getpass('Confirm password: ')
+        if first != confirm:
+            raise SystemExit('Passwords do not match.')
+        (set_admin_password if admin_mode else set_password)(first)
+        print('Password updated; old sessions have been invalidated.')
+    elif len(sys.argv) == 4 and sys.argv[1] == '--update-imdb':
+        imdb_identity.update_index(sys.argv[2], sys.argv[3], IMDB_INDEX_PATH)
+        print('IMDb identity dataset updated successfully.')
+    elif len(sys.argv) > 1:
+        raise SystemExit('Usage: PlexCastExplorer.exe [--set-admin-password | --set-password | --update-imdb name.basics.tsv.gz title.basics.tsv.gz]')
+    else:
+        main()

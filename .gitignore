@@ -1,6 +1,7 @@
 # Secrets and runtime configuration — never commit
 config.json
 auth.json
+admin_auth.json
 artwork_config.json
 network.json
 .env
@@ -18,6 +19,7 @@ network.json
 
 # Downloaded portraits, caches, and logs
 portraits/
+plex-portraits/
 server.log
 *.log
 *.log.*
@@ -38,10 +40,13 @@ venv/
 .DS_Store
 Thumbs.db
 
-# Distribution artifacts
+# Distribution artifacts (generated only on the local Windows builder)
 *.zip
 build/
 dist/
+output/
+installer-assets/
+*.spec
 
 # Backups and sensitive local state
 *.bak

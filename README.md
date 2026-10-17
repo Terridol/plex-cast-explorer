@@ -1,56 +1,49 @@
 # Plex Cast Explorer
 
-A self-hosted, cross-library performer directory for **Plex Media Server**. Browse an A–Z portrait gallery, search cast members, and see their movies and shows across every indexed library.
+Self-hosted Plex cast browser for Windows. Index actors across movie and TV libraries, browse portraits and credits, and optionally search external portrait providers.
 
-**Development version:** v0.4.2 · **Python:** 3.10+ (standard library) · **Host:** Windows (primary); Linux/macOS launchers available
+**Version:** `1.0.0` (release source; GA installer not yet verified/published) · **Windows:** 10/11 x64 · **Runtime:** bundled into installer · **Source build:** Python 3.10+ and Inno Setup 6
 
-**Licensing:** Public **source-available** project — all commercial use requires prior written authorization; qualifying modifications must share their source. [License summary](docs/LICENSING.md) · [Full terms](LICENSE). *These project-specific terms have not been independently legally reviewed.*
+**Project state:** Feature-frozen 1.0 release source, **not yet a published or verified general release**. See [the release checklist](docs/RELEASE_CHECKLIST.md) before promoting or distributing a stable installer.
 
-> **Security:** Designed for use on a trusted local network only. The built-in web server uses HTTP, not HTTPS. **Never forward port 8765 to the Internet.**
->
-> **Project status:** Public development source; live interoperability, security, and provider-attribution verification remain incomplete. Do not treat this as a certified production release.
+## Install and use
 
-## Features
+1. On a Windows build machine, clone `Terridol/plex-cast-explorer` with GitHub Desktop and select the **`dev`** branch.
+2. Choose **Fetch origin → Pull origin**, then run **`BUILD-INSTALLER.cmd`** in the repository directory.
+3. The local build validates PowerShell syntax before any other step, runs Python regression/negative tests, builds a self-contained application, smoke-tests that executable with disposable data, compiles Inno Setup, and verifies the installer/checksum.
+4. The uniquely named installer is placed in `output/`: for example, `PlexCastExplorer-Setup-1.0.0-dev-20261014-203512123-g23a496e7-win-x64.exe`. **Every new installer compilation first deletes all previous files and subdirectories in `output/`** (including old setup files and checksums). Copy installers you intend to archive to a different folder.
+5. **Back up `C:\ProgramData\PlexCastExplorer` before an upgrade.** Run Setup as Administrator. Choose the service port, Private-profile Windows Firewall rule, and any explicitly permitted provider/VPN options. Do not uninstall your existing service first.
+6. After installation, use **Start → Plex Cast Explorer → Set Gallery Password** if this is a new installation. On the server, browse `http://127.0.0.1:8765` (or your configured port), configure Plex, and index the libraries. Other trusted LAN devices sign in with the gallery password.
 
-- Cross-library actor directory with full-text name search, filters, and filmographies.
-- Local Plex title links on configured home subnets; hosted Plex links for remote visitors.
-- Plex-provided portraits plus optional TMDB, ThePornDB, and Wikimedia searches.
-- Credit-aware portrait enrichment, candidate review, and automated matching for eligible single candidates.
-- Local SQLite indexing, cached portrait overrides, incremental library sync, and Windows startup helpers.
-- LAN gallery password; administrative operations available only from the server's loopback connection.
+Setup installs an automatically starting service using the restricted `LocalService` account. Application data, tokens, SQLite index, and portraits remain under `C:\ProgramData\PlexCastExplorer`. Upgrades preserve that directory and apply a scoped firewall rule. End users running the compiled installer do **not** need Python or build tools.
 
-## Quick start (Windows)
+For details see [Windows installation, service, upgrades and updates](docs/WINDOWS_INSTALLER.md), [local build gates](docs/BUILD_GATES.md), and [troubleshooting](docs/TROUBLESHOOTING.md).
 
-1. Install **Python 3.10+**, ensuring `python --version` works in a new terminal.
-2. Download the source ZIP from the repository (or a published release archive when available) and extract it to a permanent directory (for example `C:\Apps\plex-cast-explorer`).
-3. Run `set_password_windows.bat` to configure the gallery password.
-4. Run `start_windows.bat`.
-5. On the **server itself**, visit `http://127.0.0.1:8765`, enter the Plex URL (usually `http://127.0.0.1:32400`) and authentication token, then index your libraries.
-6. On another trusted LAN device, open `http://<SERVER-IP>:8765` and sign in using the gallery password.
+## Features and security
 
-The Windows firewall may require an inbound rule for TCP 8765 on the appropriate **Private** profile. **UniFi port forwarding is not required** for local access.
+- A–Z cast browser, search and filters; performers' credits and links into Plex.
+- Plex actor portraits fetched and cached on demand (bulk prefetch disabled by default), including scraper-independent custom-agent photos when Plex exposes a valid `Role.thumb`, bundle reference, or linked Plex person record. Custom-host images are fetched through Plex's image transcoder after validation; private/LAN image destinations are blocked. Manual portrait overrides remain authoritative. Reviewable third-party artwork and incremental library synchronization are also supported.
+- Separate gallery password and optional VPN-address-restricted remote administrator password.
+- No change to Plex media files or metadata.
 
-[Full installation & configuration](docs/INSTALLATION.md) · [Art and identity matching](docs/ARTWORK.md) · [Troubleshooting](docs/TROUBLESHOOTING.md)
+**Security boundary:** The web server uses plain HTTP. Use only a trusted LAN or an appropriately secured private VPN; **never forward the application port to the public Internet**. Do not expose it through an untrusted proxy on localhost. Provider API tokens and credentials must remain on the server. See [security](SECURITY.md), [privacy](docs/PRIVACY.md), and [remote admin](docs/REMOTE_ADMIN.md).
 
-## Data safety
+**Artwork priority:** An automatic post-sync, resumable actor scan prefers corroborated TMDB portraits, then ThePornDB portraits, then Plex images as the final fallback. Previously processed actors are tagged in SQLite and are not searched again on ordinary syncs. Authorized TMDB (explicit installer opt-in and API token) is the preferred external provider; ThePornDB (separate token) is queried only when TMDB has no usable portrait match. Wikimedia lookups remain disabled. The operator reports TMDB use is permitted for this deployment and is responsible for maintaining authorization within its actual scope. TMDB's approved logo and required attribution notice appear in the application's footer and About/Privacy page. The app does not grant redistribution rights in TMDB or ThePornDB imagery. Existing portraits are preserved. A new **Rescan unmatched performers** action requeues previous misses without deleting completed matches. See [artwork](docs/ARTWORK.md) and [third-party requirements](docs/THIRD_PARTY.md).
 
-The app **does not alter Plex media or Plex metadata**. Your Plex token, provider keys, indexed titles/performers, review decisions, and downloaded images remain **on your own host**; the external providers may receive search terms and movie/show-credit queries when enabled. These runtime files must never be committed:
+Development builds use unique `dev-` installer IDs. The final general-release installer has a separate, opt-in `-Release` build mode that requires a clean `dev` or `main` checkout and the final version number. A release-named binary built from `dev` is for final acceptance testing; only the exact source revision accepted for general availability is promoted to `main` and published.
 
-`config.json` · `auth.json` · `artwork_config.json` · `network.json` · `cast_explorer.db*` · `portraits/` · `*.log`
+## 1.0 feature freeze
 
-See [Security](SECURITY.md) and [Privacy & data flow](docs/PRIVACY.md) for limitations and handling details.
+The v1.0 feature set is frozen. Only targeted release-blocking bug fixes, security/privacy corrections, dependency and rights issues, compatibility fixes, regression tests, packaging and release documentation are allowed on `dev` until general availability. Do not add features, external provider integrations or unrelated refactors during stabilization.
 
-## For contributors
+## Development rules
 
-- [Contributing guide](CONTRIBUTING.md) · [Code of conduct](CODE_OF_CONDUCT.md) · [Support](SUPPORT.md)
-- [Architecture](docs/ARCHITECTURE.md) · [Maintainers](docs/MAINTAINERS.md) · [Release process](docs/RELEASE.md) · [Readiness audit](docs/PUBLICATION_STATUS.md) · [Changelog](CHANGELOG.md)
-- Run tests locally: `python -m unittest discover -s . -p 'test_*.py' -v`
-- GitHub Actions checks Python 3.10 and 3.13 on Windows and Ubuntu.
+All development is committed directly to **`dev`**. Keep only the `dev` and `main` branches; do not push to `main` without explicit maintainer approval. Do **not** run GitHub Actions, hosted CI, deployments or other GitHub-hosted code. The supported build entry point is **`BUILD-INSTALLER.cmd`**; the PowerShell build orchestrator compiles the EXE and Setup directly without a second batch-file helper. Everything is built and tested locally.
 
-## Third-party names, images and licensing
+Built executables, service wrappers, local database files, tokens, logs, caches, and portraits must never be committed. Source tests can also be run manually with `python -m unittest discover -s . -p "test_*.py" -v`. Passing source/build gates **does not** replace actual Windows installer/upgrade/reboot tests on a disposable VM.
 
-Plex Cast Explorer is an **independent community project**, not affiliated with or endorsed by Plex, TMDB, ThePornDB, or Wikimedia. Names, trademarks, cast metadata and portraits belong to their respective owners. An application source-code license does **not** grant rights to redistribute provider images.
+## Ownership, license, and contributions
 
-**TMDB notice:** This application uses TMDB and the TMDB APIs but is not endorsed, certified, or otherwise approved by TMDB. See [Third-party credits and provider requirements](docs/THIRD_PARTY.md). An approved TMDB logo still needs to be included before claiming full compliance with TMDB branding terms.
+Plex Cast Explorer is an independent community project, not affiliated with or endorsed by Plex, TMDB, ThePornDB, or Wikimedia. Source is published under the **Plex Cast Explorer Noncommercial Network Source-Share License 1.0**: all commercial use, including free internal use by for-profit organizations, requires the owner's prior written authorization. Custom terms have not been independently legally reviewed. Third-party art and trademarks are not licensed by this project. See [LICENSE](LICENSE), [licensing explanation](docs/LICENSING.md), and [legal review](legal/LICENSING_REVIEW.md).
 
-**License:** **Plex Cast Explorer Noncommercial Network Source-Share License 1.0**. Commercial use, including internal use by for-profit businesses, requires prior written permission. Noncommercial forks must preserve the license and applicable source-sharing requirements. The custom terms have **not** been independently reviewed; no guarantee of universal enforceability is made. See [Licensing](docs/LICENSING.md) · [License limitations](legal/LICENSING_REVIEW.md) · [Release checklist](docs/RELEASE.md).
+Use [issues](https://github.com/Terridol/plex-cast-explorer/issues) for bugs or feature suggestions. Outside copyrighted code is not being accepted without appropriate contributor-rights agreements; see [contributing](CONTRIBUTING.md), [support](SUPPORT.md), and [maintainer policy](CONTRIBUTING.md).

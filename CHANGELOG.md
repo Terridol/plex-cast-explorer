@@ -1,5 +1,124 @@
 # Changelog
 
+## v1.0.0 — Feature-locked release source (not yet published)
+
+- Prevented nearly 50,000 Plex portrait requests from being skipped because the first 25 images of an enormous source group failed: sample across the source's full index and pause only after broader probing finds no working images. Trusted Plex CDN 401/403 downloads retry through the Plex-authenticated photo transcoder without exposing the token to remote hosts. The most impactful blocked-source status now remains visible even if a later isolated 404 occurs. Added corresponding regression and source-gate checks.
+
+- Fixed high-volume portrait synchronization stopping after a single 25-item batch containing unrelated HTTP 403 images. Failed origins now have separate circuit breakers; only repeated high-rate denials or 5xx responses pause that image route, with unrelated Plex and custom-agent sources continuing. HTTP 429 still pauses the whole image scan. Added accurate attempted/skipped accounting, safe source-status messages, an integration fixture with two independent Plex CDN domains, and matching source gates.
+
+- Fixed Plex portrait sync diagnostics for large libraries: live downloaded/missing/failed counts, exact non-sensitive HTTP status codes, and correct “portraits” progress units. HTTP 404/410 unavailable images are counted separately and the warning identifies the failed image-source category without exposing URLs or credentials; HTTP 401/403, 429, and server 5xx conditions pause further image requests rather than flooding Plex. The UI retains the final missing-art summary.
+
+- Added Plex custom-agent `metadata://` and `media://` bundle portrait support plus lookup through valid Plex person metadata keys when Role records omit `thumb`. The additional actor-person reference table upgrades in place; existing user artwork overrides and cached portraits are preserved.
+
+- Added scraper-independent support for Plex actor `Role.thumb` URLs from custom metadata agents, using Plex's own authenticated image transcoder for validated public HTTPS custom hosts. Public DNS/IP checks reject loopback, private LAN, link-local, and reserved destinations; cache and manual override priority are unchanged. Includes regression coverage and a mandatory real-Plex custom-scraper acceptance check.
+
+- Fixed missing Plex actor images after sync by actively fetching and locally caching Plex-provided Role.thumb portraits (including unchanged-title backfills). Image reads are size-limited and origin-restricted, user artwork overrides remain untouched, and failed downloads are retryable on the next sync. The cache lives in excluded `plex-portraits/` and is not part of release assets.
+
+- Updated the local Windows builder to clear every previous installer, checksum and subfolder from the repository's `output/` before packaging a new Setup EXE, with junction/symlink protection and regression tests. All other build and installed-application folders are unaffected.
+
+- Fixed a Windows PowerShell 5.1 native-command quoting bug in CPython license discovery that caused `NameError: name 'LICENSE' is not defined` after the executable smoke gate. The builder now gets only `sys.base_prefix` from Python, constructs `LICENSE.txt` using PowerShell, and verifies the license before expensive packaging. Added source and regression guards.
+
+- Added an unauthenticated, locally served privacy and legal notice linked from the gallery and login pages; source includes a project copyright notice. Replaced an obsolete password-setup command in the sign-in help.
+
+- Added tests enforcing restricted provider credential enrollment, saved-token independence, no new legacy TMDB previews, and a fail-closed installer configuration for 1.0.
+- Restored TMDB as the preferred authorized, opt-in external provider, with ThePornDB only used when TMDB lacks a usable portrait. Reinstated the TMDB token field and installer option with the official logo and exact required attribution notice. Wikimedia remains disabled. Added a safe rescan for unmatched performers while retaining applied portraits.
+
+- Permit the final, explicitly invoked stable-named installer to be built from clean `dev` for acceptance testing, without prematurely promoting untested source to `main` or publishing a release.
+
+- Include project NOTICE and the build interpreter's CPython license in Windows Setup, and add release gates protecting both notices.
+
+- Set the final `1.0.0` version consistently across the application, Inno Setup, updater, service, build regression checks and support material.
+- Preserve unique IDs for developer-built packages; official stable naming requires explicit `-Release`, a clean approved `main` checkout, and mandatory source/EXE/installer integrity gates.
+- Keep Windows acceptance, source-history/security, provider-licensing and public binary distribution verification blocking until real evidence exists. This entry is not a claim that a GA release has been published.
+
+## v1.0.0-rc.1 — Feature-freeze release candidate (NOT general availability)
+
+- Fixed oversized ThePornDB performer-credit responses: metadata reads are now bounded at 8 MiB, larger valid JSON is parsed completely, and truly oversized payloads fail with an explicit size error instead of misleading 'Unterminated string' errors. Added regression coverage.
+
+- Added a guarded opt-in stable installer build path (final semver, clean approved `main` only), while retaining the existing unique-ID development builder.
+- Bundled the required upstream WinSW MIT license notice with the service wrapper and added fail-closed source contract tests.
+- Verified current tracked files contain no build binaries, databases, logs or cached portraits; full Git history and final packaged release still require checks.
+
+- Freeze existing Plex cast indexing, actor gallery, authentication, artwork review, and Windows installer/service features for v1.
+- Preserve the Windows product AppId, service name, ProgramData index, tokens, artwork and upgrade compatibility.
+- Align app, Setup, updater, service and regression tests to `1.0.0-rc.1`, with a consolidated general-release gate and draft notes.
+- Remain on `dev`; do not tag, publish, invoke GitHub Actions or promote to `main` before independent release validation and maintainer authorization.
+
+## dev — Windows installer and repository cleanup
+
+- Fixed a regression-gate false negative after legacy service-account migration: both pre-migration and post-migration Windows service-registration checks are required, and separate mutation tests verify that removing either blocks the build.
+- Fixed a confirmed Windows in-place upgrade failure reported in `installer-error-details.log`: older WinSW services can be registered as `LocalSystem` and were rejected by the `LocalService`-only installer guard. Known legacy services now migrate to the least-privileged account in place; unknown custom service accounts are still rejected.
+- Added service-account migration regression and build-contract checks. A successful Windows upgrade/reboot test is still required.
+- Fixed PowerShell application-version recognition (`\\s` escaping) and moved it ahead of PyInstaller packaging, so malformed version logic fails before compiling the executable.
+- Added fail-closed source regression coverage that evaluates the builder's version regex against `app.py`, detects updater/service version drift, and protects early validation ordering.
+- Expanded the PowerShell parse preflight to cover all six retained scripts, including the validator itself; repository hygiene tests now enforce the single supported CMD launcher and six-purpose script layout.
+- Rechecked frontend/backend API paths, Markdown link resolution and duplicate tracked-file blobs; removed unused source symbols without changing application behavior.
+- **Windows Setup compilation and real clean-install/upgrade tests are still pending.**
+- Repaired invalid `test_installer_spec.py` syntax and removed duplicated test case/footer, which would have prevented regression tests from starting.
+- Consolidated the Windows builder into `BUILD-INSTALLER.cmd` plus `build_installer_windows.ps1`; removed the redundant nested `BUILD-EXE.cmd`.
+- Merged overlapping branching, general release, and maintainer documentation into the build guide, beta checklist, and contribution guide.
+- Removed an unadopted contributor-agreement draft (the policy against accepting outside copyrighted patches remains in effect).
+- Extended repository hygiene tests to detect duplicate class methods, multiple entry-point guards, and broken legal-document links.
+- Verified one active batch launcher, six purpose-specific PowerShell scripts, and no redundant build or migration files remain on `dev`.
+- Repaired `installer/check_updates.ps1`: restored its terminated filename pattern and removed a duplicated download block; added regression tests that reproduce both faults.
+- Repaired `build_gate.py` and `test_build_gate.py`: removed accidentally duplicated module/test sections and restored the updater-guard regular expression.
+- Kept one supported Windows installation entry point (`BUILD-INSTALLER.cmd`), building the executable directly in the PowerShell orchestrator, without a second batch helper.
+- Removed obsolete direct-run launchers, redundant `manage.py`, unused standalone PyInstaller and service-migration scripts, obsolete installation documents, and unused PR metadata.
+- Reduced nested duplicate source-test execution; retained mandatory PowerShell syntax preflight, source regression and mutation tests, compiled EXE smoke, Inno Setup compilation, and installer artifact/digest check.
+- Updated all installation, contributor, provider, troubleshooting and release documents to match the Windows service deployment.
+- Kept application index, provider, authentication and cache logic unchanged except for retiring an outdated password instruction; preserve the existing Plex database, tokens and portraits during upgrades.
+- Real Windows clean-install, in-place upgrade, reboot and uninstall testing remains mandatory before publishing a public beta.
+
+## v0.4.7-beta — Windows setup startup verification
+
+- Correct malformed PowerShell build script introduced by dev build-ID versioning: remove duplicated installer sections and restore complete Git revision/build-ID regex.
+- Run Windows PowerShell AST syntax validation **before launching** the installer build; reject syntax errors before compiling or changing service state.
+- Extend fail-closed regression checks to catch duplicated installer body, malformed Git SHA regex, or missing PowerShell preflight.
+
+
+- Distinguish every `dev` installer by an automatically generated UTC build timestamp and Git SHA/source fingerprint; embed the ID in the Setup filename and Installed Apps version.
+- Preserve older installer builds rather than overwriting identical filenames; validate the build identifier in local gates and updater asset matching.
+
+
+- Fix confirmed Windows upgrade failure: WinSW v2.12 rejected the unsupported `refresh` command and left the service stopped.
+- Preserve existing service registration; verify wrapper path/account; apply automatic delayed-start via Windows SCM; restart with updated WinSW XML.
+- Add fail-closed regression checks forbidding `refresh`, including a mutation test that reproduces the previously released failure.
+- Capture underlying Windows setup exceptions and surface them in the installer instead of reporting only exit code 1.
+
+
+- Introduce mandatory local fail-closed build gates: source regression/negative tests, compiled EXE HTTP smoke, and installer hash/artifact checks.
+- Document GitHub Desktop `dev` pull-and-build workflow; exclude generated installers and service wrapper binaries from source control.
+- Start and verify the Windows service before the installer Finish page appears.
+- Verify the actual application responds on localhost with the expected version; SCM/WinSW Running alone is insufficient.
+- Report service start and health-check failures clearly instead of presenting false success.
+- In-place upgrade continues to retain credentials, database, artwork, and managed Private-network firewall settings.
+- Local regression tests passed; clean-install, reboot and final Inno compilation must be verified on Windows.
+
+## v0.4.6-beta — Windows installer and updates (testing candidate)
+
+- Add an interactive Inno Setup Windows installer with port, Private-LAN firewall, TMDB opt-in, VPN-only remote admin, beta update channel and shortcut options.
+- Add upgrade-in-place for the existing service without data migration; timestamped pre-upgrade backups and preserved ProgramData.
+- Add installer-managed firewall rule cleanup on upgrade and removal.
+- Add explicit user-initiated release checks and SHA-256 verification for download-and-install.
+- Windows installer compilation/service-upgrade smoke test pending; no production release has been tagged.
+
+## Unreleased — v0.4.5-beta (Windows service / remote-admin prototype)
+
+- Package Windows EXE locally using PyInstaller and configure an Automatic (Delayed Start) WinSW service under LocalService.
+- Separate runtime credentials and SQLite data from packaged static assets and application executable.
+- Add explicit VPN address allowlist, separate administrator password, and one-hour admin sessions for optional remote administration.
+- Keep gallery-only access for ordinary LAN clients; remote administration is disabled until configured.
+- Add Windows build, migration, service-install, uninstall, backup, and rollback instructions.
+- Windows executable/service installation remains **untested on Windows** pending host validation.
+
+## v0.4.4-beta — Security hardening (LAN-only)
+
+- Require JSON content type and reject cross-site browser POSTs.
+- Prevent internal server exception details from being sent to browsers.
+- Expire TMDB actor portraits and stale provider result records after 180 days.
+- Keep TMDB/Wikimedia disabled by default and prevent portrait redirects to untrusted hosts.
+- Development-only release; production interoperability and provider compliance remain unverified.
+
 ## Unreleased — noncommercial license adopted
 
 - Adopted a custom noncommercial, network-source-sharing license and plain-language usage guide.

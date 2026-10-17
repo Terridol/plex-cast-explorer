@@ -20,7 +20,7 @@
   function modal(id,open){$(id).hidden=!open;document.body.style.overflow=(!$('settingsOverlay').hidden||!$('actorOverlay').hidden||!$('reviewOverlay').hidden)?'hidden':'';}
   async function openSettings(){
     if(!state.admin){notify('To change Plex settings, open Cast Explorer on the server at http://127.0.0.1:8765');return;}
-    try{const conf=await api('/api/config');$('plexUrl').value=conf.url;$('plexToken').value='';$('plexToken').placeholder=conf.token_set?'Already configured — leave blank to keep':'Paste your Plex authentication token';$('settingsError').textContent='';try{const a=await api('/api/art/config');$('artSettingsStatus').textContent='TMDB: '+(a.tmdb_set?'configured':'not configured')+' · ThePornDB: '+(a.theporndb_set?'configured':'not configured')+' · Wikimedia: available';}catch(e){$('artSettingsStatus').textContent=e.message}modal('settingsOverlay',true);$('plexUrl').focus();void refreshEnrichment(true);}catch(e){notify(e.message)}
+    try{const conf=await api('/api/config');$('plexUrl').value=conf.url;$('plexToken').value='';$('plexToken').placeholder=conf.token_set?'Already configured — leave blank to keep':'Paste your Plex authentication token';$('settingsError').textContent='';try{const a=await api('/api/art/config');$('artSettingsStatus').textContent='TMDB: '+(a.tmdb_enabled?'enabled':(a.tmdb_set?'token saved; enable via installer':'not configured'))+' · ThePornDB: '+(a.theporndb_set?'configured':'not configured')+' · Wikimedia: disabled';}catch(e){$('artSettingsStatus').textContent=e.message}modal('settingsOverlay',true);$('plexUrl').focus();void refreshEnrichment(true);}catch(e){notify(e.message)}
   }
   function buildAlphabet(){const bar=$('alphabet');bar.replaceChildren();for(const letter of alphabet){const btn=elt('button','alpha'+((state.letter||'ALL')===letter?' active':''),letter);btn.addEventListener('click',()=>{state.letter=letter==='ALL'?'':letter;buildAlphabet();loadActors(false);});bar.append(btn)}}
   function renderLibraries(){const nav=$('libraryNav');nav.replaceChildren();if(!state.stats.sections?.length){nav.append(elt('div','nav-muted','Your libraries will appear after the first index.'));return;}
@@ -295,11 +295,11 @@
   }catch(err){$('artSettingsStatus').textContent=err.message}}
   async function findArt(key){
     const picker=$('artPicker');if(!picker)return;
-    picker.replaceChildren(elt('p','note','Searching TMDB, ThePornDB and Wikimedia Commons…'));
+    picker.replaceChildren(elt('p','note','Searching your enabled portrait providers…'));
     try{const data=await api('/api/art/search?key='+encodeURIComponent(key));picker.replaceChildren();
       const h=elt('h3','','Choose a portrait for '+data.actor);picker.append(h);
       picker.append(elt('p','note','Matches are suggestions only. Confirm the image represents the right person before applying.'));
-      const providers=elt('p','note','TMDB: '+(data.configured.tmdb?'enabled':'add API token')+' · ThePornDB: '+(data.configured.theporndb?'enabled':'add API token')+' · Wikimedia: enabled');picker.append(providers);
+      const providers=elt('p','note','TMDB: '+(data.configured.tmdb?'enabled':'not enabled')+' · ThePornDB fallback: '+(data.configured.theporndb?'ready':'add a token')+' · Wikimedia: disabled');picker.append(providers);
       for(const warning of data.warnings){picker.append(elt('p','note',warning));}
       if(!data.results.length){picker.append(elt('p','note','No portraits found. Add provider keys in Settings or try again later.'));return;}
       const results=elt('div','art-choice-grid');
@@ -331,8 +331,21 @@
         a.append(poster,elt('strong','',title.title));tile.append(a);tile.append(elt('small','',[(title.year||'Year unknown'),title.library].join(' · ')));if(title.character)tile.append(elt('small','',title.character));grid.append(tile)}host.append(grid);
     }catch(e){$('actorDetail').textContent='Could not load this performer: '+e.message}
   }
-  async function refreshStatus(){try{const s=await api('/api/status');const progress=$('syncBanner');progress.hidden=!s.running&&s.phase==='Not scanned';if(s.running||s.phase==='Sync failed'||s.phase==='Finished with warnings'){
-      progress.hidden=false;$('syncPhase').textContent=s.phase;$('syncFraction').textContent=s.total?formatNumber(s.current)+' / '+formatNumber(s.total)+' titles':'';$('syncBar').style.width=s.total?Math.min(100,Math.round(s.current/s.total*100))+'%':'3%';$('syncError').textContent=s.last_error?(s.errors+' error(s). Latest: '+s.last_error):'';
+  async function refreshStatus(){try{const s=await api('/api/status');const progress=$('syncBanner');progress.hidden=!s.running&&s.phase==='Not scanned';const hasImageSummary=!!(s.portrait_missing||s.portrait_failed||s.portrait_skipped);if(s.running||s.phase==='Sync failed'||s.phase==='Finished with warnings'||hasImageSummary){
+      progress.hidden=false;
+      $('syncPhase').textContent=s.phase;
+      const unit=s.phase==='Caching Plex actor portraits'||((s.phase==='Finished'||s.phase==='Finished with warnings')&&(s.portrait_downloaded||s.portrait_missing||s.portrait_failed||s.portrait_skipped))?'portraits':s.phase==='Resolving Plex actor artwork'?'performers':'titles';
+      $('syncFraction').textContent=s.total?formatNumber(s.current)+' / '+formatNumber(s.total)+' '+unit:'';
+      $('syncBar').style.width=s.total?Math.min(100,Math.round(s.current/s.total*100))+'%':'3%';
+      const details=[];
+      if(s.phase==='Caching Plex actor portraits'||s.portrait_downloaded||s.portrait_missing||s.portrait_failed){
+        details.push(formatNumber(s.portrait_downloaded||0)+' downloaded');
+        if(s.portrait_missing)details.push(formatNumber(s.portrait_missing)+' missing in Plex');
+        if(s.portrait_skipped)details.push(formatNumber(s.portrait_skipped)+' skipped due to source errors');
+      }
+      if(s.errors)details.push(formatNumber(s.errors)+' error(s)');
+      if(s.last_error)details.push('Latest: '+s.last_error);
+      $('syncError').textContent=details.join(' · ');
     }else if(!s.running)progress.hidden=true;
     $('refreshBtn').disabled=!!s.running;
     if(s.running){state.wasRunning=true;}else if(state.wasRunning){state.wasRunning=false;notify(s.errors?'Index completed with warnings.':'Your cast directory is up to date.');await loadStats();await loadActors(false)}
@@ -340,13 +353,13 @@
   async function sync(force=false){try{const result=await post('/api/sync',{force});if(result.started){notify('Indexing started. You can keep browsing while it runs.');state.wasRunning=true;await refreshStatus()}else notify('Indexing is already in progress.')}catch(e){notify('Could not sync: '+e.message)}}
   async function saveSettings(event){event.preventDefault();$('settingsError').textContent='';const url=$('plexUrl').value.trim();const token=$('plexToken').value.trim();try{await post('/api/config',{url,token:token||null});state.tokenSet=true;modal('settingsOverlay',false);$('connDot').classList.add('online');$('connectionLabel').textContent='Plex configured';await sync();}catch(e){$('settingsError').textContent=e.message}}
   async function start(){
-    $('artSettingsForm').addEventListener('submit',saveArtSettings);$('enrichStart').addEventListener('click',startEnrichment);$('enrichAcceptUnique').addEventListener('click',acceptQueuedSingles);$('enrichPause').addEventListener('click',pauseEnrichment);$('enrichReload').addEventListener('click',()=>refreshEnrichment(true));$('enrichRetry').addEventListener('click',async()=>{try{const r=await post('/api/enrich/retry-errors',{});notify('Reset '+r.reset+' failed lookups. Click Start / resume to retry them.');await refreshEnrichment(true);}catch(e){notify(e.message)}});$('settingsBtn').addEventListener('click',openSettings);$('settingsTopBtn').addEventListener('click',openSettings);$('reviewClose').addEventListener('click',()=>modal('reviewOverlay',false));document.addEventListener('keydown',e=>{if(e.key==='Escape'&&!$('reviewOverlay').hidden)modal('reviewOverlay',false)});$('settingsClose').addEventListener('click',()=>modal('settingsOverlay',false));$('settingsCancel').addEventListener('click',()=>modal('settingsOverlay',false));$('settingsForm').addEventListener('submit',saveSettings);
+    $('artSettingsForm').addEventListener('submit',saveArtSettings);$('enrichStart').addEventListener('click',startEnrichment);$('enrichAcceptUnique').addEventListener('click',acceptQueuedSingles);$('enrichPause').addEventListener('click',pauseEnrichment);$('enrichReload').addEventListener('click',()=>refreshEnrichment(true));$('enrichRetry').addEventListener('click',async()=>{try{const r=await post('/api/enrich/retry-errors',{});notify('Reset '+r.reset+' failed lookups. Click Start / resume to retry them.');await refreshEnrichment(true);}catch(e){notify(e.message)}});$('enrichRetryUnmatched').addEventListener('click',async()=>{try{const r=await post('/api/enrich/retry-unmatched',{});notify('Requeued '+r.reset+' unmatched performers. Click Start / resume to search with the updated provider order.');await refreshEnrichment(true);}catch(e){notify(e.message)}});$('settingsBtn').addEventListener('click',openSettings);$('settingsTopBtn').addEventListener('click',openSettings);$('reviewClose').addEventListener('click',()=>modal('reviewOverlay',false));document.addEventListener('keydown',e=>{if(e.key==='Escape'&&!$('reviewOverlay').hidden)modal('reviewOverlay',false)});$('settingsClose').addEventListener('click',()=>modal('settingsOverlay',false));$('settingsCancel').addEventListener('click',()=>modal('settingsOverlay',false));$('settingsForm').addEventListener('submit',saveSettings);
     $('actorClose').addEventListener('click',()=>modal('actorOverlay',false));$('settingsOverlay').addEventListener('click',e=>{if(e.target===$('settingsOverlay'))modal('settingsOverlay',false)});$('actorOverlay').addEventListener('click',e=>{if(e.target===$('actorOverlay'))modal('actorOverlay',false)});document.addEventListener('keydown',e=>{if(e.key==='Escape'){modal('settingsOverlay',false);modal('actorOverlay',false)}});
-    $('emptyAction').addEventListener('click',openSettings);$('logoutBtn').addEventListener('click',async()=>{try{await post('/api/logout',{});location.assign('/login')}catch(e){notify(e.message)}});$('refreshBtn').addEventListener('click',()=>sync());$('loadMore').addEventListener('click',()=>loadActors(true));$('sortSelect').addEventListener('change',e=>{state.sort=e.target.value;loadActors(false)});$('missingOnly').addEventListener('change',e=>{state.missing=e.target.checked;loadActors(false)});let typing;
+    $('adminLogoutBtn').addEventListener('click',async()=>{try{await post('/api/admin/logout',{});location.assign('/');}catch(e){notify(e.message)}});$('emptyAction').addEventListener('click',openSettings);$('logoutBtn').addEventListener('click',async()=>{try{await post('/api/logout',{});location.assign('/login')}catch(e){notify(e.message)}});$('refreshBtn').addEventListener('click',()=>sync());$('loadMore').addEventListener('click',()=>loadActors(true));$('sortSelect').addEventListener('change',e=>{state.sort=e.target.value;loadActors(false)});$('missingOnly').addEventListener('change',e=>{state.missing=e.target.checked;loadActors(false)});let typing;
     $('searchInput').addEventListener('input',e=>{clearTimeout(typing);typing=setTimeout(()=>{state.search=e.target.value;loadActors(false)},180)});
     $('mediaNav').addEventListener('click',e=>{const button=e.target.closest('[data-type]');if(!button)return;state.type=button.dataset.type;renderMediaNav();loadActors(false)});
     buildAlphabet();try{const c=await api('/api/config');state.tokenSet=c.token_set;state.admin=!!c.admin;
-      $('logoutBtn').hidden=state.admin;$('settingsBtn').hidden=!state.admin;$('settingsTopBtn').hidden=!state.admin;$('refreshBtn').hidden=!state.admin;$('emptyAction').hidden=!state.admin;$('connDot').classList.toggle('online',!!c.token_set);$('connectionLabel').textContent=c.token_set?'Plex configured':'Not configured';}catch(e){notify(e.message)}
+      $('adminLoginLink').hidden=state.admin||!c.admin_login_available; $('adminLogoutBtn').hidden=!state.admin||!c.admin_login_available; $('logoutBtn').hidden=state.admin;$('settingsBtn').hidden=!state.admin;$('settingsTopBtn').hidden=!state.admin;$('refreshBtn').hidden=!state.admin;$('emptyAction').hidden=!state.admin;$('connDot').classList.toggle('online',!!c.token_set);$('connectionLabel').textContent=c.token_set?'Plex configured':'Not configured';}catch(e){notify(e.message)}
     await Promise.all([loadStats(),getPlexLinkMode()]);await loadActors(false);await refreshStatus();state.timer=setInterval(refreshStatus,2200);setInterval(()=>refreshEnrichment(false),6000);
   }
   start();
