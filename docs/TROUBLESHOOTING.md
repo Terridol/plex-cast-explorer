@@ -35,3 +35,7 @@ For a stalled scan, export once, wait a few minutes, then export again. Compare
 `index.current`, `index.phase`, `enrichment.checked`, and `enrichment.running`
 to identify which pipeline is stalled. The export is a diagnostic sample rather
 than the complete actor catalog.
+
+## Verify complete Plex catalog enumeration
+
+Every synchronization enumerates all accessible movie and TV library title listings, even when most titles are unchanged. The progress counter counts titles requiring metadata refresh, **not** the full title inventory. The sync now requires each paginated library listing to reach its Plex-reported `totalSize`, tolerates short intermediate pages, and refuses to prune when the listing is empty prematurely or contains duplicate rating keys. If Plex reports inconsistent pagination, sync reports a failure rather than treating the library as complete. The diagnostics JSON contains `indexed_catalog.sections` with database title counts per library, plus total indexed titles and cast credits. Compare these counts with Plex library counts (including library and metadata type filters) to verify completeness.
