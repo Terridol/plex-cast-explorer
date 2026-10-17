@@ -426,9 +426,22 @@ def plex_image_bytes(thumb: str) -> bytes:
             raw = request_plex(target.path + ('?' + target.query if target.query else ''),
                                timeout=12, max_bytes=MAX_PLEX_IMAGE_BYTES)
         elif allowed_https_image_url(thumb, ALLOWED_REMOTE_IMAGES):
+            # Plex-owned CDN artwork can reject unauthenticated direct fetches.
+            # Try Plex's own authenticated photo transcoder once before treating
+            # HTTP 401/403 as a permanent denial. The token stays on Plex.
             req = Request(thumb, headers={'User-Agent': 'PlexCastExplorer/1.0'})
-            with build_opener(ArtworkRedirects(ALLOWED_REMOTE_IMAGES)).open(req, timeout=12) as response:
-                raw = response.read(MAX_PLEX_IMAGE_BYTES + 1)
+            try:
+                with build_opener(ArtworkRedirects(ALLOWED_REMOTE_IMAGES)).open(req, timeout=12) as response:
+                    raw = response.read(MAX_PLEX_IMAGE_BYTES + 1)
+            except HTTPError as direct_error:
+                if direct_error.code not in (401, 403):
+                    raise
+                try:
+                    raw = plex_transcoded_image(thumb)
+                except (HTTPError, URLError, ValueError):
+                    # Preserve the actionable original 403; a Plex photo
+                    # transcoder 404 does not mean the source image is missing.
+                    raise direct_error from None
         else:
             # A custom scraper may advertise an HTTPS portrait host Plex
             # knows about but that is absent from our hardcoded CDN list.
@@ -553,6 +566,22 @@ def plex_portrait_source_group(thumb: str) -> tuple[str, str]:
         return label, 'invalid origin'
 
 
+def spread_plex_portrait_probes(thumbnails: list[str]) -> list[str]:
+    """Interleave a sorted source list so initial probes span the entire group.
+
+    Plex metadata URLs are frequently sorted by library and ID. Testing only
+    the first 25 makes a single bad section look like a 50k-image outage.
+    This is deterministic and does not add network requests.
+    """
+    if len(thumbnails) <= 25:
+        return thumbnails
+    stride = (len(thumbnails) + 24) // 25
+    return [thumbnails[part * stride + offset]
+            for offset in range(stride)
+            for part in range(25)
+            if part * stride + offset < len(thumbnails)]
+
+
 def cache_plex_portraits() -> int:
     """Backfill missing Plex photos even when no title's updatedAt has changed."""
     config = load_config()
@@ -578,12 +607,14 @@ def cache_plex_portraits() -> int:
         return 0
     # Progress counts actually attempted portraits; skipped ones are shown
     # separately so a stopped scan never appears fully downloaded.
-    # A denied provider/CDN is not evidence that *all* Plex images are
-    # inaccessible. Group by source so a circuit breaker only skips the
-    # affected route, while valid images from other origins are still saved.
+    # Group by origin, but spread probes across each group: Plex IDs and
+    # metadata links are sorted, and one early blocked library is not
+    # representative of 50,000 later portraits.
     groups = {}
     for thumb in pending:
         groups.setdefault(plex_portrait_source_group(thumb), []).append(thumb)
+    for source, thumbs in groups.items():
+        groups[source] = spread_plex_portrait_probes(thumbs)
     baseline_errors = status_snapshot()['errors']
     state_update(phase='Caching Plex actor portraits', current=0, total=len(pending),
                  portrait_downloaded=0, portrait_missing=0,
@@ -594,13 +625,19 @@ def cache_plex_portraits() -> int:
     attempted = 0
     skipped = 0
     stop_reason = ''
+    blocked_groups = []
     with ThreadPoolExecutor(max_workers=5) as pool:
         for (source_label, _origin), group_thumbs in groups.items():
             group_denied = 0
             group_server_errors = 0
+            group_success = 0
             last_denied_code = 403
             last_server_code = 500
             group_attempted = 0
+            # Large sources must be sampled broadly. Never discard a source
+            # after only 20 failures among tens of thousands of images.
+            min_probe = min(len(group_thumbs),
+                            max(25, min(100, len(group_thumbs) // 4)))
             for start in range(0, len(group_thumbs), 25):
                 batch = group_thumbs[start:start + 25]
                 futures = {pool.submit(cached_plex_portrait, thumb): thumb
@@ -609,6 +646,7 @@ def cache_plex_portraits() -> int:
                     try:
                         future.result()
                         downloaded += 1
+                        group_success += 1
                     except HTTPError as exc:
                         code = int(exc.code)
                         if code in (404, 410):
@@ -646,20 +684,23 @@ def cache_plex_portraits() -> int:
                                  portrait_skipped=skipped)
                 if stop_reason:
                     break
-                # Consecutive failures are common when one provider's URL
-                # format expires. Only stop that origin when a significant
-                # share of its attempted artwork has been denied.
+                # A few bad images are not proof of a source-wide outage.
+                # Break only after broad probing with zero successful images.
+                # Mixed sources continue up to the global failure ceiling.
                 severe = group_denied + group_server_errors
-                if (group_denied >= MAX_PLEX_SOURCE_DENIALS and
-                        severe * 2 >= group_attempted) or (
-                        group_server_errors >= MAX_PLEX_PORTRAIT_ERRORS_PER_SYNC and
-                        severe * 2 >= group_attempted):
+                if (group_attempted >= min_probe and group_success == 0 and
+                        ((group_denied >= MAX_PLEX_SOURCE_DENIALS and
+                          severe * 2 >= group_attempted) or
+                         (group_server_errors >= MAX_PLEX_PORTRAIT_ERRORS_PER_SYNC and
+                          severe * 2 >= group_attempted))):
                     remaining = len(group_thumbs) - start - len(batch)
                     skipped += remaining
                     blocked_code = last_denied_code if group_denied >= MAX_PLEX_SOURCE_DENIALS else last_server_code
+                    blocked_note = f'HTTP {blocked_code} ({source_label}): {remaining} portraits skipped after {group_attempted} varied probes.'
+                    blocked_groups.append((remaining, blocked_note))
                     state_update(current=attempted,
                                  portrait_skipped=skipped,
-                                 last_error=f'HTTP {blocked_code} from {source_label}; skipped {remaining} same-origin portraits this run. Other origins continue.')
+                                 last_error=blocked_note + ' Other origins continue.')
                     logging.warning('Paused failing Plex artwork origin: %s (%d attempted, %d skipped)',
                                     source_label, group_attempted, remaining)
                     break
@@ -671,6 +712,11 @@ def cache_plex_portraits() -> int:
                 state_update(current=attempted, portrait_skipped=skipped,
                              last_error=stop_reason)
                 break
+    if blocked_groups and not stop_reason:
+        # Do not allow a later unrelated 404 to mask the reason thousands of
+        # portraits were skipped. Report the largest blocked origin first.
+        primary = max(blocked_groups, key=lambda item: item[0])[1]
+        state_update(last_error=primary + ' Check this Plex artwork source.')
     return failures
 
 def plex_xml(path: str):
