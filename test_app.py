@@ -771,6 +771,47 @@ class PlexCastExplorerTests(unittest.TestCase):
             self.assertEqual(app.image_bytes('actor', 'sample actor'), b'\\xff\\xd8\\xffTMDB')
             self.assertNotIn('sample actor', app.pending_enrichment_keys())
 
+    def test_tmdb_replaces_saved_non_tmdb_art_and_blocks_tpdb_fallback(self):
+        with patch.object(app, 'plex_xml', side_effect=self.fake_xml):
+            app.sync_all(force=True)
+        prior = app.new_art_candidate(
+            'sample actor', 'Sample Actor', 'https://cdn.theporndb.net/old.jpg',
+            'ThePornDB', 'https://theporndb.net/performers/1', 'ThePornDB')
+        with patch.object(app, 'external_image', return_value=(b'\\xff\\xd8\\xffold', 'jpg')):
+            app.apply_art('sample actor', prior['id'])
+        tmdb = {'name': 'Sample Actor', 'source': 'TMDB',
+                'url': 'https://image.tmdb.org/t/p/w342/new.jpg',
+                'reference': 'https://www.themoviedb.org/person/42',
+                'credit': 'TMDB',
+                'matches': [{'title': 'Alpha', 'year': 2024,
+                             'external_year': 2024, 'year_verified': True}]}
+        with patch.object(app, 'artwork_keys', return_value={'tmdb': 't', 'theporndb': 'p'}), \
+             patch.object(app, 'provider_enabled', return_value=True):
+            self.assertIn('sample actor', app.pending_enrichment_keys())
+            with patch.object(app, 'verified_portrait_candidates', return_value=([tmdb], [])), \
+                 patch.object(app, 'external_image', return_value=(b'\\xff\\xd8\\xffnew', 'jpg')):
+                app.ENRICH_STOP.clear()
+                app.enrichment_worker()
+            self.assertEqual(app.get_actor('sample actor')['art']['source'], 'TMDB')
+            self.assertEqual(app.image_bytes('actor', 'sample actor'), b'\\xff\\xd8\\xffnew')
+            self.assertNotIn('sample actor', app.pending_enrichment_keys())
+
+    @patch.object(app, 'provider_enabled', new=lambda name: name == 'tmdb')
+    def test_existing_saved_art_prevents_tpdb_search_when_tmdb_misses(self):
+        with patch.object(app, 'plex_xml', side_effect=self.fake_xml):
+            app.sync_all(force=True)
+        prior = app.new_art_candidate(
+            'second actor', 'Second Actor', 'https://cdn.theporndb.net/old.jpg',
+            'ThePornDB', 'https://theporndb.net/performers/1', 'ThePornDB')
+        with patch.object(app, 'external_image', return_value=(b'\\xff\\xd8\\xffold', 'jpg')):
+            app.apply_art('second actor', prior['id'])
+        with patch.object(app, 'artwork_keys', return_value={'tmdb': 't', 'theporndb': 'p'}), \
+             patch.object(app, 'paced_provider_json', return_value={'results': []}) as provider:
+            candidates, errors = app.verified_portrait_candidates('second actor')
+        self.assertEqual((candidates, errors), ([], []))
+        self.assertEqual(provider.call_count, 1)
+        self.assertEqual(app.get_actor('second actor')['art']['source'], 'ThePornDB')
+
     def test_tmdb_disabled_keeps_existing_plex_portrait_priority(self):
         with patch.object(app, 'plex_xml', side_effect=self.fake_xml):
             app.sync_all(force=True)
