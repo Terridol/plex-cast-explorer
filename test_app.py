@@ -651,7 +651,7 @@ class PlexCastExplorerTests(unittest.TestCase):
         self.assertIsNone(app.choose_automatic_candidate([good], actor_name='Other Person'))
         self.assertIsNone(app.choose_automatic_candidate([good], actor_name='Ada Example', errors=['TPDB timed out']))
         self.assertIsNone(app.choose_automatic_candidate([dict(good, matches=[])], actor_name='Ada Example'))
-        self.assertIsNone(app.choose_automatic_candidate([dict(good, matches=[dict(evidence[0], role_conflict=True)])], actor_name='Ada Example'))
+        self.assertIs(app.choose_automatic_candidate([dict(good, matches=[dict(evidence[0], role_conflict=True)])], actor_name='Ada Example')['source'], good['source'])
         self.assertIsNone(app.choose_automatic_candidate([dict(good, matches=[dict(evidence[0], external_year=2020)])], actor_name='Ada Example'))
         self.assertIsNone(app.choose_automatic_candidate([dict(good, url='http://127.0.0.1/p.jpg')], actor_name='Ada Example'))
         self.assertIsNone(app.choose_automatic_candidate([good, dict(good, source='ThePornDB')], actor_name='Ada Example'))
@@ -782,7 +782,7 @@ class PlexCastExplorerTests(unittest.TestCase):
         matches=app.credit_matches(local,remote,'TMDB')
         self.assertTrue(matches[0]['role_conflict'])
         self.assertFalse(matches[1]['role_conflict'])
-        self.assertFalse(app.is_strong_match({'matches':matches}))
+        self.assertTrue(app.is_strong_match({'matches':matches}))
         self.assertEqual(app.provider_other_credits(local,remote),[])
         self.assertEqual(app.provider_other_credits(local, remote+[{'title':'Different Project','year':2020}]),
                          [{'title':'Different Project','year':2020}])
@@ -866,6 +866,24 @@ class PlexCastExplorerTests(unittest.TestCase):
         self.assertEqual(provider.call_count, 2)
         self.assertEqual(app.get_actor('second actor')['art']['source'], 'ThePornDB')
 
+    def test_unique_two_credit_portrait_ignores_role_label_difference(self):
+        entry = {'name': 'Verne Lundquist', 'source': 'TMDB',
+                 'url': 'https://image.tmdb.org/t/p/w342/photo.jpg',
+                 'matches': [
+                     {'title': 'Happy Gilmore', 'year': 1996,
+                      'external_year': 1996, 'year_verified': True,
+                      'plex_character': 'Announcer', 'provider_character': 'Announcer'},
+                     {'title': 'The Last Boy Scout', 'year': 1991,
+                      'external_year': 1991, 'year_verified': True,
+                      'plex_character': 'Himself', 'provider_character': 'Verne Lundquist',
+                      'role_conflict': True},
+                 ]}
+        self.assertTrue(app.singleton_is_verified('Verne Lundquist', [entry]))
+        self.assertTrue(app.confident_portrait_replacement('Verne Lundquist', [entry]))
+        self.assertIsNone(app.choose_automatic_candidate([entry, entry], 'Verne Lundquist'))
+        self.assertFalse(app.confident_portrait_replacement(
+            'Verne Lundquist', [dict(entry, matches=[]) ]))
+
     def test_single_exact_year_credit_can_replace_existing_plex_portrait(self):
         with patch.object(app, 'plex_xml', side_effect=self.fake_xml):
             app.sync_all(force=True)
@@ -890,7 +908,7 @@ class PlexCastExplorerTests(unittest.TestCase):
                   'url': 'https://image.tmdb.org/t/p/w342/a.jpg',
                   'matches': [match]}
         self.assertFalse(app.confident_portrait_replacement('Sample Actor', [choice]))
-        self.assertFalse(app.confident_portrait_replacement(
+        self.assertTrue(app.confident_portrait_replacement(
             'Sample Actor', [dict(choice, matches=[dict(match, external_year=2024,
                                                        year_verified=True, role_conflict=True)])]))
         self.assertFalse(app.confident_portrait_replacement('Sample Actor', [choice, choice]))
