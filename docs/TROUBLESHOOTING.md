@@ -19,3 +19,19 @@
 ## Artwork enrichment reports “Unterminated string” at byte 1,000,000
 
 Older builds read only 1,000,001 bytes of provider JSON, which could truncate large ThePornDB scene-credit responses. The 1.0 release candidate now allows bounded complete JSON responses up to **8 MiB**, with a clear size error for larger responses. Pull and build the updated release candidate, then **pause the enrichment run** before selecting **Retry failed lookups** and **Start / resume enrichment**. Retrying clears only saved error records; previously accepted portraits and unmatched results are retained. If the provider still exceeds 8 MiB, inspect the warning and report it without exposing API tokens or private Plex metadata. Do not disable provider response bounds.
+
+## Export indexing and portrait matching diagnostics
+
+On the Plex Cast Explorer server, open `http://127.0.0.1:8765/api/diagnostics/export`
+(replace 8765 if you changed the port). This downloads a read-only JSON snapshot
+of current indexing/enrichment state, match outcomes by source, pending totals,
+and up to 500 representative review/error/unmatched records. It is limited to
+server-local or authenticated authorized remote administrators. No tokens, image
+URLs or raw provider error messages are included, but performer names are present:
+review the export before sharing it outside your deployment. The original
+database and live scans are not altered. A download does not pause either scan.
+
+For a stalled scan, export once, wait a few minutes, then export again. Compare
+`index.current`, `index.phase`, `enrichment.checked`, and `enrichment.running`
+to identify which pipeline is stalled. The export is a diagnostic sample rather
+than the complete actor catalog.
