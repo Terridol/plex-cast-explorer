@@ -724,13 +724,19 @@ class PlexCastExplorerTests(unittest.TestCase):
                               'external_year': 2024, 'year_verified': True}]}
         second = dict(first, reference='https://www.themoviedb.org/person/20',
                       url='https://image.tmdb.org/t/p/w342/b.jpg')
+        looked_up = []
         def external(url, token):
+            looked_up.append(url)
             return {'imdb_id': 'nm111' if '/10/' in url else 'nm222'}
         with patch.object(app, 'IMDB_INDEX_PATH', Path(self.temp.name) / 'imdb.sqlite'), \
              patch.object(app, 'paced_provider_json', side_effect=external), \
              patch.object(app.imdb_identity, 'supporting_credits',
                           side_effect=lambda path, ident, local: 1 if ident == 'nm222' else 0):
             winner = app.imdb_resolve_candidates([first, second], 'sample actor')
+        self.assertEqual(looked_up, [
+            'https://api.themoviedb.org/3/person/10/external_ids',
+            'https://api.themoviedb.org/3/person/20/external_ids'])
+        self.assertIsNotNone(winner)
         self.assertEqual(winner['reference'], second['reference'])
 
     def test_imdb_unknown_does_not_resolve_competing_identities(self):
