@@ -65,6 +65,42 @@ class PlexCastExplorerTests(unittest.TestCase):
                 <Role tag="Sample Actor" role="Officer"/></Directory></MediaContainer>''')
         raise AssertionError('Unexpected Plex request '+path)
 
+    def test_sync_continues_after_short_plex_page(self):
+        def short_pages(path):
+            if '/sections/1/all' in path:
+                from urllib.parse import parse_qs, urlsplit
+                offset = int(parse_qs(urlsplit(path).query).get('X-Plex-Container-Start', ['0'])[0])
+                ids = ['101'] if offset == 0 else ['102'] if offset == 1 else []
+                return ET.fromstring('<MediaContainer totalSize="2">' +
+                    ''.join(f'<Video ratingKey="{key}" updatedAt="123"/>' for key in ids) +
+                    '</MediaContainer>')
+            return self.fake_xml(path)
+        with patch.object(app, 'plex_xml', side_effect=short_pages):
+            app.sync_all(force=True)
+        self.assertEqual(app.status_snapshot()['phase'], 'Finished')
+        self.assertEqual(app.get_stats()['titles'], 3)
+
+    def test_sync_refuses_truncated_plex_pages_without_pruning(self):
+        with patch.object(app, 'plex_xml', side_effect=self.fake_xml):
+            app.sync_all(force=True)
+        def truncated(path):
+            if '/sections/1/all' in path:
+                return ET.fromstring('<MediaContainer totalSize="2"/>')
+            return self.fake_xml(path)
+        with patch.object(app, 'plex_xml', side_effect=truncated):
+            app.sync_all(force=False)
+        self.assertEqual(app.status_snapshot()['phase'], 'Sync failed')
+        self.assertEqual(app.get_stats()['titles'], 3)
+
+    def test_sync_refuses_duplicate_plex_page_items(self):
+        def duplicate(path):
+            if '/sections/1/all' in path:
+                return ET.fromstring('<MediaContainer totalSize="2"><Video ratingKey="101"/><Video ratingKey="101"/></MediaContainer>')
+            return self.fake_xml(path)
+        with patch.object(app, 'plex_xml', side_effect=duplicate):
+            app.sync_all(force=True)
+        self.assertEqual(app.status_snapshot()['phase'], 'Sync failed')
+
     def test_cross_library_index_and_incremental(self):
         with patch.object(app, 'plex_xml', side_effect=self.fake_xml) as mock_plex:
             app.sync_all(force=True)
