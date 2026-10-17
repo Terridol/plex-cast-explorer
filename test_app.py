@@ -751,6 +751,34 @@ class PlexCastExplorerTests(unittest.TestCase):
         self.assertEqual(errors, [])
         self.assertEqual(provider.call_count, 2)
 
+    def test_tmdb_enabled_scans_plex_portraits_without_touching_saved_art(self):
+        with patch.object(app, 'plex_xml', side_effect=self.fake_xml):
+            app.sync_all(force=True)
+        with patch.object(app, 'artwork_keys', return_value={'tmdb': 'key', 'theporndb': ''}), \
+             patch.object(app, 'provider_enabled', return_value=True):
+            self.assertIn('sample actor', app.pending_enrichment_keys())
+            candidate = {'name': 'Sample Actor', 'source': 'TMDB',
+                         'url': 'https://image.tmdb.org/t/p/w342/example.jpg',
+                         'reference': 'https://www.themoviedb.org/person/1',
+                         'credit': 'TMDB',
+                         'matches': [{'title': 'Alpha', 'year': 2024, 'external_year': 2024,
+                                      'year_verified': True}]}
+            with patch.object(app, 'verified_portrait_candidates', return_value=([candidate], [])), \
+                 patch.object(app, 'external_image', return_value=(b'\\xff\\xd8\\xffTMDB', 'jpg')):
+                app.ENRICH_STOP.clear()
+                app.enrichment_worker()
+            self.assertEqual(app.get_actor('sample actor')['art']['source'], 'TMDB')
+            self.assertEqual(app.image_bytes('actor', 'sample actor'), b'\\xff\\xd8\\xffTMDB')
+            self.assertNotIn('sample actor', app.pending_enrichment_keys())
+
+    def test_tmdb_disabled_keeps_existing_plex_portrait_priority(self):
+        with patch.object(app, 'plex_xml', side_effect=self.fake_xml):
+            app.sync_all(force=True)
+        with patch.object(app, 'artwork_keys', return_value={'tmdb': 'key', 'theporndb': 'key'}), \
+             patch.object(app, 'provider_enabled', return_value=False):
+            self.assertNotIn('sample actor', app.pending_enrichment_keys())
+            self.assertIn('second actor', app.pending_enrichment_keys())
+
     def test_background_enrichment_auto_applies_and_resumes(self):
         with patch.object(app, 'plex_xml', side_effect=self.fake_xml):
             app.sync_all(force=True)
