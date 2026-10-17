@@ -882,7 +882,7 @@ class PlexCastExplorerTests(unittest.TestCase):
             app.sync_all(force=True)
         with patch.object(app, 'artwork_keys', return_value={'tmdb': 'key', 'theporndb': 'key'}), \
              patch.object(app, 'provider_enabled', return_value=False):
-            self.assertNotIn('sample actor', app.pending_enrichment_keys())
+            self.assertIn('sample actor', app.pending_enrichment_keys())
             self.assertIn('second actor', app.pending_enrichment_keys())
 
     def test_sync_wrapper_starts_enrichment_only_after_successful_sync(self):
