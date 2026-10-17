@@ -1668,7 +1668,7 @@ def imdb_resolve_candidates(choices, actor_key):
         if choice.get('source') != 'TMDB' or not singleton_is_verified(actor_name, [choice]):
             scored.append((0, choice))
             continue
-        match = re.fullmatch(r'https://www\\.themoviedb\\.org/person/([0-9]+)',
+        match = re.fullmatch(r'https://www\.themoviedb\.org/person/([0-9]+)',
                              choice.get('reference', ''))
         if not match:
             scored.append((0, choice))
