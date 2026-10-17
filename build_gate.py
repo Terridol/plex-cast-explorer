@@ -81,6 +81,7 @@ def check_install_contract(root: Path) -> str:
     app_source = read(root, 'app.py')
     require("PLEX_PORTRAIT_DIR = ROOT / 'plex-portraits'" in app_source and
             'def cache_plex_portraits()' in app_source and
+            "if os.environ.get('CAST_EXPLORER_BULK_PLEX_CACHE') == '1':" in app_source and
             'errors += cache_plex_portraits()' in app_source and
             'return cached_plex_portrait(thumb)' in app_source and
             'MAX_PLEX_IMAGE_BYTES = 4_000_000' in app_source and
