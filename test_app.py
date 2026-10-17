@@ -814,7 +814,7 @@ class PlexCastExplorerTests(unittest.TestCase):
             self.assertNotIn('sample actor', app.pending_enrichment_keys())
 
     @patch.object(app, 'provider_enabled', new=lambda name: name == 'tmdb')
-    def test_existing_saved_art_prevents_tpdb_search_when_tmdb_misses(self):
+    def test_existing_saved_art_kept_when_external_providers_have_no_match(self):
         with patch.object(app, 'plex_xml', side_effect=self.fake_xml):
             app.sync_all(force=True)
         prior = app.new_art_candidate(
@@ -823,10 +823,11 @@ class PlexCastExplorerTests(unittest.TestCase):
         with patch.object(app, 'external_image', return_value=(b'\\xff\\xd8\\xffold', 'jpg')):
             app.apply_art('second actor', prior['id'])
         with patch.object(app, 'artwork_keys', return_value={'tmdb': 't', 'theporndb': 'p'}), \
-             patch.object(app, 'paced_provider_json', return_value={'results': []}) as provider:
+             patch.object(app, 'paced_provider_json', side_effect=[
+                 {'results': []}, {'data': []}]) as provider:
             candidates, errors = app.verified_portrait_candidates('second actor')
         self.assertEqual((candidates, errors), ([], []))
-        self.assertEqual(provider.call_count, 1)
+        self.assertEqual(provider.call_count, 2)
         self.assertEqual(app.get_actor('second actor')['art']['source'], 'ThePornDB')
 
     def test_single_exact_year_credit_can_replace_existing_plex_portrait(self):
@@ -986,23 +987,18 @@ class PlexCastExplorerTests(unittest.TestCase):
         self.assertEqual(len(calls), 2)
 
     @patch.object(app, 'provider_enabled', new=lambda name: name == 'tmdb')
-    def test_plex_portrait_blocks_tpdb_fallback_after_tmdb_miss(self):
+    def test_existing_plex_fallback_remains_when_tpdb_has_no_match(self):
         with patch.object(app, 'plex_xml', side_effect=self.fake_xml):
             app.sync_all(force=True)
-        calls = []
-        def fake_provider(url, token):
-            calls.append(url)
-            if '/search/person?' in url:
-                return {'results': []}
-            raise AssertionError('TPDB must not be queried while Plex has artwork')
         with patch.object(app, 'artwork_keys', return_value={'tmdb': 't', 'theporndb': 'p'}), \
-             patch.object(app, 'paced_provider_json', side_effect=fake_provider):
+             patch.object(app, 'provider_enabled', return_value=True), \
+             patch.object(app, 'paced_provider_json',
+                          side_effect=[{'results': []}, {'data': []}]) as provider:
             candidates, errors = app.verified_portrait_candidates('sample actor')
         self.assertEqual((candidates, errors), ([], []))
-        self.assertEqual(len(calls), 1)
+        self.assertEqual(provider.call_count, 2)
         self.assertEqual(app.get_actor('sample actor')['art']['source'], 'Plex')
 
-    @patch.object(app, 'provider_enabled', new=lambda name: name == 'tmdb')
     def test_verified_candidates_fall_back_to_tpdb_if_tmdb_lacks_portrait(self):
         with patch.object(app, 'plex_xml', side_effect=self.fake_xml):
             app.sync_all(force=True)
