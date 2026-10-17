@@ -999,6 +999,7 @@ class PlexCastExplorerTests(unittest.TestCase):
         self.assertEqual(provider.call_count, 2)
         self.assertEqual(app.get_actor('sample actor')['art']['source'], 'Plex')
 
+    @patch.object(app, 'provider_enabled', new=lambda name: name == 'tmdb')
     def test_verified_candidates_fall_back_to_tpdb_if_tmdb_lacks_portrait(self):
         with patch.object(app, 'plex_xml', side_effect=self.fake_xml):
             app.sync_all(force=True)
