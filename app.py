@@ -811,12 +811,28 @@ def sync_all(force=False):
                             f"&X-Plex-Container-Start={start}&X-Plex-Container-Size={page_size}")
                     root = plex_xml(path)
                     batch = [node for node in root if node.tag in ('Video', 'Directory') and node.get('ratingKey')]
+                    # Some Plex endpoints return short pages before the final
+                    # page. Never treat a short page as proof of completion.
+                    reported = root.get('totalSize')
+                    if reported is None:
+                        raise ValueError(f"Library {section['name']}: Plex omitted totalSize; refusing incomplete sync")
+                    total_size = int(reported)
+                    if total_size < 0:
+                        raise ValueError(f"Library {section['name']}: invalid Plex totalSize")
+                    keys = [node.get('ratingKey') for node in batch]
+                    if len(keys) != len(set(keys)) or any(key in seen for key in keys):
+                        raise ValueError(f"Library {section['name']}: duplicate ratingKey in paginated listing")
+                    if not batch and start < total_size:
+                        raise ValueError(f"Library {section['name']}: empty page at {start}/{total_size}")
                     all_entries.extend(batch)
-                    seen.update(node.get('ratingKey') for node in batch)
+                    seen.update(keys)
                     start += len(batch)
-                    total_size = int(root.get('totalSize') or root.get('size') or len(batch))
-                    if not batch or start >= total_size or len(batch) < page_size:
+                    if start > total_size:
+                        raise ValueError(f"Library {section['name']}: page count exceeds totalSize")
+                    if start == total_size:
                         break
+                if len(seen) != total_size:
+                    raise ValueError(f"Library {section['name']}: discovered {len(seen)} of {total_size}; refusing deletions")
 
                 existing = {r['rating_key']: r for r in db.execute('''
                     SELECT t.rating_key,t.updated_at,
