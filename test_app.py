@@ -762,6 +762,8 @@ class PlexCastExplorerTests(unittest.TestCase):
                          'reference': 'https://www.themoviedb.org/person/1',
                          'credit': 'TMDB',
                          'matches': [{'title': 'Alpha', 'year': 2024, 'external_year': 2024,
+                                      'year_verified': True},
+                                     {'title': 'Beta', 'year': 2018, 'external_year': 2018,
                                       'year_verified': True}]}
             with patch.object(app, 'verified_portrait_candidates', return_value=([candidate], [])), \
                  patch.object(app, 'external_image', return_value=(b'\\xff\\xd8\\xffTMDB', 'jpg')):
@@ -784,7 +786,9 @@ class PlexCastExplorerTests(unittest.TestCase):
                 'reference': 'https://www.themoviedb.org/person/42',
                 'credit': 'TMDB',
                 'matches': [{'title': 'Alpha', 'year': 2024,
-                             'external_year': 2024, 'year_verified': True}]}
+                             'external_year': 2024, 'year_verified': True},
+                            {'title': 'Beta', 'year': 2018,
+                             'external_year': 2018, 'year_verified': True}]}
         with patch.object(app, 'artwork_keys', return_value={'tmdb': 't', 'theporndb': 'p'}), \
              patch.object(app, 'provider_enabled', return_value=True):
             self.assertIn('sample actor', app.pending_enrichment_keys())
@@ -811,6 +815,24 @@ class PlexCastExplorerTests(unittest.TestCase):
         self.assertEqual((candidates, errors), ([], []))
         self.assertEqual(provider.call_count, 1)
         self.assertEqual(app.get_actor('second actor')['art']['source'], 'ThePornDB')
+
+    def test_weak_tmdb_match_does_not_replace_existing_plex_portrait(self):
+        with patch.object(app, 'plex_xml', side_effect=self.fake_xml):
+            app.sync_all(force=True)
+        candidate = {'name': 'Sample Actor', 'source': 'TMDB',
+                     'url': 'https://image.tmdb.org/t/p/w342/ambiguous.jpg',
+                     'reference': 'https://www.themoviedb.org/person/77',
+                     'credit': 'TMDB',
+                     'matches': [{'title': 'Alpha', 'year': 2024,
+                                  'external_year': 2024, 'year_verified': True}]}
+        with patch.object(app, 'pending_enrichment_keys', return_value=['sample actor']), \
+             patch.object(app, 'verified_portrait_candidates', return_value=([candidate], [])), \
+             patch.object(app, 'external_image') as image:
+            app.ENRICH_STOP.clear()
+            app.enrichment_worker()
+            image.assert_not_called()
+        self.assertEqual(app.get_actor('sample actor')['art']['source'], 'Plex')
+        self.assertEqual(app.enrichment_status()['review_waiting'], 1)
 
     def test_tmdb_disabled_keeps_existing_plex_portrait_priority(self):
         with patch.object(app, 'plex_xml', side_effect=self.fake_xml):
