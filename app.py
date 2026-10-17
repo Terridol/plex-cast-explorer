@@ -1703,6 +1703,7 @@ def diagnostic_export():
         'index': index,
         'enrichment': enrich,
         'counts': counts,
+        'indexed_catalog': {key: value for key, value in get_stats().items() if key != 'machine_id'},
         'sample_limit': 500,
         'sample_count': len(samples),
         'samples': samples,
