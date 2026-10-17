@@ -181,7 +181,7 @@ def check_install_contract(root: Path) -> str:
             "WizardIsTaskSelected('tmdb')" in spec and
             "if ($EnableTMDB -eq 1)" in service and
             "CAST_EXPLORER_ENABLE_TMDB" in read(root, 'app.py') and
-            "if keys['theporndb'] and not found:" in read(root, 'app.py') and
+            "if keys['theporndb'] and not found and not has_existing_art and not errors:" in app_source and
             "if keys['theporndb'] and not results:" in read(root, 'app.py') and
             "retry_unmatched_enrichment" in read(root, 'app.py') and
             "enrichRetryUnmatched" in read(root, 'static/app.js') and
