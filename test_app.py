@@ -893,6 +893,20 @@ class PlexCastExplorerTests(unittest.TestCase):
         sync.assert_called_once_with(force=True)
         enrich.assert_called_once()
 
+    def test_diagnostic_export_summarizes_reviews_without_secrets(self):
+        with patch.object(app, 'plex_xml', side_effect=self.fake_xml):
+            app.sync_all(force=True)
+        app.remember_enrichment('sample actor', 'review', [{
+            'source': 'TMDB', 'name': 'Sample Actor',
+            'url': 'https://example.org/portrait?token=private-value',
+            'matches': [{'title': 'Alpha', 'year_verified': True}]}])
+        snapshot = app.diagnostic_export()
+        self.assertEqual(snapshot['counts']['actors_total'], 2)
+        self.assertEqual(snapshot['counts']['review'], 1)
+        self.assertEqual(snapshot['samples'][0]['candidates'][0]['matching_credits'], 1)
+        self.assertNotIn('private-value', json.dumps(snapshot))
+        self.assertNotIn('example.org', json.dumps(snapshot))
+
     def test_completed_enrichment_results_are_not_requeued(self):
         with patch.object(app, 'plex_xml', side_effect=self.fake_xml):
             app.sync_all(force=True)
