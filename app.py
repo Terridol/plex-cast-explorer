@@ -1587,18 +1587,22 @@ def enrichment_status():
         for row in db.execute('SELECT status,COUNT(*) AS n FROM enrichment_results GROUP BY status'):
             data['db_' + row['status']] = row['n']
         data['review_waiting'] = db.execute("SELECT COUNT(*) FROM enrichment_results WHERE status='review'").fetchone()[0]
+        include_plex = bool(artwork_keys()['tmdb']) and provider_enabled('tmdb')
         data['remaining'] = db.execute('''SELECT COUNT(*) FROM actors a
-            WHERE a.thumb='' AND NOT EXISTS(SELECT 1 FROM actor_art art WHERE art.actor_key=a.actor_key)
-            AND NOT EXISTS(SELECT 1 FROM enrichment_results r WHERE r.actor_key=a.actor_key)''').fetchone()[0]
+            WHERE (a.thumb='' OR ?) AND NOT EXISTS(SELECT 1 FROM actor_art art WHERE art.actor_key=a.actor_key)
+            AND NOT EXISTS(SELECT 1 FROM enrichment_results r WHERE r.actor_key=a.actor_key)''',
+            (int(include_plex),)).fetchone()[0]
     return data
 
 
 def pending_enrichment_keys():
+    include_plex = bool(artwork_keys()['tmdb']) and provider_enabled('tmdb')
     with db_open() as db:
         return [r[0] for r in db.execute('''SELECT a.actor_key FROM actors a JOIN credits c ON c.actor_key=a.actor_key
-            WHERE a.thumb='' AND NOT EXISTS(SELECT 1 FROM actor_art art WHERE art.actor_key=a.actor_key)
+            WHERE (a.thumb='' OR ?) AND NOT EXISTS(SELECT 1 FROM actor_art art WHERE art.actor_key=a.actor_key)
             AND NOT EXISTS(SELECT 1 FROM enrichment_results r WHERE r.actor_key=a.actor_key)
-            GROUP BY a.actor_key ORDER BY COUNT(c.rating_key) DESC,a.actor_key''')]
+            GROUP BY a.actor_key ORDER BY COUNT(c.rating_key) DESC,a.actor_key''',
+            (int(include_plex),))]
 
 
 def remember_enrichment(actor_key, status, candidates=None, message=''):
@@ -1622,6 +1626,12 @@ def enrichment_worker():
                 break
             try:
                 choices, errors = verified_portrait_candidates(key)
+                # Existing Plex artwork remains the fallback when TMDB cannot
+                # verify a match; never auto-replace it with ThePornDB.
+                with db_open() as db:
+                    plex_row = db.execute('SELECT thumb FROM actors WHERE actor_key=?', (key,)).fetchone()
+                if plex_row and plex_row['thumb']:
+                    choices = [choice for choice in choices if choice['source'] == 'TMDB']
                 # Avoid burning through a large library on bad credentials, outages,
                 # or rate limits. The administrator can fix the provider and retry.
                 if errors and not choices:
@@ -1702,11 +1712,12 @@ def retry_unmatched_enrichment():
             raise ValueError('Pause the running scan before retrying unmatched performers')
     with db_open() as db:
         # Skip entries whose actor already has Plex or user-saved artwork.
+        include_plex = bool(artwork_keys()['tmdb']) and provider_enabled('tmdb')
         count = db.execute("""DELETE FROM enrichment_results
             WHERE status='unmatched' AND actor_key IN (
-                SELECT a.actor_key FROM actors a WHERE a.thumb=''
+                SELECT a.actor_key FROM actors a WHERE (a.thumb='' OR ?)
                   AND NOT EXISTS (SELECT 1 FROM actor_art art WHERE art.actor_key=a.actor_key)
-            )""").rowcount
+            )""", (int(include_plex),)).rowcount
     return count
 
 
