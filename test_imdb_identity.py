@@ -28,6 +28,11 @@ class IMDbIndexTests(unittest.TestCase):
             imdb_identity.update_index(people, titles, index)
             self.assertEqual(imdb_identity.supporting_credits(index, 'nm123', [
                 {'title': 'Film Alpha', 'year': 2024}]), 1)
+            # Windows refuses to move/delete a SQLite database whose read
+            # connection remains open. Verify a lookup releases its handle.
+            moved = root / 'moved.sqlite'
+            index.replace(moved)
+            moved.replace(index)
             self.assertEqual(imdb_identity.supporting_credits(index, 'nm456', [
                 {'title': 'Film Alpha', 'year': 2024}]), 0)
             self.assertEqual(imdb_identity.supporting_credits(index, 'nm123', [
