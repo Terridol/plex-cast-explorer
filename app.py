@@ -1968,7 +1968,13 @@ def review_single_batch_worker():
                         choices = json.loads(current['candidates'])
                     except (ValueError, TypeError):
                         choices = []
-                    if not singleton_is_verified(row['name'], choices, current['message']):
+                    if current['message']:
+                        with REVIEW_BATCH_LOCK: REVIEW_BATCH_STATE['skipped'] += 1
+                        continue
+                    selected = (choices[0] if singleton_is_verified(row['name'], choices) else
+                                imdb_resolve_candidates(choices, row['actor_key'])
+                                if len(choices) > 1 else None)
+                    if selected is None:
                         with REVIEW_BATCH_LOCK: REVIEW_BATCH_STATE['skipped'] += 1
                         continue
                     with db_open() as db:
@@ -1976,10 +1982,10 @@ def review_single_batch_worker():
                             FROM actors a LEFT JOIN actor_art art ON art.actor_key=a.actor_key
                             WHERE a.actor_key=?''', (row['actor_key'],)).fetchone()
                     if (existing and (existing['thumb'] or existing['saved_art'])
-                            and not confident_portrait_replacement(row['name'], choices, [current['message']] if current['message'] else [])):
+                            and not confident_portrait_replacement(row['name'], [selected])):
                         with REVIEW_BATCH_LOCK: REVIEW_BATCH_STATE['skipped'] += 1
                         continue
-                    save_verified_art(row['actor_key'], choices[0])
+                    save_verified_art(row['actor_key'], selected)
                     remember_enrichment(row['actor_key'], 'auto', [], 'Unique credit-matched candidate auto-accepted')
                     with REVIEW_BATCH_LOCK: REVIEW_BATCH_STATE['applied'] += 1
             except Exception as exc:
