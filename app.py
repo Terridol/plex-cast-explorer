@@ -1370,6 +1370,30 @@ def credit_year(row):
     return int(date[:4]) if re.match(r'^\d{4}', date) else None
 
 
+SELF_CREDIT_LABELS = {'self', 'himself', 'herself', 'themself', 'themselves'}
+
+
+def credit_role_conflict(plex_role, provider_role, performer_name=''):
+    """Self credits may use 'Himself' on Plex and the real name on TMDB."""
+    left, right = normalize_title(plex_role), normalize_title(provider_role)
+    if not left or not right or left == right:
+        return False
+    name = normalize_title(performer_name)
+    if name and {left, right} <= (SELF_CREDIT_LABELS | {name}):
+        return False
+    return True
+
+
+def credit_has_conflict(credit, performer_name=''):
+    """Also reinterpret stored review records created by older role rules."""
+    if not credit.get('role_conflict'):
+        return False
+    left, right = credit.get('plex_character'), credit.get('provider_character')
+    if not left or not right:
+        return True  # Missing evidence must not undo an existing conflict.
+    return credit_role_conflict(left, right, performer_name)
+
+
 def credit_matches(local_titles, remote_credits, source):
     """Require real title equality and compatible dates; never infer identity from a name alone."""
     matched = {}
@@ -1399,7 +1423,7 @@ def credit_matches(local_titles, remote_credits, source):
             key = (local['title'].casefold(), year_a, local['media_type'])
             p_role = str(local.get('character') or '').strip()
             e_role = str(remote.get('character') or '').strip()
-            conflict = bool(p_role and e_role and normalize_title(p_role) != normalize_title(e_role))
+            conflict = credit_role_conflict(p_role, e_role, '')
             matched[key] = {'title': local['title'], 'year': year_a,
                             'external_year': year_b, 'year_verified': exact_year,
                             'plex_character': p_role, 'provider_character': e_role,
@@ -1411,7 +1435,7 @@ def credit_matches(local_titles, remote_credits, source):
 def is_strong_match(item):
     matches = item.get('matches', [])
     return (len(matches) >= 2 and sum(bool(m['year_verified']) for m in matches) >= 1
-            and not any(m.get('role_conflict') for m in matches))
+            and not any(credit_has_conflict(m, item.get('name', '')) for m in matches))
 
 
 def actor_titles_for_matching(key):
@@ -1556,7 +1580,7 @@ def singleton_is_verified(actor_name, candidates, warning=''):
     if not isinstance(matches, list) or not matches:
         return False
     for m in matches:
-        if not isinstance(m, dict) or not normalize_title(m.get('title')) or m.get('role_conflict'):
+        if not isinstance(m, dict) or not normalize_title(m.get('title')) or credit_has_conflict(m, entry['name']):
             return False
         ya, yb = credit_year({'year': m.get('year')}), credit_year({'year': m.get('external_year')})
         if ya is not None and yb is not None and abs(ya-yb) > 1:
