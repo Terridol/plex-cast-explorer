@@ -1632,6 +1632,60 @@ def enrichment_status():
     return data
 
 
+def diagnostic_export():
+    """Read-only, redacted snapshot of index/enrichment progress for support."""
+    with db_open() as db:
+        counts = {r['status']: r['n'] for r in db.execute(
+            'SELECT status, COUNT(*) AS n FROM enrichment_results GROUP BY status')}
+        counts['actors_total'] = db.execute('SELECT COUNT(*) FROM actors').fetchone()[0]
+        counts['actors_without_plex_thumb'] = db.execute(
+            "SELECT COUNT(*) FROM actors WHERE thumb=''").fetchone()[0]
+        counts['without_external_art'] = db.execute(
+            'SELECT COUNT(*) FROM actors a WHERE NOT EXISTS '
+            '(SELECT 1 FROM actor_art art WHERE art.actor_key=a.actor_key)').fetchone()[0]
+        counts['unprocessed'] = db.execute(
+            'SELECT COUNT(*) FROM actors a WHERE NOT EXISTS '
+            '(SELECT 1 FROM enrichment_results e WHERE e.actor_key=a.actor_key)').fetchone()[0]
+        counts['art_by_source'] = {r['source']: r['n'] for r in db.execute(
+            'SELECT source, COUNT(*) AS n FROM actor_art GROUP BY source')}
+        rows = db.execute("""SELECT a.name,e.status,e.candidates,e.checked_at
+            FROM enrichment_results e JOIN actors a ON a.actor_key=e.actor_key
+            WHERE e.status IN ('review','error','unmatched')
+            ORDER BY CASE e.status WHEN 'error' THEN 0 WHEN 'review' THEN 1 ELSE 2 END,
+                     e.checked_at DESC LIMIT 500""").fetchall()
+    samples = []
+    for row in rows:
+        try:
+            options = json.loads(row['candidates'])
+            if not isinstance(options, list):
+                options = []
+        except (ValueError, TypeError):
+            options = []
+        samples.append({
+            'actor': row['name'], 'status': row['status'],
+            'checked_at': row['checked_at'],
+            'candidates': [{
+                'source': c.get('source', ''),
+                'name': c.get('name', ''),
+                'matching_credits': len(c.get('matches', [])),
+                'verified_years': sum(bool(m.get('year_verified')) for m in c.get('matches', [])
+                                      if isinstance(m, dict)),
+                'role_conflicts': sum(bool(m.get('role_conflict')) for m in c.get('matches', [])
+                                      if isinstance(m, dict)),
+            } for c in options if isinstance(c, dict)][:8],
+        })
+    return {
+        'format': 'plex-cast-diagnostics-v1',
+        'generated_at': datetime.now(timezone.utc).isoformat(),
+        'index': status_snapshot(),
+        'enrichment': enrichment_status(),
+        'counts': counts,
+        'sample_limit': 500,
+        'sample_count': len(samples),
+        'samples': samples,
+    }
+
+
 def pending_enrichment_keys():
     with db_open() as db:
         return [r[0] for r in db.execute('''SELECT a.actor_key FROM actors a JOIN credits c ON c.actor_key=a.actor_key
@@ -2064,6 +2118,12 @@ class Handler(BaseHTTPRequestHandler):
                 entry = candidate(params.get('id', [''])[0])
                 raw, ext = external_image(entry['url'])
                 self.respond(200, raw, {'png':'image/png','jpg':'image/jpeg','webp':'image/webp'}[ext], 'private, max-age=300')
+            elif path == '/api/diagnostics/export':
+                if not self.is_admin():
+                    return self.respond(403, {'error': 'Server-only diagnostics'})
+                self.respond(200, diagnostic_export(), extra_headers=(
+                    ('Content-Disposition', 'attachment; filename="plex-cast-diagnostics.json"'),
+                ))
             elif path == '/api/enrich/status':
                 if not self.is_admin():
                     return self.respond(403, {'error': 'Server-only artwork administration'})
