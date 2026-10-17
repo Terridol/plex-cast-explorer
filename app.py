@@ -1441,9 +1441,10 @@ def verified_portrait_candidates(actor_key):
     # A Plex portrait is the fallback after TMDB. TPDB is only eligible
     # when neither provider has usable artwork.
     with db_open() as db:
-        plex_row = db.execute('SELECT thumb FROM actors WHERE actor_key=?',
-                              (actor_key,)).fetchone()
-    has_plex_portrait = bool(plex_row and plex_row['thumb'])
+        existing = db.execute('''SELECT a.thumb, art.actor_key AS saved_art
+            FROM actors a LEFT JOIN actor_art art ON art.actor_key=a.actor_key
+            WHERE a.actor_key=?''', (actor_key,)).fetchone()
+    has_existing_art = bool(existing and (existing['thumb'] or existing['saved_art']))
     if keys['tmdb'] and provider_enabled('tmdb'):
         try:
             search = paced_provider_json('https://api.themoviedb.org/3/search/person?' + urlencode({
@@ -1469,7 +1470,7 @@ def verified_portrait_candidates(actor_key):
     # Fall back to ThePornDB only when TMDB produced no corroborated portrait
     # candidate. An errored TMDB lookup retains its warning, preventing
     # automatic assignment from an unverified, degraded provider comparison.
-    if keys['theporndb'] and not found and not has_plex_portrait and not errors:
+    if keys['theporndb'] and not found and not has_existing_art and not errors:
         try:
             response = paced_provider_json('https://api.theporndb.net/performers?' + urlencode({'q': name}), keys['theporndb'])
             for item in (response.get('data') or [])[:10]:
@@ -1595,7 +1596,10 @@ def enrichment_status():
         data['review_waiting'] = db.execute("SELECT COUNT(*) FROM enrichment_results WHERE status='review'").fetchone()[0]
         include_plex = bool(artwork_keys()['tmdb']) and provider_enabled('tmdb')
         data['remaining'] = db.execute('''SELECT COUNT(*) FROM actors a
-            WHERE (a.thumb='' OR ?) AND NOT EXISTS(SELECT 1 FROM actor_art art WHERE art.actor_key=a.actor_key)
+            WHERE ((? AND NOT EXISTS (SELECT 1 FROM actor_art art
+                        WHERE art.actor_key=a.actor_key AND art.source='TMDB'))
+                   OR (a.thumb='' AND NOT EXISTS (SELECT 1 FROM actor_art art
+                        WHERE art.actor_key=a.actor_key)))
             AND NOT EXISTS(SELECT 1 FROM enrichment_results r WHERE r.actor_key=a.actor_key)''',
             (int(include_plex),)).fetchone()[0]
     return data
@@ -1605,7 +1609,10 @@ def pending_enrichment_keys():
     include_plex = bool(artwork_keys()['tmdb']) and provider_enabled('tmdb')
     with db_open() as db:
         return [r[0] for r in db.execute('''SELECT a.actor_key FROM actors a JOIN credits c ON c.actor_key=a.actor_key
-            WHERE (a.thumb='' OR ?) AND NOT EXISTS(SELECT 1 FROM actor_art art WHERE art.actor_key=a.actor_key)
+            WHERE ((? AND NOT EXISTS (SELECT 1 FROM actor_art art
+                        WHERE art.actor_key=a.actor_key AND art.source='TMDB'))
+                   OR (a.thumb='' AND NOT EXISTS (SELECT 1 FROM actor_art art
+                        WHERE art.actor_key=a.actor_key)))
             AND NOT EXISTS(SELECT 1 FROM enrichment_results r WHERE r.actor_key=a.actor_key)
             GROUP BY a.actor_key ORDER BY COUNT(c.rating_key) DESC,a.actor_key''',
             (int(include_plex),))]
@@ -1711,12 +1718,15 @@ def retry_unmatched_enrichment():
         if ENRICH_STATE['running']:
             raise ValueError('Pause the running scan before retrying unmatched performers')
     with db_open() as db:
-        # Skip entries whose actor already has Plex or user-saved artwork.
+        # Retry unmatched actors when TMDB could supersede non-TMDB artwork.
         include_plex = bool(artwork_keys()['tmdb']) and provider_enabled('tmdb')
         count = db.execute("""DELETE FROM enrichment_results
             WHERE status='unmatched' AND actor_key IN (
-                SELECT a.actor_key FROM actors a WHERE (a.thumb='' OR ?)
-                  AND NOT EXISTS (SELECT 1 FROM actor_art art WHERE art.actor_key=a.actor_key)
+                SELECT a.actor_key FROM actors a WHERE
+                    (? AND NOT EXISTS (SELECT 1 FROM actor_art art
+                        WHERE art.actor_key=a.actor_key AND art.source='TMDB'))
+                    OR (a.thumb='' AND NOT EXISTS (SELECT 1 FROM actor_art art
+                        WHERE art.actor_key=a.actor_key))
             )""", (int(include_plex),)).rowcount
     return count
 
