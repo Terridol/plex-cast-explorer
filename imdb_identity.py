@@ -70,7 +70,11 @@ def supporting_credits(destination, imdb_id, local_titles):
     if not re.fullmatch(r'nm[0-9]+', str(imdb_id or '')) or not Path(destination).is_file():
         return 0
     local = {(clean_title(x.get('title')), x.get('year')) for x in local_titles}
-    with sqlite3.connect(f'file:{Path(destination).resolve().as_posix()}?mode=ro', uri=True) as db:
+    # sqlite3.Connection's context manager commits/rolls back but DOES NOT
+    # close the handle. Explicit close is essential for Windows temp cleanup
+    # and for atomically replacing the IMDb dataset during updates.
+    db = sqlite3.connect(f'file:{Path(destination).resolve().as_posix()}?mode=ro', uri=True)
+    try:
         person = db.execute('SELECT known FROM people WHERE nconst=?', (imdb_id,)).fetchone()
         if not person:
             return 0
@@ -84,3 +88,5 @@ def supporting_credits(destination, imdb_id, local_titles):
                            for title, year in local):
                 found += 1
         return found
+    finally:
+        db.close()
