@@ -242,6 +242,63 @@ class PlexCastExplorerTests(unittest.TestCase):
             self.assertNotIn('secret', state['last_error'])
             self.assertNotIn('metadata-static.plex.tv', state['last_error'])
 
+    def test_large_portrait_source_samples_across_entire_index(self):
+        portraits = [f'/portrait/{i:05d}' for i in range(50000)]
+        spread = app.spread_plex_portrait_probes(portraits)
+        self.assertEqual(len(spread), len(portraits))
+        self.assertEqual(set(spread), set(portraits))
+        # First 25 requests span the large set instead of the first 25 IDs.
+        self.assertGreater(int(spread[24].rsplit('/', 1)[-1]), 40000)
+
+    def test_mixed_403_portraits_do_not_skip_working_same_origin(self):
+        with patch.dict(os.environ, {}, clear=True):
+            app.save_config('http://127.0.0.1:32400', 'example-token')
+            with app.db_open() as db:
+                for i in range(200):
+                    db.execute('INSERT INTO actors(actor_key,name,thumb) VALUES (?,?,?)',
+                               (f'actor-{i}', f'Actor {i}',
+                                f'https://metadata-static.plex.tv/images/{i:05d}.jpg'))
+            observed = []
+            def fake_image(thumb):
+                observed.append(thumb)
+                n = int(thumb.rsplit('/', 1)[-1].split('.')[0])
+                if n < 40:
+                    raise HTTPError(thumb + '?token=secret', 403, 'Forbidden', {}, None)
+                return b'\xff\xd8\xffOK'
+            app.state_update(errors=0, last_error='')
+            with patch.object(app, 'cached_plex_portrait', side_effect=fake_image):
+                failures = app.cache_plex_portraits()
+            status = app.status_snapshot()
+            self.assertEqual(failures, 40, status)
+            self.assertEqual(status['portrait_skipped'], 0, status)
+            self.assertEqual(status['portrait_downloaded'], 160, status)
+            self.assertEqual(status['current'], 200, status)
+            self.assertEqual(len(observed), 200)
+
+    def test_known_plex_cdn_http_403_retries_authenticated_plex_transcode(self):
+        thumb = 'https://metadata-static.plex.tv/people/image.jpg'
+        blocked = HTTPError(thumb, 403, 'Forbidden', {}, None)
+        with patch.object(app, 'build_opener') as opener, \
+             patch.object(app, 'plex_transcoded_image',
+                          return_value=b'\xff\xd8\xffPlex') as transcoder:
+            opener.return_value.open.side_effect = blocked
+            self.assertEqual(app.plex_image_bytes(thumb), b'\xff\xd8\xffPlex')
+            transcoder.assert_called_once_with(thumb)
+            direct = opener.return_value.open.call_args.args[0]
+            self.assertNotIn('X-Plex-Token', direct.headers)
+
+    def test_failed_plex_transcode_keeps_original_403_diagnostic(self):
+        thumb = 'https://metadata-static.plex.tv/people/image.jpg'
+        direct_403 = HTTPError(thumb, 403, 'Forbidden', {}, None)
+        plex_404 = HTTPError('http://plex.invalid/photo/:/transcode',
+                             404, 'Not Found', {}, None)
+        with patch.object(app, 'build_opener') as opener, \
+             patch.object(app, 'plex_transcoded_image', side_effect=plex_404):
+            opener.return_value.open.side_effect = direct_403
+            with self.assertRaises(HTTPError) as caught:
+                app.plex_image_bytes(thumb)
+            self.assertEqual(caught.exception.code, 403)
+
     def test_plex_sync_never_replaces_manual_portrait_override(self):
         with patch.object(app, 'plex_xml', side_effect=self.fake_xml):
             app.sync_all(force=True)
