@@ -1535,6 +1535,26 @@ def singleton_is_verified(actor_name, candidates, warning=''):
     return True
 
 
+def confident_portrait_replacement(actor_name, candidates, errors=None):
+    """Require corroborated identity before replacing existing artwork."""
+    if errors or len(candidates) != 1:
+        return False
+    entry = candidates[0]
+    if not singleton_is_verified(actor_name, candidates):
+        return False
+    if is_strong_match(entry):
+        return True
+    matches = entry['matches']
+    if len(matches) != 1:
+        return False
+    credit = matches[0]
+    # One credit qualifies only with an exact verified release year,
+    # no role conflict, and no competing corroborated candidate.
+    return (credit.get('year_verified') is True and
+            credit_year({'year': credit.get('year')}) is not None and
+            credit_year({'year': credit.get('external_year')}) is not None)
+
+
 def choose_automatic_candidate(candidates, actor_name=None, errors=None):
     if not candidates or errors:
         return None
@@ -1654,7 +1674,7 @@ def enrichment_worker():
                         FROM actors a LEFT JOIN actor_art art ON art.actor_key=a.actor_key
                         WHERE a.actor_key=?''', (key,)).fetchone()
                 if (automatic and existing and (existing['thumb'] or existing['saved_art'])
-                        and not is_strong_match(automatic)):
+                        and not confident_portrait_replacement(actor_name, choices, errors)):
                     automatic = None
                 if automatic:
                     try:
@@ -1775,7 +1795,7 @@ def review_single_batch_worker():
                             FROM actors a LEFT JOIN actor_art art ON art.actor_key=a.actor_key
                             WHERE a.actor_key=?''', (row['actor_key'],)).fetchone()
                     if (existing and (existing['thumb'] or existing['saved_art'])
-                            and not is_strong_match(choices[0])):
+                            and not confident_portrait_replacement(row['name'], choices, [current['message']] if current['message'] else [])):
                         with REVIEW_BATCH_LOCK: REVIEW_BATCH_STATE['skipped'] += 1
                         continue
                     save_verified_art(row['actor_key'], choices[0])
