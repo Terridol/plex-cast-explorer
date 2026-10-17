@@ -370,6 +370,12 @@ class PlexCastExplorerTests(unittest.TestCase):
                 app.sync_all(force=True)
                 self.assertEqual(app.status_snapshot()['phase'], 'Finished',
                                  app.status_snapshot())
+                approved.assert_not_called()
+                plex.assert_not_called()
+                # Portraits are fetched only when the gallery requests them.
+                app.image_bytes.cache_clear()
+                self.assertEqual(app.image_bytes('actor', 'sample actor'),
+                                 b'\xff\xd8\xffCustom')
                 approved.assert_called_once_with(custom_url)
                 plex.assert_called_once()
                 proxied = plex.call_args.args[0]
@@ -378,9 +384,6 @@ class PlexCastExplorerTests(unittest.TestCase):
                 self.assertNotIn('X-Plex-Token', proxied)
                 self.assertEqual(plex.call_args.kwargs['max_bytes'],
                                  app.MAX_PLEX_IMAGE_BYTES)
-                app.image_bytes.cache_clear()
-                self.assertEqual(app.image_bytes('actor', 'sample actor'),
-                                 b'\xff\xd8\xffCustom')
                 plex.assert_called_once()
 
     def test_private_custom_scraper_image_is_not_proxied_through_plex(self):
