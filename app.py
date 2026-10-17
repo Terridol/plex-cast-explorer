@@ -32,6 +32,7 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import parse_qs, quote, urlencode, urlsplit
 from urllib.request import Request, urlopen, build_opener, HTTPRedirectHandler
 import xml.etree.ElementTree as ET
+import imdb_identity
 
 ASSET_ROOT = Path(getattr(sys, '_MEIPASS', Path(__file__).resolve().parent))
 ROOT = Path(os.environ['CAST_EXPLORER_DATA_DIR']).expanduser().resolve() if os.getenv('CAST_EXPLORER_DATA_DIR') else Path(__file__).resolve().parent
@@ -43,6 +44,7 @@ AUTH_PATH = ROOT / 'auth.json'
 ART_CONFIG_PATH = ROOT / 'artwork_config.json'
 PORTRAIT_DIR = ROOT / 'portraits'
 PLEX_PORTRAIT_DIR = ROOT / 'plex-portraits'
+IMDB_INDEX_PATH = ROOT / 'imdb-identity.sqlite'
 NETWORK_CONFIG_PATH = ROOT / 'network.json'
 HOST = os.getenv('CAST_EXPLORER_HOST', '0.0.0.0')
 PORT = int(os.getenv('CAST_EXPLORER_PORT', '8765'))
@@ -1649,6 +1651,45 @@ def choose_automatic_candidate(candidates, actor_name=None, errors=None):
     return best if primary != secondary else None
 
 
+def imdb_resolve_candidates(choices, actor_key):
+    """Tie-break genuinely competing candidates with locally indexed IMDb IDs.
+
+    IMDb knownForTitles contains only selected titles, not full filmography.
+    Therefore only unique positive IMDb evidence can break a tie; absence
+    of evidence never rules out a candidate.
+    """
+    if not IMDB_INDEX_PATH.is_file():
+        return None
+    actor_name, local = actor_titles_for_matching(actor_key)
+    if not actor_name:
+        return None
+    scored = []
+    for choice in choices:
+        if choice.get('source') != 'TMDB' or not singleton_is_verified(actor_name, [choice]):
+            scored.append((0, choice))
+            continue
+        match = re.fullmatch(r'https://www\\.themoviedb\\.org/person/([0-9]+)',
+                             choice.get('reference', ''))
+        if not match:
+            scored.append((0, choice))
+            continue
+        try:
+            external = paced_provider_json(
+                'https://api.themoviedb.org/3/person/' + match[1] + '/external_ids',
+                artwork_keys()['tmdb'])
+            imdb_id = external.get('imdb_id')
+            support = imdb_identity.supporting_credits(IMDB_INDEX_PATH, imdb_id, local)
+        except Exception as exc:
+            logging.info('Optional IMDb identity lookup unavailable: %s', type(exc).__name__)
+            return None
+        scored.append((support, choice))
+    scored.sort(key=lambda pair: pair[0], reverse=True)
+    if len(scored) < 2 or scored[0][0] < 1 or scored[0][0] <= scored[1][0]:
+        return None
+    winner = scored[0][1]
+    return winner if confident_portrait_replacement(actor_name, [winner]) else None
+
+
 def verified_portrait_image(url):
     """Prefer higher-resolution TMDB portraits and preserve safe fallback."""
     if url.startswith('https://image.tmdb.org/t/p/w342/'):
@@ -1793,6 +1834,8 @@ def enrichment_worker():
                     consecutive_provider_failures = 0
                 actor_name, _ = actor_titles_for_matching(key)
                 automatic = choose_automatic_candidate(choices, actor_name=actor_name, errors=errors)
+                if automatic is None and len(choices) > 1 and not errors:
+                    automatic = imdb_resolve_candidates(choices, key)
                 # Replacing an existing portrait requires stronger corroboration
                 # than a single overlapping title. Leave ambiguous matches for review.
                 with db_open() as db:
@@ -2422,7 +2465,10 @@ if __name__ == '__main__':
             raise SystemExit('Passwords do not match.')
         (set_admin_password if admin_mode else set_password)(first)
         print('Password updated; old sessions have been invalidated.')
+    elif len(sys.argv) == 4 and sys.argv[1] == '--update-imdb':
+        imdb_identity.update_index(sys.argv[2], sys.argv[3], IMDB_INDEX_PATH)
+        print('IMDb identity dataset updated successfully.')
     elif len(sys.argv) > 1:
-        raise SystemExit('Usage: PlexCastExplorer.exe [--set-admin-password | --set-password]')
+        raise SystemExit('Usage: PlexCastExplorer.exe [--set-admin-password | --set-password | --update-imdb name.basics.tsv.gz title.basics.tsv.gz]')
     else:
         main()
