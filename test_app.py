@@ -853,7 +853,7 @@ class PlexCastExplorerTests(unittest.TestCase):
                      'reference': 'https://www.themoviedb.org/person/77',
                      'credit': 'TMDB',
                      'matches': [{'title': 'Alpha', 'year': 2024,
-                                  'external_year': 2024, 'year_verified': True}]}
+                                  'external_year': None, 'year_verified': False}]}
         with patch.object(app, 'pending_enrichment_keys', return_value=['sample actor']), \
              patch.object(app, 'verified_portrait_candidates', return_value=([candidate], [])), \
              patch.object(app, 'external_image') as image:
