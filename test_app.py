@@ -816,6 +816,35 @@ class PlexCastExplorerTests(unittest.TestCase):
         self.assertEqual(provider.call_count, 1)
         self.assertEqual(app.get_actor('second actor')['art']['source'], 'ThePornDB')
 
+    def test_single_exact_year_credit_can_replace_existing_plex_portrait(self):
+        with patch.object(app, 'plex_xml', side_effect=self.fake_xml):
+            app.sync_all(force=True)
+        choice = {'name': 'Sample Actor', 'source': 'TMDB',
+                  'url': 'https://image.tmdb.org/t/p/w342/a.jpg',
+                  'reference': 'https://www.themoviedb.org/person/1',
+                  'credit': 'TMDB',
+                  'matches': [{'title': 'Alpha', 'year': 2024,
+                               'external_year': 2024, 'year_verified': True}]}
+        with patch.object(app, 'pending_enrichment_keys', return_value=['sample actor']), \
+             patch.object(app, 'verified_portrait_candidates', return_value=([choice], [])), \
+             patch.object(app, 'external_image', return_value=(b'\\xff\\xd8\\xffnew', 'jpg')):
+            app.ENRICH_STOP.clear()
+            app.enrichment_worker()
+        self.assertEqual(app.get_actor('sample actor')['art']['source'], 'TMDB')
+        self.assertEqual(app.enrichment_status()['review_waiting'], 0)
+
+    def test_one_credit_without_exact_year_cannot_replace_existing_art(self):
+        match = {'title': 'Alpha', 'year': 2024,
+                 'external_year': None, 'year_verified': False}
+        choice = {'name': 'Sample Actor', 'source': 'TMDB',
+                  'url': 'https://image.tmdb.org/t/p/w342/a.jpg',
+                  'matches': [match]}
+        self.assertFalse(app.confident_portrait_replacement('Sample Actor', [choice]))
+        self.assertFalse(app.confident_portrait_replacement(
+            'Sample Actor', [dict(choice, matches=[dict(match, external_year=2024,
+                                                       year_verified=True, role_conflict=True)])]))
+        self.assertFalse(app.confident_portrait_replacement('Sample Actor', [choice, choice]))
+
     def test_weak_tmdb_match_does_not_replace_existing_plex_portrait(self):
         with patch.object(app, 'plex_xml', side_effect=self.fake_xml):
             app.sync_all(force=True)
