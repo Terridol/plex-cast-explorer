@@ -32,3 +32,37 @@ Plex actor portrait bulk caching is disabled during normal library sync. Plex im
 Keep provider tokens, user library metadata and cached images out of Git, release assets and public support reports. See [Third-party providers](THIRD_PARTY.md), [Privacy](PRIVACY.md) and [1.0 release checklist](RELEASE_CHECKLIST.md).
 
 Matching policy: character/role labels are informational, not automatic identity vetoes; verified filmography titles and years determine confidence. Competing identities remain for review.
+
+## Optional IMDb identity corroboration (personal, non-commercial use)
+
+IMDb is **not** an artwork provider and the application never scrapes IMDb pages.
+When two or more TMDB identities remain plausible, an optional local IMDb
+`knownForTitles` dataset can provide an additional independent title/year
+cross-check. TMDB's supported `external_ids` endpoint supplies the candidate's
+IMDb person ID. A candidate is selected by IMDb only when exactly one candidate
+has positive known-for evidence and the others have less; the candidate must
+still pass the local filmography confidence checks. Missing IMDb evidence never
+counts against someone. If the dataset is missing, ambiguous profiles remain
+in review as before.
+
+To install or **update** the local IMDb identity dataset:
+
+1. Download `name.basics.tsv.gz` and `title.basics.tsv.gz` from
+   https://datasets.imdbws.com/ on your own computer, subject to IMDb's
+   current personal/non-commercial dataset terms. Do not redistribute these files.
+2. Open a terminal in the installation directory and execute:
+
+   `PlexCastExplorer.exe --update-imdb "C:\\Downloads\\name.basics.tsv.gz" "C:\\Downloads\\title.basics.tsv.gz"`
+
+   Use the actual download locations. On source installs run
+   `python app.py --update-imdb ...` instead.
+3. Repeat the same command whenever you want fresher IMDb data. It writes
+   `imdb-identity.sqlite` in the configured application data folder and
+   atomically replaces the previous dataset only after successful import.
+
+The update can take significant time and temporary disk space for full IMDb
+datasets. Run it when the application service is stopped to avoid Windows file
+locking. After updating, pending ambiguous actors may be retried through the
+existing review workflow; already accepted portraits are not changed.
+IMDb `knownForTitles` is a **limited set of highlights**, not a complete
+filmography, and must never be used as negative identity evidence.
