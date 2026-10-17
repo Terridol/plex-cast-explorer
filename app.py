@@ -873,12 +873,22 @@ def sync_all(force=False):
         state_update(running=False, last_finished=datetime.now(timezone.utc).isoformat())
 
 
+def sync_and_enrich(force=False):
+    sync_all(force=force)
+    # The initial catalog scan and later incremental scans share one durable
+    # queue; confirmed/reviewed/unmatched actors are not searched repeatedly.
+    if status_snapshot()['phase'] in ('Finished', 'Finished with warnings'):
+        try:
+            enrichment_start()
+        except ValueError:
+            pass  # External providers are optional; Plex still works.
+
 def sync_start(force=False):
     with STATE_LOCK:
         if STATE['running']:
             return False
         STATE['running'] = True
-    threading.Thread(target=sync_all, args=(force,), daemon=True).start()
+    threading.Thread(target=sync_and_enrich, args=(force,), daemon=True).start()
     return True
 
 
@@ -1470,10 +1480,10 @@ def verified_portrait_candidates(actor_key):
                     errors.append('TMDB credits: ' + str(exc)[:100])
         except Exception as exc:
             errors.append('TMDB search: ' + str(exc)[:100])
-    # Fall back to ThePornDB only when TMDB produced no corroborated portrait
-    # candidate. An errored TMDB lookup retains its warning, preventing
-    # automatic assignment from an unverified, degraded provider comparison.
-    if keys['theporndb'] and not found and not has_existing_art and not errors:
+    # TPDB is second priority even when Plex already has a thumbnail.
+    # Plex artwork is retained only if neither external provider has a
+    # sufficiently corroborated match. Provider errors must be retryable.
+    if keys['theporndb'] and not found and not errors:
         try:
             response = paced_provider_json('https://api.theporndb.net/performers?' + urlencode({'q': name}), keys['theporndb'])
             for item in (response.get('data') or [])[:10]:
@@ -1617,28 +1627,16 @@ def enrichment_status():
         for row in db.execute('SELECT status,COUNT(*) AS n FROM enrichment_results GROUP BY status'):
             data['db_' + row['status']] = row['n']
         data['review_waiting'] = db.execute("SELECT COUNT(*) FROM enrichment_results WHERE status='review'").fetchone()[0]
-        include_plex = bool(artwork_keys()['tmdb']) and provider_enabled('tmdb')
         data['remaining'] = db.execute('''SELECT COUNT(*) FROM actors a
-            WHERE ((? AND NOT EXISTS (SELECT 1 FROM actor_art art
-                        WHERE art.actor_key=a.actor_key AND art.source='TMDB'))
-                   OR (a.thumb='' AND NOT EXISTS (SELECT 1 FROM actor_art art
-                        WHERE art.actor_key=a.actor_key)))
-            AND NOT EXISTS(SELECT 1 FROM enrichment_results r WHERE r.actor_key=a.actor_key)''',
-            (int(include_plex),)).fetchone()[0]
+            WHERE NOT EXISTS(SELECT 1 FROM enrichment_results r WHERE r.actor_key=a.actor_key)''').fetchone()[0]
     return data
 
 
 def pending_enrichment_keys():
-    include_plex = bool(artwork_keys()['tmdb']) and provider_enabled('tmdb')
     with db_open() as db:
         return [r[0] for r in db.execute('''SELECT a.actor_key FROM actors a JOIN credits c ON c.actor_key=a.actor_key
-            WHERE ((? AND NOT EXISTS (SELECT 1 FROM actor_art art
-                        WHERE art.actor_key=a.actor_key AND art.source='TMDB'))
-                   OR (a.thumb='' AND NOT EXISTS (SELECT 1 FROM actor_art art
-                        WHERE art.actor_key=a.actor_key)))
-            AND NOT EXISTS(SELECT 1 FROM enrichment_results r WHERE r.actor_key=a.actor_key)
-            GROUP BY a.actor_key ORDER BY COUNT(c.rating_key) DESC,a.actor_key''',
-            (int(include_plex),))]
+            WHERE NOT EXISTS(SELECT 1 FROM enrichment_results r WHERE r.actor_key=a.actor_key)
+            GROUP BY a.actor_key ORDER BY COUNT(c.rating_key) DESC,a.actor_key''')]
 
 
 def remember_enrichment(actor_key, status, candidates=None, message=''):
@@ -1750,16 +1748,7 @@ def retry_unmatched_enrichment():
         if ENRICH_STATE['running']:
             raise ValueError('Pause the running scan before retrying unmatched performers')
     with db_open() as db:
-        # Retry unmatched actors when TMDB could supersede non-TMDB artwork.
-        include_plex = bool(artwork_keys()['tmdb']) and provider_enabled('tmdb')
-        count = db.execute("""DELETE FROM enrichment_results
-            WHERE status='unmatched' AND actor_key IN (
-                SELECT a.actor_key FROM actors a WHERE
-                    (? AND NOT EXISTS (SELECT 1 FROM actor_art art
-                        WHERE art.actor_key=a.actor_key AND art.source='TMDB'))
-                    OR (a.thumb='' AND NOT EXISTS (SELECT 1 FROM actor_art art
-                        WHERE art.actor_key=a.actor_key))
-            )""", (int(include_plex),)).rowcount
+        count = db.execute("DELETE FROM enrichment_results WHERE status='unmatched'").rowcount
     return count
 
 
