@@ -1484,6 +1484,28 @@ def portrait_from_tpdb(item):
     return image if isinstance(image, str) else ''
 
 
+def deduplicate_portrait_candidates(candidates):
+    """Collapse identical provider images without combining identity evidence.
+
+    Two provider person IDs can reuse a portrait. Keep the strongest single
+    record's credits instead of adding unrelated records' filmographies.
+    """
+    unique = {}
+    for candidate in candidates:
+        source = candidate.get('source', '')
+        url = candidate.get('url', '')
+        name = normal_name(candidate.get('name', ''))
+        # Missing image URL must never count as a shared identity.
+        key = (source, name, url) if url else (source, name, id(candidate))
+        current = unique.get(key)
+        score = (len(candidate.get('matches', [])),
+                 sum(m.get('year_verified') is True for m in candidate.get('matches', [])))
+        if current is None or score > (len(current.get('matches', [])),
+                 sum(m.get('year_verified') is True for m in current.get('matches', []))):
+            unique[key] = candidate
+    return list(unique.values())
+
+
 def verified_portrait_candidates(actor_key):
     name, local = actor_titles_for_matching(actor_key)
     if not name:
@@ -1552,6 +1574,7 @@ def verified_portrait_candidates(actor_key):
         except Exception as exc:
             errors.append('ThePornDB search: ' + str(exc)[:100])
     # Best verified credit overlap first. Name-only matches never enter auto approval.
+    found = deduplicate_portrait_candidates(found)
     found.sort(key=lambda c: (len(c['matches']), sum(bool(m['year_verified']) for m in c['matches'])), reverse=True)
     return found[:8], errors
 
