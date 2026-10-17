@@ -87,11 +87,21 @@ class PlexCastExplorerTests(unittest.TestCase):
             self.assertEqual(mock_plex.call_count - count, 4)  # root, sections, 2 paged lists; no detail requests
 
 
+    def test_normal_sync_does_not_bulk_cache_plex_portraits(self):
+        with patch.dict(os.environ, {'CAST_EXPLORER_BULK_PLEX_CACHE': ''}, clear=True), \
+             patch.object(app, 'plex_xml', side_effect=self.fake_xml), \
+             patch.object(app, 'cache_plex_portraits') as bulk, \
+             patch.object(app, 'request_plex') as photo:
+            app.sync_all(force=True)
+            bulk.assert_not_called()
+            photo.assert_not_called()
+            self.assertEqual(app.status_snapshot()['phase'], 'Finished')
+
     def test_sync_downloads_and_reuses_plex_actor_portraits(self):
         # Plex's Role.thumb may be available even though the first sync only
         # indexed its URL. Cache missing images while indexing, and backfill
         # without requiring the movie's updatedAt timestamp to change.
-        with patch.dict(os.environ, {}, clear=True):
+        with patch.dict(os.environ, {'CAST_EXPLORER_BULK_PLEX_CACHE': '1'}, clear=True):
             app.save_config('http://127.0.0.1:32400', 'example-token')
             with patch.object(app, 'plex_xml', side_effect=self.fake_xml), \
                  patch.object(app, 'request_plex', return_value=b'\xff\xd8\xffPlex image') as photo:
@@ -111,7 +121,7 @@ class PlexCastExplorerTests(unittest.TestCase):
                 self.assertEqual(app.get_actor('second actor')['image'], '')
 
     def test_sync_repairs_corrupt_plex_actor_cache(self):
-        with patch.dict(os.environ, {}, clear=True):
+        with patch.dict(os.environ, {'CAST_EXPLORER_BULK_PLEX_CACHE': '1'}, clear=True):
             app.save_config('http://127.0.0.1:32400', 'example-token')
             self.assertEqual(app.load_config(), {'url': 'http://127.0.0.1:32400', 'token': 'example-token'})
             path = app.plex_portrait_cache_path('/portrait/sample')
@@ -125,7 +135,7 @@ class PlexCastExplorerTests(unittest.TestCase):
                 self.assertEqual(app.status_snapshot()['phase'], 'Finished')
 
     def test_plex_sync_portrait_download_failure_is_non_destructive_and_retryable(self):
-        with patch.dict(os.environ, {}, clear=True):
+        with patch.dict(os.environ, {'CAST_EXPLORER_BULK_PLEX_CACHE': '1'}, clear=True):
             app.save_config('http://127.0.0.1:32400', 'example-token')
             with patch.object(app, 'plex_xml', side_effect=self.fake_xml), \
                  patch.object(app, 'request_plex', side_effect=[OSError('temporarily offline'),
@@ -138,7 +148,7 @@ class PlexCastExplorerTests(unittest.TestCase):
                 self.assertTrue(app.plex_portrait_cache_path('/portrait/sample').is_file())
 
     def test_plex_sync_treats_http_404_as_missing_art_not_sync_error(self):
-        with patch.dict(os.environ, {}, clear=True):
+        with patch.dict(os.environ, {'CAST_EXPLORER_BULK_PLEX_CACHE': '1'}, clear=True):
             app.save_config('http://127.0.0.1:32400', 'test-token')
             missing = HTTPError('https://portrait.example.invalid/?X-Plex-Token=private',
                                 404, 'Not Found', {}, None)
@@ -158,7 +168,7 @@ class PlexCastExplorerTests(unittest.TestCase):
                 self.assertEqual(app.get_stats()['actors'], 2)
 
     def test_plex_sync_reports_http_403_with_live_error_count(self):
-        with patch.dict(os.environ, {}, clear=True):
+        with patch.dict(os.environ, {'CAST_EXPLORER_BULK_PLEX_CACHE': '1'}, clear=True):
             app.save_config('http://127.0.0.1:32400', 'test-token')
             denied = HTTPError('https://example.invalid/private?token=private',
                                403, 'Forbidden', {}, None)
@@ -194,7 +204,7 @@ class PlexCastExplorerTests(unittest.TestCase):
                     self.assertNotIn('http', label)
 
     def test_plex_sync_pauses_on_http_429_rate_limit(self):
-        with patch.dict(os.environ, {}, clear=True):
+        with patch.dict(os.environ, {'CAST_EXPLORER_BULK_PLEX_CACHE': '1'}, clear=True):
             app.save_config('http://127.0.0.1:32400', 'test-token')
             throttled = HTTPError('https://example.invalid/portrait',
                                   429, 'Too Many Requests', {}, None)
