@@ -1764,6 +1764,7 @@ def pending_enrichment_keys():
 
 
 def remember_enrichment(actor_key, status, candidates=None, message=''):
+    candidates = deduplicate_portrait_candidates(candidates or [])
     with db_open() as db:
         db.execute('''INSERT INTO enrichment_results(actor_key,status,candidates,checked_at,message)
             VALUES (?,?,?,?,?) ON CONFLICT(actor_key) DO UPDATE SET status=excluded.status,
@@ -1876,13 +1877,34 @@ def retry_unmatched_enrichment():
     return count
 
 
+def deduplicate_saved_reviews():
+    """Upgrade existing review rows in place without querying external providers."""
+    updated = 0
+    with db_open() as db:
+        rows = db.execute("SELECT actor_key,candidates FROM enrichment_results WHERE status='review'").fetchall()
+        for row in rows:
+            try:
+                entries = json.loads(row['candidates'])
+            except (ValueError, TypeError):
+                continue
+            if not isinstance(entries, list):
+                continue
+            distinct = deduplicate_portrait_candidates(entries)
+            if len(distinct) != len(entries):
+                db.execute("UPDATE enrichment_results SET candidates=? WHERE actor_key=? AND status='review'",
+                           (json.dumps(distinct, ensure_ascii=False), row['actor_key']))
+                updated += 1
+    return updated
+
+
 def review_single_batch_worker():
     """Apply previously queued, unambiguous one-result portraits in background.
 
-    Items with historical provider errors, mismatched names/roles, or incomplete
-    evidence stay in the queue. No Plex metadata is modified.
+    Historical duplicate portraits are consolidated before verifying. Existing
+    identity evidence is never merged across different provider person IDs.
     """
     try:
+        deduplicate_saved_reviews()
         with db_open() as db:
             rows = db.execute("""SELECT e.actor_key, a.name FROM enrichment_results e
                 JOIN actors a ON a.actor_key=e.actor_key WHERE e.status='review'
