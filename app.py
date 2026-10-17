@@ -1843,7 +1843,7 @@ def enrichment_worker():
                         FROM actors a LEFT JOIN actor_art art ON art.actor_key=a.actor_key
                         WHERE a.actor_key=?''', (key,)).fetchone()
                 if (automatic and existing and (existing['thumb'] or existing['saved_art'])
-                        and not confident_portrait_replacement(actor_name, choices, errors)):
+                        and not confident_portrait_replacement(actor_name, [automatic], errors)):
                     automatic = None
                 if automatic:
                     try:
