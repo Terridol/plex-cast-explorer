@@ -861,7 +861,10 @@ def sync_all(force=False):
         image_bytes.cache_clear()
         errors += resolve_plex_actor_refs()
         state_update(errors=errors)
-        errors += cache_plex_portraits()
+        # Bulk Plex artwork download is disabled by default. TMDB enrichment
+        # chooses verified portraits; Plex thumbnails load only when viewed.
+        if os.environ.get('CAST_EXPLORER_BULK_PLEX_CACHE') == '1':
+            errors += cache_plex_portraits()
         state_update(errors=errors, phase='Finished' if not errors else 'Finished with warnings')
     except Exception as exc:
         logging.exception('Sync failed')
