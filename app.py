@@ -1647,6 +1647,15 @@ def enrichment_worker():
                     consecutive_provider_failures = 0
                 actor_name, _ = actor_titles_for_matching(key)
                 automatic = choose_automatic_candidate(choices, actor_name=actor_name, errors=errors)
+                # Replacing an existing portrait requires stronger corroboration
+                # than a single overlapping title. Leave ambiguous matches for review.
+                with db_open() as db:
+                    existing = db.execute('''SELECT a.thumb, art.actor_key AS saved_art
+                        FROM actors a LEFT JOIN actor_art art ON art.actor_key=a.actor_key
+                        WHERE a.actor_key=?''', (key,)).fetchone()
+                if (automatic and existing and (existing['thumb'] or existing['saved_art'])
+                        and not is_strong_match(automatic)):
+                    automatic = None
                 if automatic:
                     try:
                         save_verified_art(key, automatic)
@@ -1759,6 +1768,14 @@ def review_single_batch_worker():
                     except (ValueError, TypeError):
                         choices = []
                     if not singleton_is_verified(row['name'], choices, current['message']):
+                        with REVIEW_BATCH_LOCK: REVIEW_BATCH_STATE['skipped'] += 1
+                        continue
+                    with db_open() as db:
+                        existing = db.execute('''SELECT a.thumb, art.actor_key AS saved_art
+                            FROM actors a LEFT JOIN actor_art art ON art.actor_key=a.actor_key
+                            WHERE a.actor_key=?''', (row['actor_key'],)).fetchone()
+                    if (existing and (existing['thumb'] or existing['saved_art'])
+                            and not is_strong_match(choices[0])):
                         with REVIEW_BATCH_LOCK: REVIEW_BATCH_STATE['skipped'] += 1
                         continue
                     save_verified_art(row['actor_key'], choices[0])
