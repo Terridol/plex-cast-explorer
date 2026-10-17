@@ -713,6 +713,39 @@ class PlexCastExplorerTests(unittest.TestCase):
         self.assertEqual(len(matches[0]['matches']), 2)
         self.assertTrue(app.is_strong_match(matches[0]))
 
+    def test_duplicate_tmdb_portraits_keep_only_one_candidate_without_merging_credits(self):
+        first = {'name':'Troy Brown','source':'TMDB',
+                 'url':'https://image.tmdb.org/t/p/w342/same.jpg',
+                 'reference':'https://www.themoviedb.org/person/10',
+                 'matches':[{'title':'2 Fast 2 Furious','year':2003,'external_year':2003,
+                             'year_verified':True}]}
+        second = {'name':'Troy Brown','source':'TMDB',
+                  'url':'https://image.tmdb.org/t/p/w342/same.jpg',
+                  'reference':'https://www.themoviedb.org/person/20',
+                  'matches':[{'title':'Twisted Metal','year':2023,'external_year':2023,
+                              'year_verified':True}]}
+        collapsed = app.deduplicate_portrait_candidates([first, second])
+        self.assertEqual(len(collapsed), 1)
+        self.assertEqual(len(collapsed[0]['matches']), 1)
+        self.assertFalse(app.is_strong_match(collapsed[0]))
+        self.assertEqual(len(app.deduplicate_portrait_candidates(
+            [first, dict(second, url='https://image.tmdb.org/t/p/w342/other.jpg')])), 2)
+
+    def test_saved_review_duplicates_are_consolidated_before_batch(self):
+        with patch.object(app, 'plex_xml', side_effect=self.fake_xml):
+            app.sync_all(force=True)
+        candidate = {'name':'Second Actor','source':'TMDB',
+                     'url':'https://image.tmdb.org/t/p/w342/same.jpg',
+                     'reference':'https://www.themoviedb.org/person/10',
+                     'matches':[{'title':'Alpha','year':2024,'external_year':2024,
+                                 'year_verified':True}]}
+        with app.db_open() as db:
+            db.execute('INSERT INTO enrichment_results(actor_key,status,candidates,checked_at,message) VALUES(?,?,?,?,?)',
+                       ('second actor','review',json.dumps([candidate,dict(candidate,reference='https://www.themoviedb.org/person/20')]),'',''))
+        self.assertEqual(app.deduplicate_saved_reviews(), 1)
+        self.assertEqual(len(app.review_enrichment()[0]['choices']), 1)
+        self.assertEqual(app.deduplicate_saved_reviews(), 0)
+
     def test_review_queue_is_persistent_and_requires_selection(self):
         with patch.object(app, 'plex_xml', side_effect=self.fake_xml):
             app.sync_all(force=True)
