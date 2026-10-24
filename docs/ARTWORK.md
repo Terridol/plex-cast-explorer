@@ -2,18 +2,43 @@
 
 Plex Cast Explorer first uses actor portraits supplied by **your own Plex server**. It never bundles downloaded provider portraits or credentials inside Setup.
 
-## Automatic sync and portrait selection
+## Automatic actor matching and artwork source priority
 
-After Plex library synchronization completes, a background enrichment scan examines each new actor. The catalog saves the result in `enrichment_results`; completed matches, review decisions, and unmatched actors are not re-queried on ordinary subsequent syncs. Newly indexed actors are added automatically. Provider errors remain retryable, and operators can explicitly rescan unmatched actors.
+The application scans the entire Plex library, then enriches actors in the
+background. **Only one identity decision is used** by new searches and by
+previously queued reviews.
 
-1. **TMDB:** Preferred when explicitly enabled and configured. Name plus corroborating Plex credits are required; uncertain identities are sent to review.
-2. **ThePornDB:** Second choice when TMDB has no corroborated candidate and its lookup did not fail. It may supersede a Plex-supplied portrait when identity confidence is sufficient.
-3. **Plex:** Final fallback. Images from Plex Role metadata, person references and approved scraper URLs are retrieved on demand through the secured Plex image path rather than bulk-cached during sync.
-4. **Review:** Ambiguous or conflicting external matches are queued without automatically changing the current image. A verified single credit with matching release year can qualify; name-only matches cannot.
+1. **TMDB** is the preferred portrait. A credible TMDB actor replaces any
+   saved ThePornDB image or Plex fallback.
+2. **ThePornDB** is used if no credible TMDB portrait is found. It replaces
+   Plex art but cannot replace saved TMDB art.
+3. **Plex** is an on-demand fallback and is never falsely labeled TMDB.
 
-The sync runs without waiting for tens of thousands of API lookups; the background enrichment worker reports its own progress. Previously completed actors do not consume provider calls on routine syncs. Changing provider availability or revisiting prior misses requires an explicit rescan operation.
+An exact normalized actor name and one matching production are sufficient to
+automatically accept a **single credible provider identity**. Character-name
+differences do not reject the match. One missing/incorrect film title or
+release year is an **informational warning** if the remaining filmography
+corroborates the performer. A unique title whose *only* year disagrees
+substantially is not corroborated.
 
-TMDB lookups remain **disabled by default**: a saved token alone does not turn them on. Choose **Enable TMDB lookups** during Windows Setup and configure the API Read Access Token in Settings. The installer writes `CAST_EXPLORER_ENABLE_TMDB=1` to the WinSW service environment when selected. Prior installer settings may be remembered on upgrade. A valid authorization covering the actual media categories and distribution is necessary; the operator confirms this requirement has been resolved for their deployment. The project cannot independently certify third-party permission from a configuration toggle.
+Manual review is reserved for multiple plausible identities (unless optional
+IMDb evidence independently resolves the tie) or genuinely contradictory /
+untrustworthy results. Failed provider lookups are retryable errors, not
+requests for human identity approval. Missing results retain Plex fallback.
+
+Actor cards show their actual source, and non-blocking metadata warnings appear
+on the profile. An automatic scan clears old single-person review entries,
+and a one-time refresh attempts to upgrade prior ThePornDB portraits to TMDB
+without removing the old portrait when no better one is found.
+
+The user library and Plex metadata are always read-only. A saved TMDB image
+is fetched only with an explicitly enabled TMDB integration and proper API
+credentials; no external lookups are required to browse existing actor data.
+
+TMDB remains **disabled by default**. Set **Enable TMDB lookups** during
+Windows Setup and configure the API Read Access Token in Settings. The
+installer uses the `CAST_EXPLORER_ENABLE_TMDB=1` service setting when opted in.
+Provider permissions and attribution requirements still apply.
 
 ## TMDB attribution and conditions
 
@@ -27,11 +52,14 @@ Logo source: [TMDB's approved logo and attribution page](https://www.themoviedb.
 
 **ThePornDB** use requires the operator's own token and compliance with provider terms and individual image/performer rights. No general artwork-redistribution license has been verified. **Wikimedia Commons remains disabled** because file-specific author, share-alike and license obligations are not yet automated.
 
-Plex actor portrait bulk caching is disabled during normal library sync. Plex images are fetched on demand as fallbacks. The legacy bulk operation requires the explicit service environment variable `CAST_EXPLORER_BULK_PLEX_CACHE=1` and is not part of the standard installation.\n\nAll downloaded portrait overrides are stored locally under `portraits/`, with associated source metadata in SQLite. Plex metadata is read only and is not modified. Existing portraits remain available when TMDB cannot verify a match. When enabled, TMDB enrichment may replace an existing saved portrait or Plex thumbnail only with an unambiguous, corroborated match: either two overlapping credits with at least one verified release year, or one matching credit with an exact verified year and no conflicting role. Multiple competing candidates or missing corroboration require manual review without replacing existing art. If neither TMDB nor existing artwork provides a portrait, ThePornDB is the final fallback.
+Plex actor portrait bulk caching is disabled during ordinary sync; Plex
+thumbnails load on demand as a fallback. External portrait files are kept
+locally under `portraits/` with source attribution in the actor database.
+Previously saved files are not deleted when a provider cannot find artwork.
+Provider tokens and private library data must not be committed to Git.
 
-Keep provider tokens, user library metadata and cached images out of Git, release assets and public support reports. See [Third-party providers](THIRD_PARTY.md), [Privacy](PRIVACY.md) and [1.0 release checklist](RELEASE_CHECKLIST.md).
-
-Matching policy: character/role labels are informational, not automatic identity vetoes; verified filmography titles and years determine confidence. Competing identities remain for review.
+See [Third-party providers](THIRD_PARTY.md),
+[Privacy](PRIVACY.md), and [Release checklist](RELEASE_CHECKLIST.md).
 
 ## Optional IMDb identity corroboration (personal, non-commercial use)
 
@@ -75,27 +103,3 @@ existing review workflow; already accepted portraits are not changed.
 IMDb `knownForTitles` is a **limited set of highlights**, not a complete
 filmography, and must never be used as negative identity evidence.
 
-## Portrait source priority and reducing manual reviews
-
-The actor gallery serves **saved, verified TMDB art before Plex thumbnails**.
-ThePornDB is another external source when no usable TMDB portrait is available.
-Plex art is a visible **fallback only** when no verified external portrait is
-saved; missing source evidence never justifies attributing Plex art to TMDB.
-The gallery now labels each portrait source, and the enrichment dashboard
-reports actual saved TMDB, ThePornDB, Plex-fallback and missing counts. These
-are database portrait-source counts, not the number of provider API lookups.
-
-**Auto-verify queued portraits** reevaluates stored review candidates using
-the latest filmography rules. One confirmed movie/title and matching release
-year can pass automatically despite differently labeled character roles.
-If the optional IMDb local index is installed, an independently corroborating
-IMDb known-for title/year may also resolve a TMDB candidate with an omitted
-provider release year, or break a multi-candidate tie. A tie on IMDb evidence,
-provider errors, different names, invalid art URLs, and missing corroboration
-remain in review. The action never performs a new person search, but may look
-up TMDB external IMDb IDs and fetch a portrait for an approved candidate.
-
-TMDB must be enabled and configured to create new TMDB portraits. Use the
-dashboard's `TMDB lookup enabled` and `IMDb verification dataset installed`
-status fields to confirm readiness. Actors with no verifiable TMDB portrait
-can continue to display the Plex fallback; the program does not mislabel it.
