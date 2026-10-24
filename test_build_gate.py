@@ -27,6 +27,27 @@ class BuildGateRegressionTests(unittest.TestCase):
             with self.assertRaises(build_gate.GateFailure):
                 build_gate.check_install_contract(root)
 
+    def test_tpdb_fallback_requires_no_credible_tmdb_match(self):
+        self.assert_mutation_blocked(
+            'app.py',
+            'not any(portrait_match_quality(name, candidate)[0] for candidate in found)',
+            'True  # allow TPDB despite valid TMDB identity'
+        )
+
+    def test_tpdb_fallback_must_not_run_after_provider_errors(self):
+        self.assert_mutation_blocked(
+            'app.py',
+            "if (keys['theporndb'] and not errors and",
+            "if (keys['theporndb'] and True and"
+        )
+
+    def test_tpdb_fallback_requires_configured_provider(self):
+        self.assert_mutation_blocked(
+            'app.py',
+            "if (keys['theporndb'] and not errors and",
+            "if (True and not errors and"
+        )
+
     def test_missing_cpython_license_packaging_is_fatal(self):
         self.assert_mutation_blocked('build_installer_windows.ps1',
                                      'Python-LICENSE.txt', 'missing-python-license.txt')
