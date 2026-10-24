@@ -1564,7 +1564,7 @@ def verified_portrait_candidates(actor_key):
             search = paced_provider_json('https://api.themoviedb.org/3/search/person?' + urlencode({
                 'query': name, 'include_adult': 'true'}), keys['tmdb'])
             matching = [p for p in search.get('results', [])
-                        if normal_name(p.get('name', '')) == normal_name(name)
+                        if normalize_title(p.get('name', '')) == normalize_title(name)
                         and isinstance(p.get('id'), int) and
                         re.fullmatch(r'/[a-zA-Z0-9_./-]+\.(?:jpg|png|webp)', p.get('profile_path') or '', re.I)]
             for item in matching[:4]:
@@ -1589,7 +1589,7 @@ def verified_portrait_candidates(actor_key):
         try:
             response = paced_provider_json('https://api.theporndb.net/performers?' + urlencode({'q': name}), keys['theporndb'])
             for item in (response.get('data') or [])[:10]:
-                if normal_name(item.get('name', '')) != normal_name(name):
+                if normalize_title(item.get('name', '')) != normalize_title(name):
                     continue
                 ident = item.get('_id') or item.get('id')
                 image = portrait_from_tpdb(item)
@@ -1632,7 +1632,8 @@ def portrait_match_quality(actor_name, entry):
     credits corroborate the identity. No shared production, mismatched name,
     unsafe image URL, or predominantly contradictory dates is not credible.
     """
-    if not isinstance(entry, dict) or normal_name(actor_name) != normal_name(entry.get('name')):
+    if (not isinstance(entry, dict) or not normalize_title(actor_name)
+            or normalize_title(actor_name) != normalize_title(entry.get('name'))):
         return False, ['Performer name does not match']
     if entry.get('source') not in ('TMDB', 'ThePornDB'):
         return False, ['Unsupported portrait provider']
