@@ -1644,6 +1644,10 @@ def choose_automatic_candidate(candidates, actor_name=None, errors=None):
         return None
     if not is_strong_match(candidates[0]):
         return None
+    # Strong filmography still requires an exact performer name, a trusted
+    # portrait URL and compatible credited years for the winning identity.
+    if not singleton_is_verified(actor_name or candidates[0].get('name', ''), [candidates[0]]):
+        return None
     best = candidates[0]
     primary = (len(best['matches']), sum(bool(m['year_verified']) for m in best['matches']))
     runner = candidates[1]
