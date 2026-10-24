@@ -684,6 +684,31 @@ class PlexCastExplorerTests(unittest.TestCase):
         self.assertIsNone(app.choose_automatic_candidate([
             dict(entry, matches=[] )], 'Ada Example'))
 
+    def test_tpdb_fallback_when_tmdb_filmography_is_genuinely_wrong(self):
+        with patch.object(app, 'plex_xml', side_effect=self.fake_xml):
+            app.sync_all(force=True)
+        def provider(url, key):
+            if '/search/person' in url:
+                return {'results':[{'id':7,'name':'Sample Actor','profile_path':'/wrong.jpg'}]}
+            if '/person/7/combined_credits' in url:
+                return {'cast':[{'title':'Alpha','media_type':'movie',
+                                 'release_date':'2001-04-01'}]}
+            if '/performers?' in url:
+                return {'data':[{'_id':'3','name':'Sample Actor',
+                                 'image':'https://cdn.theporndb.net/right.jpg'}]}
+            if '/performers/3/scenes?' in url:
+                return {'data':[{'title':'Alpha','year':2024}]}
+            raise AssertionError(url)
+        with patch.object(app, 'artwork_keys', return_value={'tmdb':'x','theporndb':'y'}), \
+             patch.object(app, 'provider_enabled', return_value=True), \
+             patch.object(app, 'paced_provider_json', side_effect=provider):
+            matches, errors = app.verified_portrait_candidates('sample actor')
+        self.assertEqual(errors, [])
+        self.assertEqual({c['source'] for c in matches}, {'TMDB', 'ThePornDB'})
+        winner = app.choose_automatic_candidate(matches, 'Sample Actor')
+        self.assertIsNotNone(winner)
+        self.assertEqual(winner['source'], 'ThePornDB')
+
     def test_tmdb_overrides_tpdb_but_tpdb_never_overrides_tmdb(self):
         with patch.object(app, 'plex_xml', side_effect=self.fake_xml):
             app.sync_all(force=True)
