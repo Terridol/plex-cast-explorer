@@ -851,7 +851,8 @@ class PlexCastExplorerTests(unittest.TestCase):
             app.review_single_batch_worker()
             img.assert_not_called()
         self.assertEqual(app.enrichment_status()['single_batch']['skipped'], 1)
-        self.assertEqual(app.enrichment_status()['review_waiting'], 1)
+        self.assertEqual(app.enrichment_status()['review_waiting'], 0)
+        self.assertEqual(app.enrichment_status()['db_error'], 1)
 
     @patch.object(app, 'provider_enabled', new=lambda name: name in ('tmdb', 'wikimedia'))
     def test_provider_verification_uses_both_movie_and_tv_credits(self):
@@ -1196,9 +1197,11 @@ class PlexCastExplorerTests(unittest.TestCase):
     def test_sync_wrapper_starts_enrichment_only_after_successful_sync(self):
         with patch.object(app, 'sync_all') as sync, \
              patch.object(app, 'status_snapshot', return_value={'phase': 'Finished'}), \
+             patch.object(app, 'review_single_batch_start') as review, \
              patch.object(app, 'enrichment_start') as enrich:
             app.sync_and_enrich(force=True)
         sync.assert_called_once_with(force=True)
+        review.assert_called_once()
         enrich.assert_called_once()
 
     def test_diagnostic_export_summarizes_reviews_without_secrets(self):
