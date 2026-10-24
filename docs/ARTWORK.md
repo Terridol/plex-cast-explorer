@@ -74,3 +74,28 @@ locking. After updating, pending ambiguous actors may be retried through the
 existing review workflow; already accepted portraits are not changed.
 IMDb `knownForTitles` is a **limited set of highlights**, not a complete
 filmography, and must never be used as negative identity evidence.
+
+## Portrait source priority and reducing manual reviews
+
+The actor gallery serves **saved, verified TMDB art before Plex thumbnails**.
+ThePornDB is another external source when no usable TMDB portrait is available.
+Plex art is a visible **fallback only** when no verified external portrait is
+saved; missing source evidence never justifies attributing Plex art to TMDB.
+The gallery now labels each portrait source, and the enrichment dashboard
+reports actual saved TMDB, ThePornDB, Plex-fallback and missing counts. These
+are database portrait-source counts, not the number of provider API lookups.
+
+**Auto-verify queued portraits** reevaluates stored review candidates using
+the latest filmography rules. One confirmed movie/title and matching release
+year can pass automatically despite differently labeled character roles.
+If the optional IMDb local index is installed, an independently corroborating
+IMDb known-for title/year may also resolve a TMDB candidate with an omitted
+provider release year, or break a multi-candidate tie. A tie on IMDb evidence,
+provider errors, different names, invalid art URLs, and missing corroboration
+remain in review. The action never performs a new person search, but may look
+up TMDB external IMDb IDs and fetch a portrait for an approved candidate.
+
+TMDB must be enabled and configured to create new TMDB portraits. Use the
+dashboard's `TMDB lookup enabled` and `IMDb verification dataset installed`
+status fields to confirm readiness. Actors with no verifiable TMDB portrait
+can continue to display the Plex fallback; the program does not mislabel it.
