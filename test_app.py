@@ -665,7 +665,7 @@ class PlexCastExplorerTests(unittest.TestCase):
         good = {'name':'Ada Example','source':'TMDB',
                 'url':'https://image.tmdb.org/t/p/w342/ada.jpg', 'matches':evidence}
         weaker = dict(good, matches=evidence[:1])
-        self.assertEqual(app.choose_automatic_candidate([good, weaker]), good)
+        self.assertIsNone(app.choose_automatic_candidate([good, weaker]))
         self.assertIsNone(app.choose_automatic_candidate([weaker, good]))
         self.assertIsNone(app.choose_automatic_candidate([good, dict(good, source='ThePornDB')]))
 
@@ -808,7 +808,7 @@ class PlexCastExplorerTests(unittest.TestCase):
                  'url': 'https://image.tmdb.org/t/p/w342/rival.jpg',
                  'matches': [{'title': 'Alpha', 'year': 2024,
                               'external_year': 2024, 'year_verified': True}]}
-        self.assertIs(app.choose_automatic_candidate([good, rival], 'Sample Actor'), good)
+        self.assertIsNone(app.choose_automatic_candidate([good, rival], 'Sample Actor'))
         self.assertIsNone(app.choose_automatic_candidate(
             [dict(good, name='Different Actor'), rival], 'Sample Actor'))
         self.assertIsNone(app.choose_automatic_candidate([good, dict(good)], 'Sample Actor'))
@@ -1084,13 +1084,13 @@ class PlexCastExplorerTests(unittest.TestCase):
         choice = {'name': 'Sample Actor', 'source': 'TMDB',
                   'url': 'https://image.tmdb.org/t/p/w342/a.jpg',
                   'matches': [match]}
-        self.assertFalse(app.confident_portrait_replacement('Sample Actor', [choice]))
+        self.assertTrue(app.confident_portrait_replacement('Sample Actor', [choice]))
         self.assertTrue(app.confident_portrait_replacement(
             'Sample Actor', [dict(choice, matches=[dict(match, external_year=2024,
                                                        year_verified=True, role_conflict=True)])]))
         self.assertFalse(app.confident_portrait_replacement('Sample Actor', [choice, choice]))
 
-    def test_weak_tmdb_match_does_not_replace_existing_plex_portrait(self):
+    def test_single_credible_tmdb_credit_replaces_plex_even_without_year(self):
         with patch.object(app, 'plex_xml', side_effect=self.fake_xml):
             app.sync_all(force=True)
         candidate = {'name': 'Sample Actor', 'source': 'TMDB',
@@ -1101,12 +1101,14 @@ class PlexCastExplorerTests(unittest.TestCase):
                                   'external_year': None, 'year_verified': False}]}
         with patch.object(app, 'pending_enrichment_keys', return_value=['sample actor']), \
              patch.object(app, 'verified_portrait_candidates', return_value=([candidate], [])), \
-             patch.object(app, 'external_image') as image:
+             patch.object(app, 'external_image', return_value=(bytes([255,216,255])+b'tmdb', 'jpg')):
             app.ENRICH_STOP.clear()
             app.enrichment_worker()
-            image.assert_not_called()
-        self.assertEqual(app.get_actor('sample actor')['art']['source'], 'Plex')
-        self.assertEqual(app.enrichment_status()['review_waiting'], 1)
+        self.assertEqual(app.get_actor('sample actor')['art']['source'], 'TMDB')
+        self.assertEqual(app.enrichment_status()['review_waiting'], 0)
+        with app.db_open() as db:
+            record = db.execute("SELECT message FROM enrichment_results WHERE actor_key='sample actor'").fetchone()
+        self.assertIn('Release year unverified', record['message'])
 
     def test_tmdb_disabled_keeps_existing_plex_portrait_priority(self):
         with patch.object(app, 'plex_xml', side_effect=self.fake_xml):
