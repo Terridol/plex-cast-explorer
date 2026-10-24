@@ -1971,9 +1971,14 @@ def review_single_batch_worker():
                     if current['message']:
                         with REVIEW_BATCH_LOCK: REVIEW_BATCH_STATE['skipped'] += 1
                         continue
-                    selected = (choices[0] if singleton_is_verified(row['name'], choices) else
-                                imdb_resolve_candidates(choices, row['actor_key'])
-                                if len(choices) > 1 else None)
+                    # Reevaluate historical reviews with today's rules. A unique
+                    # verified portrait or a decisively stronger filmography match
+                    # can be applied without repeating the expensive portrait search.
+                    selected = choose_automatic_candidate(choices, actor_name=row['name'])
+                    if selected is None and len(choices) > 1:
+                        selected = imdb_resolve_candidates(choices, row['actor_key'])
+                    if selected is not None and not singleton_is_verified(row['name'], [selected]):
+                        selected = None
                     if selected is None:
                         with REVIEW_BATCH_LOCK: REVIEW_BATCH_STATE['skipped'] += 1
                         continue
