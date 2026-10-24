@@ -69,7 +69,8 @@
         const info=elt('div','actor-info');
         const strong=elt('strong','',actor.name);
         const count=elt('span','',formatNumber(actor.appearance_count)+' '+(actor.appearance_count===1?'title':'titles'));
-        info.append(strong,count);
+        const origin=elt('span','', 'Portrait: '+(actor.image_source||'Unknown'));
+        info.append(strong,count,origin);
         card.append(info);
         card.addEventListener('click',()=>openActor(actor.key));
         fragment.append(card);
@@ -120,6 +121,7 @@
         formatNumber(result.remaining||0)+' not yet scanned'];
       const source=result.portrait_sources||{};
       summary.push('Portraits: '+formatNumber(source.TMDB||0)+' TMDB · '+formatNumber(source['ThePornDB']||0)+' ThePornDB · '+formatNumber(source['Plex fallback']||0)+' Plex fallback · '+formatNumber(source['No artwork']||0)+' without art');
+      summary.push('TMDB lookup '+(result.tmdb_lookup_enabled?'enabled':'disabled')+' · IMDb verification dataset '+(result.imdb_dataset_available?'installed':'not installed'));
       $('enrichSummary').textContent=summary.join(' · ')+(result.last_error?' · Latest warning: '+result.last_error:'');
       $('enrichProgress').style.width=(result.total?Math.round(100*result.checked/result.total):0)+'%';
       const batch=result.single_batch||{};
