@@ -47,6 +47,61 @@ def app_version(root: Path) -> str:
     return match.group(1)
 
 
+def tmdb_first_tpdb_fallback_is_guarded(app_tree: ast.Module) -> bool:
+    """Verify the real TPDB fallback branch, not one obsolete spelling of it.
+
+    TPDB may run only when configured, provider lookups have not failed, and
+    TMDB supplied no *credible* identity. Checking the AST ensures this gate
+    cannot pass merely because a safety expression appears in a comment.
+    """
+    functions = [
+        n for n in app_tree.body
+        if isinstance(n, ast.FunctionDef) and n.name == 'verified_portrait_candidates'
+    ]
+    if len(functions) != 1:
+        return False
+    for node in ast.walk(functions[0]):
+        if not isinstance(node, ast.If):
+            continue
+        has_tpdb_request = any(
+            isinstance(call, ast.Call) and
+            isinstance(call.func, ast.Name) and
+            call.func.id == 'paced_provider_json' and
+            any(isinstance(part, ast.Constant) and
+                part.value == 'https://api.theporndb.net/performers?'
+                for part in ast.walk(call))
+            for statement in node.body
+            for call in ast.walk(statement)
+        )
+        if not has_tpdb_request or not isinstance(node.test, ast.BoolOp) or not isinstance(node.test.op, ast.And):
+            continue
+        conditions = node.test.values
+        enabled = any(
+            isinstance(cond, ast.Subscript) and
+            isinstance(cond.value, ast.Name) and cond.value.id == 'keys' and
+            isinstance(cond.slice, ast.Constant) and cond.slice.value == 'theporndb'
+            for cond in conditions
+        )
+        no_errors = any(
+            isinstance(cond, ast.UnaryOp) and isinstance(cond.op, ast.Not) and
+            isinstance(cond.operand, ast.Name) and cond.operand.id == 'errors'
+            for cond in conditions
+        )
+        no_credible_tmdb = any(
+            isinstance(cond, ast.UnaryOp) and isinstance(cond.op, ast.Not) and
+            isinstance(cond.operand, ast.Call) and
+            isinstance(cond.operand.func, ast.Name) and cond.operand.func.id == 'any' and
+            any(isinstance(n, ast.Call) and isinstance(n.func, ast.Name) and
+                n.func.id == 'portrait_match_quality' for n in ast.walk(cond.operand)) and
+            any(isinstance(n, ast.Name) and n.id == 'found'
+                for n in ast.walk(cond.operand))
+            for cond in conditions
+        )
+        if enabled and no_errors and no_credible_tmdb:
+            return True
+    return False
+
+
 def check_install_contract(root: Path) -> str:
     """Reject version drift, accidentally disabled gates and unsafe installer changes."""
     version = app_version(root)
@@ -182,7 +237,7 @@ def check_install_contract(root: Path) -> str:
             "WizardIsTaskSelected('tmdb')" in spec and
             "if ($EnableTMDB -eq 1)" in service and
             "CAST_EXPLORER_ENABLE_TMDB" in read(root, 'app.py') and
-            "if keys['theporndb'] and not found and not errors:" in app_source and
+            tmdb_first_tpdb_fallback_is_guarded(app_tree) and
             "if keys['theporndb'] and not results:" in read(root, 'app.py') and
             "retry_unmatched_enrichment" in read(root, 'app.py') and
             "enrichRetryUnmatched" in read(root, 'static/app.js') and
