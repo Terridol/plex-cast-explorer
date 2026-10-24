@@ -118,16 +118,19 @@
         formatNumber(result.review_waiting||0)+' waiting for review',
         formatNumber(result.db_unmatched||0)+' unmatched',
         formatNumber(result.remaining||0)+' not yet scanned'];
+      const source=result.portrait_sources||{};
+      summary.push('Portraits: '+formatNumber(source.TMDB||0)+' TMDB · '+formatNumber(source['ThePornDB']||0)+' ThePornDB · '+formatNumber(source['Plex fallback']||0)+' Plex fallback · '+formatNumber(source['No artwork']||0)+' without art');
       $('enrichSummary').textContent=summary.join(' · ')+(result.last_error?' · Latest warning: '+result.last_error:'');
       $('enrichProgress').style.width=(result.total?Math.round(100*result.checked/result.total):0)+'%';
       const batch=result.single_batch||{};
       $('enrichAcceptUnique').disabled=!!batch.running;
-      $('enrichAcceptUnique').textContent=batch.running?'Applying one-result portraits…':'Auto-accept queued single matches';
+      $('enrichAcceptUnique').textContent=batch.running?'Evaluating stored portraits…':'Auto-verify queued portraits';
       $('enrichBatchSummary').hidden=!(batch.running||batch.checked||batch.failed);
-      $('enrichBatchSummary').textContent='Single-result queue: '+formatNumber(batch.checked||0)+' / '+formatNumber(batch.total||0)+' checked · '+formatNumber(batch.applied||0)+' applied · '+formatNumber(batch.skipped||0)+' retained for review'+(batch.failed?' · '+batch.failed+' download errors':'')+(batch.last_error?' · '+batch.last_error:'');
+      $('enrichBatchSummary').textContent='Review queue: '+formatNumber(batch.checked||0)+' / '+formatNumber(batch.total||0)+' checked · '+formatNumber(batch.applied||0)+' verified portraits saved · '+formatNumber(batch.skipped||0)+' retained for review'+(batch.failed?' · '+batch.failed+' download errors':'')+(batch.last_error?' · '+batch.last_error:'');
       $('enrichStart').disabled=result.running;
       $('enrichPause').disabled=!result.running;
-      $('enrichReviewCount').textContent=formatNumber(result.review_waiting||0)+' awaiting review (showing the newest 12).';
+      const triage=result.review_triage||{};
+      $('enrichReviewCount').textContent=formatNumber(result.review_waiting||0)+' awaiting review (newest 12 below). '+formatNumber(triage.ready||0)+' ready for safe bulk approval · '+formatNumber(triage.multiple_candidates||0)+' competing identities · '+formatNumber(triage.needs_more_evidence||0)+' need more evidence · '+formatNumber(triage.lookup_warning||0)+' lookup warnings. The bulk action also checks optional IMDb evidence.';
       if(forceReview || lastReviewTotal!==result.review_waiting){
         lastReviewTotal=result.review_waiting;
         const reviews=await api('/api/enrich/review');renderEnrichmentReviews(reviews.results||[]);
@@ -141,10 +144,10 @@
   function evidenceTag(choice){
     const n=(choice.matches||[]).length;
     const dated=(choice.matches||[]).filter(m=>m.year_verified).length;
-    if((choice.matches||[]).some(m=>m.role_conflict))return ['caution','Conflicting credited roles — investigate before approving'];
-    if(n>=2 && dated>=1)return ['corroborated','Multiple matching credits; confirm the identity'];
-    if(n===1)return ['caution','Only one matching title — identity not confirmed'];
-    return ['caution','Limited credit evidence — review carefully'];
+    if(n>=2 && dated>=1)return ['corroborated','Multiple corroborating film credits'];
+    if(n===1 && dated===1)return ['corroborated','Film title and release year both match'];
+    if(n===1)return ['caution','Matching production; year still needs corroboration'];
+    return ['caution','Insufficient matching film credits'];
   }
   function plexTitlesList(person, limit=12){
     const box=elt('div','verification-credits');
@@ -277,7 +280,7 @@
     const button=$('enrichAcceptUnique');button.disabled=true;
     try{
       const r=await post('/api/enrich/accept-unique',{});
-      notify(r.started?'Processing single-result review entries in the background.':'Single-result approvals are already running.');
+      notify(r.started?'Reevaluating saved portrait reviews with filmography and IMDb evidence.':'Review processing is already running.');
       await refreshEnrichment(true);
     }catch(e){notify('Could not process singles: '+e.message);button.disabled=false;}
   }
