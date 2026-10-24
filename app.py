@@ -1403,38 +1403,49 @@ def credit_has_conflict(credit, performer_name=''):
 
 
 def credit_matches(local_titles, remote_credits, source):
-    """Require real title equality and compatible dates; never infer identity from a name alone."""
+    """Match production identity by title/type; retain year differences as flags.
+
+    Prefer the best dated instance if the provider lists one title multiple
+    times. A wrong year cannot erase an otherwise matching production.
+    Character/role spelling is informational, never identity evidence.
+    """
     matched = {}
     for local in local_titles:
-        target = normalize_title(local['title'])
-        if not target or len(target) < 3:
+        target = normalize_title(local.get('title'))
+        if len(target) < 3:
             continue
         year_a = credit_year(local)
+        options = []
         for remote in remote_credits:
             if source == 'TMDB':
                 rt = remote.get('media_type', '')
-                if rt and rt not in ('movie' if local['media_type'] == 'movie' else 'tv',):
+                if rt and rt != ('movie' if local['media_type'] == 'movie' else 'tv'):
                     continue
-            else:
-                # TPDB's scene endpoint contains scenes, not TV show filmographies.
-                if local['media_type'] != 'movie':
-                    continue
+            elif local['media_type'] != 'movie':
+                continue
             names = (remote.get('title'), remote.get('original_title'),
                      remote.get('name'), remote.get('original_name'))
             if target not in {normalize_title(n) for n in names if n}:
                 continue
             year_b = credit_year(remote)
-            exact_year = year_a is not None and year_b is not None and year_a == year_b
-            # One year tolerance for alternate release dates but it is not year verification.
-            key = (local['title'].casefold(), year_a, local['media_type'])
-            p_role = str(local.get('character') or '').strip()
-            e_role = str(remote.get('character') or '').strip()
-            conflict = credit_role_conflict(p_role, e_role, '')
-            matched[key] = {'title': local['title'], 'year': year_a,
-                            'external_year': year_b, 'year_verified': exact_year,
-                            'plex_character': p_role, 'provider_character': e_role,
-                            'role_conflict': conflict}
-            break
+            delta = abs(year_a - year_b) if year_a is not None and year_b is not None else None
+            # Exact release year first, then adjacent/reissue year, then
+            # unknown year, then genuinely disagreeing years.
+            score = (0 if delta == 0 else 1 if delta == 1 else 2 if delta is None else 3, delta or 0)
+            options.append((score, year_b, remote))
+        if not options:
+            continue
+        _, year_b, remote = min(options, key=lambda item: item[0])
+        p_role = str(local.get('character') or '').strip()
+        e_role = str(remote.get('character') or '').strip()
+        key = (target, year_a, local['media_type'])
+        matched[key] = {
+            'title': local['title'], 'year': year_a,
+            'external_year': year_b,
+            'year_verified': year_a is not None and year_b is not None and year_a == year_b,
+            'plex_character': p_role, 'provider_character': e_role,
+            'role_conflict': credit_role_conflict(p_role, e_role, '')
+        }
     return list(matched.values())
 
 
