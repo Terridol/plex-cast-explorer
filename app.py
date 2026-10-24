@@ -896,6 +896,9 @@ def sync_and_enrich(force=False):
     # The initial catalog scan and later incremental scans share one durable
     # queue; confirmed/reviewed/unmatched actors are not searched repeatedly.
     if status_snapshot()['phase'] in ('Finished', 'Finished with warnings'):
+        # Previously queued identities are reevaluated locally on each scan.
+        # Users should not have to manually re-review old single matches.
+        review_single_batch_start()
         try:
             enrichment_start()
         except ValueError:
@@ -1859,6 +1862,31 @@ def diagnostic_export():
     }
 
 
+def requeue_provider_upgrades():
+    """One-time safe refresh of legacy TPDB portraits when TMDB is enabled.
+
+    Existing portrait files remain visible throughout; an unsuccessful lookup
+    cannot downgrade or delete them. The marker prevents repeated full rescans.
+    """
+    keys = artwork_keys()
+    if not (keys.get('tmdb') and provider_enabled('tmdb')):
+        return 0
+    with db_open() as db:
+        marker = db.execute(
+            "SELECT value FROM metadata WHERE key='tmdb_priority_upgrade_v1'"
+        ).fetchone()
+        if marker:
+            return 0
+        count = db.execute("""
+            DELETE FROM enrichment_results WHERE status IN ('auto','approved')
+            AND actor_key IN (SELECT actor_key FROM actor_art
+                              WHERE source='ThePornDB')
+        """).rowcount
+        db.execute("INSERT OR REPLACE INTO metadata(key,value) VALUES (?,?)",
+                   ('tmdb_priority_upgrade_v1', datetime.now(timezone.utc).isoformat()))
+    return count
+
+
 def pending_enrichment_keys():
     with db_open() as db:
         return [r[0] for r in db.execute('''SELECT a.actor_key FROM actors a JOIN credits c ON c.actor_key=a.actor_key
@@ -1958,6 +1986,12 @@ def enrichment_start():
         ENRICH_STOP.clear()
         ENRICH_STATE['running'] = True
         ENRICH_STATE['phase'] = 'Preparing'
+    try:
+        requeue_provider_upgrades()
+    except Exception:
+        with ENRICH_LOCK:
+            ENRICH_STATE['running'] = False
+        raise
     threading.Thread(target=enrichment_worker, daemon=True, name='PortraitEnrichment').start()
     return True
 
