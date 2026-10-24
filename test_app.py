@@ -696,13 +696,13 @@ class PlexCastExplorerTests(unittest.TestCase):
         app.remember_enrichment('sample actor', 'review', [candidate])
         self.assertEqual(app.get_actor('sample actor')['art']['source'], 'Plex')
         (Path(self.temp.name) / 'imdb.sqlite').touch()
-        with patch.object(app, 'IMDB_INDEX_PATH', Path(self.temp.name) / 'imdb.sqlite'), \\
-             patch.object(app, 'paced_provider_json', return_value={'imdb_id': 'nm42'}), \\
-             patch.object(app.imdb_identity, 'supporting_credits', return_value=1), \\
-             patch.object(app, 'external_image', return_value=(b'\\xff\\xd8\\xffTMDB', 'jpg')):
+        with patch.object(app, 'IMDB_INDEX_PATH', Path(self.temp.name) / 'imdb.sqlite'), \
+             patch.object(app, 'paced_provider_json', return_value={'imdb_id': 'nm42'}), \
+             patch.object(app.imdb_identity, 'supporting_credits', return_value=1), \
+             patch.object(app, 'external_image', return_value=(b'\xff\xd8\xffTMDB', 'jpg')):
             app.review_single_batch_worker()
         self.assertEqual(app.get_actor('sample actor')['art']['source'], 'TMDB')
-        self.assertEqual(app.image_bytes('actor', 'sample actor'), b'\\xff\\xd8\\xffTMDB')
+        self.assertEqual(app.image_bytes('actor', 'sample actor'), b'\xff\xd8\xffTMDB')
         self.assertEqual(app.enrichment_status()['review_waiting'], 0)
         self.assertEqual(app.enrichment_status()['portrait_sources']['TMDB'], 1)
         self.assertEqual(app.enrichment_status()['portrait_sources']['Plex fallback'], 0)
@@ -719,9 +719,9 @@ class PlexCastExplorerTests(unittest.TestCase):
                      url='https://image.tmdb.org/t/p/w342/b.jpg')
         app.remember_enrichment('sample actor', 'review', [choice, rival])
         (Path(self.temp.name) / 'imdb.sqlite').touch()
-        with patch.object(app, 'IMDB_INDEX_PATH', Path(self.temp.name) / 'imdb.sqlite'), \\
-             patch.object(app, 'paced_provider_json', return_value={'imdb_id': 'nm42'}), \\
-             patch.object(app.imdb_identity, 'supporting_credits', return_value=1), \\
+        with patch.object(app, 'IMDB_INDEX_PATH', Path(self.temp.name) / 'imdb.sqlite'), \
+             patch.object(app, 'paced_provider_json', return_value={'imdb_id': 'nm42'}), \
+             patch.object(app.imdb_identity, 'supporting_credits', return_value=1), \
              patch.object(app, 'external_image') as image:
             app.review_single_batch_worker()
             image.assert_not_called()
