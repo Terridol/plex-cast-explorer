@@ -1656,13 +1656,14 @@ def choose_automatic_candidate(candidates, actor_name=None, errors=None):
 
 
 def imdb_resolve_candidates(choices, actor_key):
-    """Tie-break genuinely competing candidates with locally indexed IMDb IDs.
+    """Use official IMDb known-for *positive* evidence to resolve weak or tied TMDB identities.
 
-    IMDb knownForTitles contains only selected titles, not full filmography.
-    Therefore only unique positive IMDb evidence can break a tie; absence
-    of evidence never rules out a candidate.
+    Local IMDb data is optional. A unique corroborated candidate must already
+    pass the Plex/TMDB name, title and image checks. IMDb cannot rescue an
+    untrusted image URL, different performer name or incompatible credit year.
+    IMDb's sparse known-for data is never treated as negative evidence.
     """
-    if not IMDB_INDEX_PATH.is_file():
+    if not choices or not IMDB_INDEX_PATH.is_file():
         return None
     actor_name, local = actor_titles_for_matching(actor_key)
     if not actor_name:
@@ -1672,7 +1673,7 @@ def imdb_resolve_candidates(choices, actor_key):
         if choice.get('source') != 'TMDB' or not singleton_is_verified(actor_name, [choice]):
             scored.append((0, choice))
             continue
-        match = re.fullmatch(r'https://www\.themoviedb\.org/person/([0-9]+)',
+        match = re.fullmatch(r'https://www\\.themoviedb\\.org/person/([0-9]+)',
                              choice.get('reference', ''))
         if not match:
             scored.append((0, choice))
@@ -1681,17 +1682,33 @@ def imdb_resolve_candidates(choices, actor_key):
             external = paced_provider_json(
                 'https://api.themoviedb.org/3/person/' + match[1] + '/external_ids',
                 artwork_keys()['tmdb'])
-            imdb_id = external.get('imdb_id')
-            support = imdb_identity.supporting_credits(IMDB_INDEX_PATH, imdb_id, local)
+            support = imdb_identity.supporting_credits(
+                IMDB_INDEX_PATH, external.get('imdb_id'), local)
         except Exception as exc:
             logging.info('Optional IMDb identity lookup unavailable: %s', type(exc).__name__)
             return None
         scored.append((support, choice))
     scored.sort(key=lambda pair: pair[0], reverse=True)
-    if len(scored) < 2 or scored[0][0] < 1 or scored[0][0] <= scored[1][0]:
+    if not scored or scored[0][0] < 1:
         return None
-    winner = scored[0][1]
-    return winner if confident_portrait_replacement(actor_name, [winner]) else None
+    if len(scored) > 1 and scored[0][0] <= scored[1][0]:
+        return None
+    return scored[0][1]
+
+
+def verified_replacement_for_actor(actor_name, selected, actor_key, imdb_verified=False):
+    """Require strong title/year evidence before replacing any existing artwork.
+
+    An IMDb-supported selection is eligible if the actor name, matching film
+    credits and trusted TMDB portrait are independently validated.
+    """
+    if not selected:
+        return False
+    if confident_portrait_replacement(actor_name, [selected]):
+        return True
+    return bool(imdb_verified and singleton_is_verified(actor_name, [selected])
+                and selected.get('source') == 'TMDB')
+
 
 
 def verified_portrait_image(url):
@@ -1838,16 +1855,21 @@ def enrichment_worker():
                     consecutive_provider_failures = 0
                 actor_name, _ = actor_titles_for_matching(key)
                 automatic = choose_automatic_candidate(choices, actor_name=actor_name, errors=errors)
-                if automatic is None and len(choices) > 1 and not errors:
-                    automatic = imdb_resolve_candidates(choices, key)
-                # Replacing an existing portrait requires stronger corroboration
-                # than a single overlapping title. Leave ambiguous matches for review.
+                imdb_verified = False
+                if not errors and (automatic is None or
+                                   not confident_portrait_replacement(actor_name, [automatic])):
+                    corroborated = imdb_resolve_candidates(choices, key)
+                    if corroborated is not None:
+                        automatic = corroborated
+                        imdb_verified = True
+                # Plex is a fallback, never a reason to veto a verified TMDB
+                # portrait. Weak evidence still cannot overwrite existing art.
                 with db_open() as db:
                     existing = db.execute('''SELECT a.thumb, art.actor_key AS saved_art
                         FROM actors a LEFT JOIN actor_art art ON art.actor_key=a.actor_key
                         WHERE a.actor_key=?''', (key,)).fetchone()
                 if (automatic and existing and (existing['thumb'] or existing['saved_art'])
-                        and not confident_portrait_replacement(actor_name, [automatic], errors)):
+                        and not verified_replacement_for_actor(actor_name, automatic, key, imdb_verified)):
                     automatic = None
                 if automatic:
                     try:
@@ -1979,8 +2001,12 @@ def review_single_batch_worker():
                     # verified portrait or a decisively stronger filmography match
                     # can be applied without repeating the expensive portrait search.
                     selected = choose_automatic_candidate(choices, actor_name=row['name'])
-                    if selected is None and len(choices) > 1:
-                        selected = imdb_resolve_candidates(choices, row['actor_key'])
+                    imdb_verified = False
+                    if selected is None or not confident_portrait_replacement(row['name'], [selected]):
+                        corroborated = imdb_resolve_candidates(choices, row['actor_key'])
+                        if corroborated is not None:
+                            selected = corroborated
+                            imdb_verified = True
                     if selected is not None and not singleton_is_verified(row['name'], [selected]):
                         selected = None
                     if selected is None:
@@ -1991,7 +2017,8 @@ def review_single_batch_worker():
                             FROM actors a LEFT JOIN actor_art art ON art.actor_key=a.actor_key
                             WHERE a.actor_key=?''', (row['actor_key'],)).fetchone()
                     if (existing and (existing['thumb'] or existing['saved_art'])
-                            and not confident_portrait_replacement(row['name'], [selected])):
+                            and not verified_replacement_for_actor(
+                                row['name'], selected, row['actor_key'], imdb_verified)):
                         with REVIEW_BATCH_LOCK: REVIEW_BATCH_STATE['skipped'] += 1
                         continue
                     save_verified_art(row['actor_key'], selected)
