@@ -659,6 +659,81 @@ class PlexCastExplorerTests(unittest.TestCase):
         self.assertIsNone(app.choose_automatic_candidate([dict(good, url='http://127.0.0.1/p.jpg')], actor_name='Ada Example'))
         self.assertIsNone(app.choose_automatic_candidate([good, dict(good, source='ThePornDB')], actor_name='Ada Example'))
 
+    def test_matching_accepts_one_year_discrepancy_when_other_credits_agree(self):
+        local = [
+            {'title':'Film Alpha','year':2018,'media_type':'movie'},
+            {'title':'Film Beta','year':2020,'media_type':'movie'}]
+        provider = [
+            {'title':'Film Alpha','release_date':'2018-05-01','media_type':'movie'},
+            {'title':'Film Beta','release_date':'2015-05-01','media_type':'movie'}]
+        matches = app.credit_matches(local, provider, 'TMDB')
+        self.assertEqual(len(matches), 2)
+        candidate = {'name':'Ada Example','source':'TMDB',
+                     'url':'https://image.tmdb.org/t/p/w342/ada.jpg',
+                     'matches':matches}
+        self.assertIs(app.choose_automatic_candidate([candidate], 'Ada Example'), candidate)
+        warning = app.portrait_match_warning('Ada Example', candidate, local)
+        self.assertIn('Release year differs for Film Beta', warning)
+
+    def test_single_genuinely_incompatible_production_requires_review(self):
+        entry = {'name':'Ada Example','source':'TMDB',
+                 'url':'https://image.tmdb.org/t/p/w342/ada.jpg',
+                 'matches':[{'title':'Film Alpha','year':2018,
+                             'external_year':1990}]}
+        self.assertIsNone(app.choose_automatic_candidate([entry], 'Ada Example'))
+        self.assertIsNone(app.choose_automatic_candidate([
+            dict(entry, matches=[] )], 'Ada Example'))
+
+    def test_tmdb_overrides_tpdb_but_tpdb_never_overrides_tmdb(self):
+        with patch.object(app, 'plex_xml', side_effect=self.fake_xml):
+            app.sync_all(force=True)
+        tpdb = {'name':'Sample Actor','source':'ThePornDB',
+                'url':'https://cdn.theporndb.net/portrait.jpg',
+                'reference':'https://theporndb.net/performers/100',
+                'credit':'ThePornDB',
+                'matches':[{'title':'Alpha','year':2024,'external_year':2024}]}
+        tmdb = dict(tpdb, source='TMDB',
+                    url='https://image.tmdb.org/t/p/w342/portrait.jpg',
+                    reference='https://www.themoviedb.org/person/5')
+        with patch.object(app, 'external_image',
+                          return_value=(bytes([255,216,255])+b'tpdb', 'jpg')):
+            app.save_verified_art('sample actor', tpdb)
+        self.assertTrue(app.source_upgrade_needed('sample actor', tmdb))
+        with patch.object(app, 'pending_enrichment_keys', return_value=['sample actor']), \
+             patch.object(app, 'verified_portrait_candidates', return_value=([tmdb], [])), \
+             patch.object(app, 'external_image',
+                          return_value=(bytes([255,216,255])+b'tmdb', 'jpg')):
+            app.ENRICH_STOP.clear()
+            app.enrichment_worker()
+        self.assertEqual(app.get_actor('sample actor')['art']['source'], 'TMDB')
+        self.assertEqual(app.image_bytes('actor', 'sample actor'), bytes([255,216,255])+b'tmdb')
+        self.assertFalse(app.source_upgrade_needed('sample actor', tpdb))
+        with patch.object(app, 'pending_enrichment_keys', return_value=['sample actor']), \
+             patch.object(app, 'verified_portrait_candidates', return_value=([tpdb], [])), \
+             patch.object(app, 'external_image') as download:
+            app.ENRICH_STOP.clear()
+            app.enrichment_worker()
+            download.assert_not_called()
+        self.assertEqual(app.get_actor('sample actor')['art']['source'], 'TMDB')
+
+    def test_one_time_tmdb_upgrade_requeues_legacy_tpdb_without_deleting_art(self):
+        with patch.object(app, 'plex_xml', side_effect=self.fake_xml):
+            app.sync_all(force=True)
+        tpdb = {'name':'Sample Actor','source':'ThePornDB',
+                'url':'https://cdn.theporndb.net/portrait.jpg',
+                'reference':'https://theporndb.net/performers/100',
+                'matches':[{'title':'Alpha','year':2024,'external_year':2024}]}
+        with patch.object(app, 'external_image',
+                          return_value=(bytes([255,216,255])+b'image', 'jpg')):
+            app.save_verified_art('sample actor', tpdb)
+        app.remember_enrichment('sample actor','auto')
+        with patch.object(app, 'artwork_keys', return_value={'tmdb':'token','theporndb':''}), \
+             patch.object(app, 'provider_enabled', return_value=True):
+            self.assertEqual(app.requeue_provider_upgrades(), 1)
+            self.assertEqual(app.requeue_provider_upgrades(), 0)
+        self.assertIn('sample actor', app.pending_enrichment_keys())
+        self.assertEqual(app.get_actor('sample actor')['art']['source'], 'ThePornDB')
+
     def test_multiple_candidates_require_strong_evidence_and_unique_winner(self):
         evidence = [{'title':'Movie One','year':2018,'external_year':2018,'year_verified':True},
                     {'title':'Movie Two','year':2020,'external_year':2021,'year_verified':False}]
