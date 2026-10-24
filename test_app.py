@@ -21,12 +21,14 @@ class PlexCastExplorerTests(unittest.TestCase):
         self.old_conf = app.CONFIG_PATH
         self.old_portraits = app.PORTRAIT_DIR
         self.old_plex_portraits = app.PLEX_PORTRAIT_DIR
+        self.old_imdb_index = app.IMDB_INDEX_PATH
         self.old_art_config = app.ART_CONFIG_PATH
         self.old_network_config = app.NETWORK_CONFIG_PATH
         app.DB_PATH = Path(self.temp.name) / 'data.sqlite'
         app.CONFIG_PATH = Path(self.temp.name) / 'settings.json'
         app.PORTRAIT_DIR = Path(self.temp.name) / 'portraits'
         app.PLEX_PORTRAIT_DIR = Path(self.temp.name) / 'plex-portraits'
+        app.IMDB_INDEX_PATH = Path(self.temp.name) / 'imdb-identity.sqlite'
         app.ART_CONFIG_PATH = Path(self.temp.name) / 'artwork.json'
         app.NETWORK_CONFIG_PATH = Path(self.temp.name) / 'network.json'
         app.image_bytes.cache_clear()
@@ -37,6 +39,7 @@ class PlexCastExplorerTests(unittest.TestCase):
         app.CONFIG_PATH = self.old_conf
         app.PORTRAIT_DIR = self.old_portraits
         app.PLEX_PORTRAIT_DIR = self.old_plex_portraits
+        app.IMDB_INDEX_PATH = self.old_imdb_index
         app.ART_CONFIG_PATH = self.old_art_config
         app.NETWORK_CONFIG_PATH = self.old_network_config
         app.image_bytes.cache_clear()
