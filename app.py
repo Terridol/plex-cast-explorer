@@ -1584,7 +1584,8 @@ def verified_portrait_candidates(actor_key):
     # TPDB is second priority even when Plex already has a thumbnail.
     # Plex artwork is retained only if neither external provider has a
     # sufficiently corroborated match. Provider errors must be retryable.
-    if keys['theporndb'] and not found and not errors:
+    if (keys['theporndb'] and not errors and
+            not any(portrait_match_quality(name, candidate)[0] for candidate in found)):
         try:
             response = paced_provider_json('https://api.theporndb.net/performers?' + urlencode({'q': name}), keys['theporndb'])
             for item in (response.get('data') or [])[:10]:
