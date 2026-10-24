@@ -31,7 +31,7 @@ class BuildGateRegressionTests(unittest.TestCase):
         self.assert_mutation_blocked(
             'app.py',
             'not any(portrait_match_quality(name, candidate)[0] for candidate in found)',
-            'True  # allow TPDB despite valid TMDB identity'
+            'True'
         )
 
     def test_tpdb_fallback_must_not_run_after_provider_errors(self):
