@@ -1673,11 +1673,21 @@ def confident_portrait_replacement(actor_name, candidates, errors=None):
 
 
 def choose_automatic_candidate(candidates, actor_name=None, errors=None):
-    """Automatically accept one credible identity; review competing identities."""
-    if errors or len(candidates) != 1:
+    """Pick one credible performer at the highest available portrait priority.
+
+    Invalid search hits are not competing identities. A unique TMDB identity
+    outranks TPDB. Multiple credible records from the same best source wait
+    for review (or an optional IMDb tie-break).
+    """
+    if errors or not candidates:
         return None
-    entry = candidates[0]
-    return entry if portrait_match_quality(actor_name or entry.get('name', ''), entry)[0] else None
+    credible = [c for c in candidates if
+                portrait_match_quality(actor_name or c.get('name', ''), c)[0]]
+    if not credible:
+        return None
+    top_rank = max(ARTWORK_PRIORITY.get(c['source'], 0) for c in credible)
+    best = [c for c in credible if ARTWORK_PRIORITY.get(c['source'], 0) == top_rank]
+    return best[0] if len(best) == 1 else None
 
 
 def source_upgrade_needed(actor_key, entry):
