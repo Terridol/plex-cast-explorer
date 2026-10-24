@@ -129,7 +129,7 @@
       $('enrichAcceptUnique').disabled=!!batch.running;
       $('enrichAcceptUnique').textContent=batch.running?'Evaluating stored portraits…':'Auto-verify queued portraits';
       $('enrichBatchSummary').hidden=!(batch.running||batch.checked||batch.failed);
-      $('enrichBatchSummary').textContent='Review queue: '+formatNumber(batch.checked||0)+' / '+formatNumber(batch.total||0)+' checked · '+formatNumber(batch.applied||0)+' verified portraits saved · '+formatNumber(batch.skipped||0)+' retained for review'+(batch.failed?' · '+batch.failed+' download errors':'')+(batch.last_error?' · '+batch.last_error:'');
+      $('enrichBatchSummary').textContent='Review queue: '+formatNumber(batch.checked||0)+' / '+formatNumber(batch.total||0)+' checked · '+formatNumber(batch.applied||0)+' reviews resolved · '+formatNumber(batch.skipped||0)+' retained for review'+(batch.failed?' · '+batch.failed+' download errors':'')+(batch.last_error?' · '+batch.last_error:'');
       $('enrichStart').disabled=result.running;
       $('enrichPause').disabled=!result.running;
       const triage=result.review_triage||{};
