@@ -657,7 +657,7 @@ class PlexCastExplorerTests(unittest.TestCase):
         self.assertIs(app.choose_automatic_candidate([dict(good, matches=[dict(evidence[0], role_conflict=True)])], actor_name='Ada Example')['source'], good['source'])
         self.assertIsNone(app.choose_automatic_candidate([dict(good, matches=[dict(evidence[0], external_year=2020)])], actor_name='Ada Example'))
         self.assertIsNone(app.choose_automatic_candidate([dict(good, url='http://127.0.0.1/p.jpg')], actor_name='Ada Example'))
-        self.assertIsNone(app.choose_automatic_candidate([good, dict(good, source='ThePornDB')], actor_name='Ada Example'))
+        self.assertIs(app.choose_automatic_candidate([good, dict(good, source='ThePornDB')], actor_name='Ada Example'), good)
 
     def test_matching_accepts_one_year_discrepancy_when_other_credits_agree(self):
         local = [
@@ -742,7 +742,7 @@ class PlexCastExplorerTests(unittest.TestCase):
         weaker = dict(good, matches=evidence[:1])
         self.assertIsNone(app.choose_automatic_candidate([good, weaker]))
         self.assertIsNone(app.choose_automatic_candidate([weaker, good]))
-        self.assertIsNone(app.choose_automatic_candidate([good, dict(good, source='ThePornDB')]))
+        self.assertIs(app.choose_automatic_candidate([good, dict(good, source='ThePornDB')]), good)
 
     def test_existing_review_queue_batch_accepts_only_verified_singletons(self):
         with patch.object(app, 'plex_xml', side_effect=self.fake_xml):
@@ -885,11 +885,11 @@ class PlexCastExplorerTests(unittest.TestCase):
                  'matches': [{'title': 'Alpha', 'year': 2024,
                               'external_year': 2024, 'year_verified': True}]}
         self.assertIsNone(app.choose_automatic_candidate([good, rival], 'Sample Actor'))
-        self.assertIsNone(app.choose_automatic_candidate(
-            [dict(good, name='Different Actor'), rival], 'Sample Actor'))
+        self.assertIs(app.choose_automatic_candidate(
+            [dict(good, name='Different Actor'), rival], 'Sample Actor'), rival)
         self.assertIsNone(app.choose_automatic_candidate([good, dict(good)], 'Sample Actor'))
-        self.assertIsNone(app.choose_automatic_candidate(
-            [dict(good, url='http://bad.invalid/portrait.jpg'), rival], 'Sample Actor'))
+        self.assertIs(app.choose_automatic_candidate(
+            [dict(good, url='http://bad.invalid/portrait.jpg'), rival], 'Sample Actor'), rival)
 
     def test_imdb_known_for_breaks_tied_tmdb_identity_candidates(self):
         (Path(self.temp.name) / 'imdb.sqlite').touch()
