@@ -1272,8 +1272,8 @@ class PlexCastExplorerTests(unittest.TestCase):
                     {'title':'Beta','year':2018,'year_verified':True}]
         candidates = [{'name':'Second Actor','source':'TMDB','url':'https://image.tmdb.org/t/p/w342/x.jpg',
                        'reference':'https://www.themoviedb.org/person/20','credit':'TMDB','matches':evidence},
-                      {'name':'Second Actor','source':'ThePornDB','url':'https://cdn.theporndb.net/y.jpg',
-                       'reference':'https://theporndb.net/performers/11','credit':'ThePornDB','matches':evidence}]
+                      {'name':'Second Actor','source':'TMDB','url':'https://image.tmdb.org/t/p/w342/y.jpg',
+                       'reference':'https://www.themoviedb.org/person/11','credit':'TMDB','matches':evidence}]
         with patch.object(app, 'pending_enrichment_keys', return_value=['second actor']), \
              patch.object(app, 'verified_portrait_candidates', return_value=(candidates,[])):
             app.ENRICH_STOP.clear()
