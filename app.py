@@ -1753,6 +1753,42 @@ def enrichment_status():
         data['review_waiting'] = db.execute("SELECT COUNT(*) FROM enrichment_results WHERE status='review'").fetchone()[0]
         data['remaining'] = db.execute('''SELECT COUNT(*) FROM actors a
             WHERE NOT EXISTS(SELECT 1 FROM enrichment_results r WHERE r.actor_key=a.actor_key)''').fetchone()[0]
+        # Actual displayed portrait sources, not enrichment job statuses.
+        # image_bytes() serves actor_art before reading the Plex thumbnail.
+        sources = {r['source']: r['n'] for r in db.execute(
+            'SELECT source, COUNT(*) AS n FROM actor_art GROUP BY source')}
+        sources['Plex fallback'] = db.execute("""
+            SELECT COUNT(*) FROM actors a WHERE a.thumb!=''
+            AND NOT EXISTS(SELECT 1 FROM actor_art art WHERE art.actor_key=a.actor_key)
+        """).fetchone()[0]
+        sources['No artwork'] = db.execute("""
+            SELECT COUNT(*) FROM actors a WHERE a.thumb=''
+            AND NOT EXISTS(SELECT 1 FROM actor_art art WHERE art.actor_key=a.actor_key)
+        """).fetchone()[0]
+        data['portrait_sources'] = sources
+        review = {'ready': 0, 'needs_more_evidence': 0,
+                  'multiple_candidates': 0, 'lookup_warning': 0}
+        for item in db.execute("""SELECT a.name,a.thumb,e.candidates,e.message,
+                    (SELECT 1 FROM actor_art art WHERE art.actor_key=a.actor_key) AS has_external
+                    FROM enrichment_results e JOIN actors a ON a.actor_key=e.actor_key
+                    WHERE e.status='review'"""):
+            if item['message']:
+                review['lookup_warning'] += 1
+                continue
+            try:
+                candidates = deduplicate_portrait_candidates(json.loads(item['candidates']))
+            except (TypeError, ValueError, AttributeError):
+                candidates = []
+            best = choose_automatic_candidate(candidates, actor_name=item['name'])
+            if (best is not None and
+                (not (item['thumb'] or item['has_external']) or
+                 confident_portrait_replacement(item['name'], [best]))):
+                review['ready'] += 1
+            elif len(candidates) > 1:
+                review['multiple_candidates'] += 1
+            else:
+                review['needs_more_evidence'] += 1
+        data['review_triage'] = review
     return data
 
 
