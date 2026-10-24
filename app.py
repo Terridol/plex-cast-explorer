@@ -1661,6 +1661,8 @@ def portrait_match_quality(actor_name, entry):
             good += 1
             if local_year is None or remote_year is None:
                 warnings.append('Release year unverified for ' + str(credit['title'])[:100])
+            elif local_year != remote_year:
+                warnings.append('Release year differs for ' + str(credit['title'])[:100])
     # Reject a candidate whose *only* matching title has an incompatible year,
     # or whose filmography conflicts more often than it agrees.
     if not good or bad > good:
