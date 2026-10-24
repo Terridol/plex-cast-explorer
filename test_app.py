@@ -682,6 +682,41 @@ class PlexCastExplorerTests(unittest.TestCase):
         self.assertEqual(app.enrichment_status()['review_waiting'], 1)
         self.assertEqual(app.enrichment_status()['single_batch']['applied'], 1)
 
+    def test_gallery_uses_verified_tmdb_before_plex_and_reports_source(self):
+        with patch.object(app, 'plex_xml', side_effect=self.fake_xml):
+            app.sync_all(force=True)
+        before = next(x for x in app.list_actors({})['results']
+                      if x['key'] == 'sample actor')
+        self.assertEqual(before['image_source'], 'Plex fallback')
+        choice = {'name': 'Sample Actor', 'source': 'TMDB',
+                  'url': 'https://image.tmdb.org/t/p/w342/proven.jpg',
+                  'reference': 'https://www.themoviedb.org/person/42',
+                  'credit': 'TMDB', 'matches': [
+                      {'title': 'Alpha', 'year': 2024, 'external_year': 2024,
+                       'year_verified': True}]}
+        with patch.object(app, 'external_image', return_value=(bytes([255, 216, 255]) + b'TMDB', 'jpg')):
+            app.save_verified_art('sample actor', choice)
+        after = next(x for x in app.list_actors({})['results']
+                     if x['key'] == 'sample actor')
+        self.assertEqual(after['image_source'], 'TMDB')
+        self.assertEqual(app.get_actor('sample actor')['art']['source'], 'TMDB')
+        self.assertEqual(app.image_bytes('actor', 'sample actor'), bytes([255, 216, 255]) + b'TMDB')
+        counts = app.enrichment_status()['portrait_sources']
+        self.assertEqual(counts['TMDB'], 1)
+        self.assertEqual(counts['Plex fallback'], 0)
+
+    def test_review_triage_exposes_queued_single_verified_portrait(self):
+        with patch.object(app, 'plex_xml', side_effect=self.fake_xml):
+            app.sync_all(force=True)
+        candidate = {'name': 'Sample Actor', 'source': 'TMDB',
+                     'url': 'https://image.tmdb.org/t/p/w342/good.jpg',
+                     'matches': [{'title': 'Alpha', 'year': 2024,
+                                  'external_year': 2024, 'year_verified': True}]}
+        app.remember_enrichment('sample actor', 'review', [candidate])
+        triage = app.enrichment_status()['review_triage']
+        self.assertEqual(triage['ready'], 1)
+        self.assertEqual(sum(triage.values()), 1)
+
     def test_imdb_verified_single_title_upgrades_plex_photo_to_tmdb(self):
         with patch.object(app, 'plex_xml', side_effect=self.fake_xml):
             app.sync_all(force=True)
