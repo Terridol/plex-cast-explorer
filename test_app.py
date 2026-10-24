@@ -713,6 +713,23 @@ class PlexCastExplorerTests(unittest.TestCase):
         self.assertEqual(len(matches[0]['matches']), 2)
         self.assertTrue(app.is_strong_match(matches[0]))
 
+    def test_multi_candidate_filmography_winner_is_safe_to_auto_accept(self):
+        good = {'name': 'Sample Actor', 'source': 'TMDB',
+                'url': 'https://image.tmdb.org/t/p/w342/good.jpg',
+                'matches': [
+                    {'title': 'Alpha', 'year': 2024, 'external_year': 2024, 'year_verified': True},
+                    {'title': 'Beta', 'year': 2018, 'external_year': 2018, 'year_verified': True}]}
+        rival = {'name': 'Sample Actor', 'source': 'TMDB',
+                 'url': 'https://image.tmdb.org/t/p/w342/rival.jpg',
+                 'matches': [{'title': 'Alpha', 'year': 2024,
+                              'external_year': 2024, 'year_verified': True}]}
+        self.assertIs(app.choose_automatic_candidate([good, rival], 'Sample Actor'), good)
+        self.assertIsNone(app.choose_automatic_candidate(
+            [dict(good, name='Different Actor'), rival], 'Sample Actor'))
+        self.assertIsNone(app.choose_automatic_candidate([good, dict(good)], 'Sample Actor'))
+        self.assertIsNone(app.choose_automatic_candidate(
+            [dict(good, url='http://bad.invalid/portrait.jpg'), rival], 'Sample Actor'))
+
     def test_imdb_known_for_breaks_tied_tmdb_identity_candidates(self):
         (Path(self.temp.name) / 'imdb.sqlite').touch()
         with patch.object(app, 'plex_xml', side_effect=self.fake_xml):
