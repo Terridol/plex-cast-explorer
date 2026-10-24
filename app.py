@@ -1421,8 +1421,6 @@ def credit_matches(local_titles, remote_credits, source):
             if target not in {normalize_title(n) for n in names if n}:
                 continue
             year_b = credit_year(remote)
-            if year_a is not None and year_b is not None and abs(year_a - year_b) > 1:
-                continue
             exact_year = year_a is not None and year_b is not None and year_a == year_b
             # One year tolerance for alternate release dates but it is not year verification.
             key = (local['title'].casefold(), year_a, local['media_type'])
@@ -1584,78 +1582,95 @@ def verified_portrait_candidates(actor_key):
     return found[:8], errors
 
 
-def singleton_is_verified(actor_name, candidates, warning=''):
-    """A unique candidate with *an actual Plex credit overlap*, not just one name result.
+# Artwork source priority is independent of whether Plex has a thumbnail.
+ARTWORK_PRIORITY = {'TMDB': 3, 'ThePornDB': 2, 'Plex': 1}
 
-    An external provider can return one incorrect namesake. Require matching
-    performer names, shared productions, compatible dates, an allowed image
-    host, and no incomplete provider lookups. Role labels are not identity proof.
+
+def portrait_match_quality(actor_name, entry):
+    """One conservative identity decision used for scans, upgrades and reviews.
+
+    Exactly named performers with a shared production are credible. A single
+    outlying year or missing production is a warning, not a veto when other
+    credits corroborate the identity. No shared production, mismatched name,
+    unsafe image URL, or predominantly contradictory dates is not credible.
     """
-    if warning or len(candidates) != 1:
-        return False
-    entry = candidates[0]
-    if not isinstance(entry, dict) or not actor_name or not entry.get('name'):
-        return False
-    if normal_name(actor_name) != normal_name(entry['name']):
-        return False
+    if not isinstance(entry, dict) or normal_name(actor_name) != normal_name(entry.get('name')):
+        return False, ['Performer name does not match']
     if entry.get('source') not in ('TMDB', 'ThePornDB'):
-        return False
-    u = urlsplit(str(entry.get('url', '')))
-    if u.scheme != 'https' or u.hostname not in IMAGE_HOSTS:
-        return False
+        return False, ['Unsupported portrait provider']
+    if not allowed_https_image_url(str(entry.get('url') or ''), IMAGE_HOSTS):
+        return False, ['Untrusted portrait URL']
     matches = entry.get('matches')
     if not isinstance(matches, list) or not matches:
-        return False
-    for m in matches:
-        if not isinstance(m, dict) or not normalize_title(m.get('title')):
-            return False
-        ya, yb = credit_year({'year': m.get('year')}), credit_year({'year': m.get('external_year')})
-        if ya is not None and yb is not None and abs(ya-yb) > 1:
-            return False
-    return True
+        return False, ['No matching production credits']
+    good, bad, warnings = 0, 0, []
+    for credit in matches:
+        if not isinstance(credit, dict) or not normalize_title(credit.get('title')):
+            return False, ['Missing credited production title']
+        local_year = credit_year({'year': credit.get('year')})
+        remote_year = credit_year({'year': credit.get('external_year')})
+        if local_year is not None and remote_year is not None and abs(local_year - remote_year) > 1:
+            bad += 1
+            warnings.append('Release year differs for ' + str(credit['title'])[:100])
+        else:
+            good += 1
+            if local_year is None or remote_year is None:
+                warnings.append('Release year unverified for ' + str(credit['title'])[:100])
+    # Reject a candidate whose *only* matching title has an incompatible year,
+    # or whose filmography conflicts more often than it agrees.
+    if not good or bad > good:
+        return False, ['Filmography does not agree']
+    return True, warnings[:5]
+
+
+def singleton_is_verified(actor_name, candidates, warning=''):
+    """Compatibility wrapper around the single filmography identity decision."""
+    return (not warning and len(candidates) == 1 and
+            portrait_match_quality(actor_name, candidates[0])[0])
 
 
 def confident_portrait_replacement(actor_name, candidates, errors=None):
-    """Require corroborated identity before replacing existing artwork."""
-    if errors or len(candidates) != 1:
-        return False
-    entry = candidates[0]
-    if not singleton_is_verified(actor_name, candidates):
-        return False
-    if is_strong_match(entry):
-        return True
-    matches = entry['matches']
-    if len(matches) != 1:
-        return False
-    credit = matches[0]
-    # One credit qualifies with an exact verified release year and no
-    # competing candidate. Character labels do not veto filmography.
-    return (credit.get('year_verified') is True and
-            credit_year({'year': credit.get('year')}) is not None and
-            credit_year({'year': credit.get('external_year')}) is not None)
+    """Legacy call sites use the same identity check, not stricter year rules."""
+    return (not errors and len(candidates) == 1 and
+            portrait_match_quality(actor_name, candidates[0])[0])
 
 
 def choose_automatic_candidate(candidates, actor_name=None, errors=None):
-    if not candidates or errors:
+    """Automatically accept one credible identity; review competing identities."""
+    if errors or len(candidates) != 1:
         return None
-    if len(candidates) == 1:
-        one = candidates[0]
-        # Exact-name and matching-title verification is required even for
-        # singletons; a sole search result is NOT itself identity evidence.
-        if singleton_is_verified(actor_name or one.get('name', ''), candidates):
-            return one
-        return None
-    if not is_strong_match(candidates[0]):
-        return None
-    # Strong filmography still requires an exact performer name, a trusted
-    # portrait URL and compatible credited years for the winning identity.
-    if not singleton_is_verified(actor_name or candidates[0].get('name', ''), [candidates[0]]):
-        return None
-    best = candidates[0]
-    primary = (len(best['matches']), sum(bool(m['year_verified']) for m in best['matches']))
-    runner = candidates[1]
-    secondary = (len(runner['matches']), sum(bool(m['year_verified']) for m in runner['matches']))
-    return best if primary != secondary else None
+    entry = candidates[0]
+    return entry if portrait_match_quality(actor_name or entry.get('name', ''), entry)[0] else None
+
+
+def source_upgrade_needed(actor_key, entry):
+    """Only move *up* TMDB > TPDB > Plex. Avoid refetching identical portraits."""
+    if not entry:
+        return False
+    new_rank = ARTWORK_PRIORITY.get(entry.get('source'), 0)
+    with db_open() as db:
+        existing = db.execute(
+            'SELECT source,source_url,file FROM actor_art WHERE actor_key=?',
+            (actor_key,)).fetchone()
+    if not existing:
+        return new_rank > ARTWORK_PRIORITY['Plex']
+    old_rank = ARTWORK_PRIORITY.get(existing['source'], 0)
+    if new_rank < old_rank:
+        return False
+    if new_rank == old_rank:
+        # Preserve existing verified provider portrait unless its local file is gone.
+        return not (PORTRAIT_DIR / existing['file']).is_file()
+    return True
+
+
+def portrait_match_warning(actor_name, entry, local_titles=None):
+    _, warnings = portrait_match_quality(actor_name, entry)
+    if local_titles:
+        matched = {normalize_title(x.get('title')) for x in entry.get('matches', [])}
+        missing = {normalize_title(x.get('title')) for x in local_titles} - matched
+        if missing and matched:
+            warnings.append(str(len(missing)) + ' Plex production credit(s) not corroborated by provider')
+    return '; '.join(dict.fromkeys(warnings))[:500]
 
 
 def imdb_resolve_candidates(choices, actor_key):
