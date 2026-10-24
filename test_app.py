@@ -657,9 +657,10 @@ class PlexCastExplorerTests(unittest.TestCase):
         self.assertIsNone(app.choose_automatic_candidate([good, dict(good, source='ThePornDB')], actor_name='Ada Example'))
 
     def test_multiple_candidates_require_strong_evidence_and_unique_winner(self):
-        evidence = [{'title':'Movie One','year':2018,'year_verified':True},
-                    {'title':'Movie Two','year':2020,'year_verified':False}]
-        good = {'name':'Ada Example','source':'TMDB', 'matches':evidence}
+        evidence = [{'title':'Movie One','year':2018,'external_year':2018,'year_verified':True},
+                    {'title':'Movie Two','year':2020,'external_year':2021,'year_verified':False}]
+        good = {'name':'Ada Example','source':'TMDB',
+                'url':'https://image.tmdb.org/t/p/w342/ada.jpg', 'matches':evidence}
         weaker = dict(good, matches=evidence[:1])
         self.assertEqual(app.choose_automatic_candidate([good, weaker]), good)
         self.assertIsNone(app.choose_automatic_candidate([weaker, good]))
