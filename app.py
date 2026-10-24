@@ -1714,21 +1714,6 @@ def imdb_resolve_candidates(choices, actor_key):
     return scored[0][1]
 
 
-def verified_replacement_for_actor(actor_name, selected, actor_key, imdb_verified=False):
-    """Require strong title/year evidence before replacing any existing artwork.
-
-    An IMDb-supported selection is eligible if the actor name, matching film
-    credits and trusted TMDB portrait are independently validated.
-    """
-    if not selected:
-        return False
-    if confident_portrait_replacement(actor_name, [selected]):
-        return True
-    return bool(imdb_verified and singleton_is_verified(actor_name, [selected])
-                and selected.get('source') == 'TMDB')
-
-
-
 def verified_portrait_image(url):
     """Prefer higher-resolution TMDB portraits and preserve safe fallback."""
     if url.startswith('https://image.tmdb.org/t/p/w342/'):
@@ -1909,36 +1894,35 @@ def enrichment_worker():
                     consecutive_provider_failures += 1
                 else:
                     consecutive_provider_failures = 0
-                actor_name, _ = actor_titles_for_matching(key)
-                automatic = choose_automatic_candidate(choices, actor_name=actor_name, errors=errors)
-                imdb_verified = False
-                if not errors and (automatic is None or
-                                   not confident_portrait_replacement(actor_name, [automatic])):
-                    corroborated = imdb_resolve_candidates(choices, key)
-                    if corroborated is not None:
-                        automatic = corroborated
-                        imdb_verified = True
-                # Plex is a fallback, never a reason to veto a verified TMDB
-                # portrait. Weak evidence still cannot overwrite existing art.
-                with db_open() as db:
-                    existing = db.execute('''SELECT a.thumb, art.actor_key AS saved_art
-                        FROM actors a LEFT JOIN actor_art art ON art.actor_key=a.actor_key
-                        WHERE a.actor_key=?''', (key,)).fetchone()
-                if (automatic and existing and (existing['thumb'] or existing['saved_art'])
-                        and not verified_replacement_for_actor(actor_name, automatic, key, imdb_verified)):
-                    automatic = None
-                if automatic:
+                actor_name, titles = actor_titles_for_matching(key)
+                choices = deduplicate_portrait_candidates(choices)
+                # One candidate is accepted. Multiple distinct identities need
+                # human confirmation, unless optional IMDb identifies exactly one.
+                automatic = choose_automatic_candidate(choices, actor_name, errors)
+                if automatic is None and len(choices) > 1 and not errors:
+                    automatic = imdb_resolve_candidates(choices, key)
+                if automatic is not None:
+                    warning = portrait_match_warning(actor_name, automatic, titles)
                     try:
-                        save_verified_art(key, automatic)
+                        if source_upgrade_needed(key, automatic):
+                            save_verified_art(key, automatic)
                         status, saved = 'auto', []
                     except Exception as exc:
                         errors.append('Portrait download: ' + str(exc)[:100])
-                        status, saved = 'review', choices
-                elif choices:
+                        status, saved = 'error', choices
+                elif errors:
+                    status, saved = 'error', choices
+                    warning = ''
+                elif len(choices) > 1:
                     status, saved = 'review', choices
+                    warning = 'Multiple plausible performer identities'
+                elif len(choices) == 1:
+                    status, saved = 'review', choices
+                    warning = 'Conflicting filmography or invalid portrait'
                 else:
-                    status, saved = ('error' if errors else 'unmatched'), []
-                remember_enrichment(key, status, saved, '; '.join(errors))
+                    status, saved = 'unmatched', []
+                    warning = ''
+                remember_enrichment(key, status, saved, '; '.join(errors) if errors else warning)
                 with ENRICH_LOCK:
                     if status == 'auto': ENRICH_STATE['applied'] += 1
                     elif status == 'review': ENRICH_STATE['review'] += 1
@@ -2050,35 +2034,32 @@ def review_single_batch_worker():
                         choices = json.loads(current['candidates'])
                     except (ValueError, TypeError):
                         choices = []
-                    if current['message']:
+                    choices = deduplicate_portrait_candidates(choices)
+                    # Old review messages can be informational. Only actual
+                    # provider failures must be retried rather than auto-accepted.
+                    msg = str(current['message'] or '')
+                    if any(marker in msg for marker in (
+                        'TMDB credits:', 'TMDB search:', 'ThePornDB credits:',
+                        'ThePornDB search:', 'Portrait download:')):
+                        remember_enrichment(row['actor_key'], 'error', choices, msg)
                         with REVIEW_BATCH_LOCK: REVIEW_BATCH_STATE['skipped'] += 1
                         continue
-                    # Reevaluate historical reviews with today's rules. A unique
-                    # verified portrait or a decisively stronger filmography match
-                    # can be applied without repeating the expensive portrait search.
-                    selected = choose_automatic_candidate(choices, actor_name=row['name'])
-                    imdb_verified = False
-                    if selected is None or not confident_portrait_replacement(row['name'], [selected]):
-                        corroborated = imdb_resolve_candidates(choices, row['actor_key'])
-                        if corroborated is not None:
-                            selected = corroborated
-                            imdb_verified = True
-                    if selected is not None and not singleton_is_verified(row['name'], [selected]):
-                        selected = None
+                    selected = choose_automatic_candidate(choices, row['name'])
+                    if selected is None and len(choices) > 1:
+                        selected = imdb_resolve_candidates(choices, row['actor_key'])
                     if selected is None:
                         with REVIEW_BATCH_LOCK: REVIEW_BATCH_STATE['skipped'] += 1
                         continue
-                    with db_open() as db:
-                        existing = db.execute('''SELECT a.thumb, art.actor_key AS saved_art
-                            FROM actors a LEFT JOIN actor_art art ON art.actor_key=a.actor_key
-                            WHERE a.actor_key=?''', (row['actor_key'],)).fetchone()
-                    if (existing and (existing['thumb'] or existing['saved_art'])
-                            and not verified_replacement_for_actor(
-                                row['name'], selected, row['actor_key'], imdb_verified)):
-                        with REVIEW_BATCH_LOCK: REVIEW_BATCH_STATE['skipped'] += 1
+                    actor_name, titles = actor_titles_for_matching(row['actor_key'])
+                    warning = portrait_match_warning(actor_name, selected, titles)
+                    if not source_upgrade_needed(row['actor_key'], selected):
+                        # The actor already has equal or higher priority artwork.
+                        # It is resolved; clear the obsolete manual review.
+                        remember_enrichment(row['actor_key'], 'auto', [], warning)
+                        with REVIEW_BATCH_LOCK: REVIEW_BATCH_STATE['applied'] += 1
                         continue
                     save_verified_art(row['actor_key'], selected)
-                    remember_enrichment(row['actor_key'], 'auto', [], 'Unique credit-matched candidate auto-accepted')
+                    remember_enrichment(row['actor_key'], 'auto', [], warning)
                     with REVIEW_BATCH_LOCK: REVIEW_BATCH_STATE['applied'] += 1
             except Exception as exc:
                 logging.warning('Single-result portrait apply failed for %s: %s', row['actor_key'], exc)
