@@ -968,11 +968,14 @@ def list_actors(params):
             ' GROUP BY a.actor_key ORDER BY '+order+' LIMIT ? OFFSET ?', args+[limit, offset]).fetchall()
     result = [dict(r) for r in rows]
     with db_open() as db:
-        overrides = {row['actor_key']: row['version'] for row in db.execute('SELECT actor_key,version FROM actor_art')}
+        overrides = {row['actor_key']: (row['version'], row['source'])
+                     for row in db.execute('SELECT actor_key,version,source FROM actor_art')}
     for r in result:
+        art = overrides.get(r['key'])
         r['image'] = ('/api/image?kind=actor&key=' + quote(r['key']) +
-                      ('&v='+str(overrides[r['key']]) if r['key'] in overrides else '')) if (r['thumb'] or r['key'] in overrides) else ''
-        r['has_art'] = bool(r['thumb'] or r['key'] in overrides)
+                      ('&v='+str(art[0]) if art else '')) if (r['thumb'] or art) else ''
+        r['image_source'] = (art[1] if art else ('Plex fallback' if r['thumb'] else 'No artwork'))
+        r['has_art'] = bool(r['thumb'] or art)
         del r['thumb']
     return {'total': total, 'results': result, 'offset': offset, 'limit': limit}
 
@@ -1745,6 +1748,8 @@ def save_verified_art(actor_key, entry):
 def enrichment_status():
     with ENRICH_LOCK:
         data = dict(ENRICH_STATE)
+    data['imdb_dataset_available'] = IMDB_INDEX_PATH.is_file()
+    data['tmdb_lookup_enabled'] = bool(artwork_keys()['tmdb'] and provider_enabled('tmdb'))
     with REVIEW_BATCH_LOCK:
         data['single_batch'] = dict(REVIEW_BATCH_STATE)
     with db_open() as db:
