@@ -925,6 +925,15 @@ def get_stats():
     return {'actors': a, 'titles': t, 'credits': credits, 'sections': sections, 'machine_id': machine_row['value'] if machine_row else ''}
 
 
+def visible_match_warning(message):
+    """Only surface actual non-blocking metadata discrepancies, not job notes."""
+    if not message:
+        return ''
+    markers = ('Release year differs', 'Release year unverified',
+               'Plex production credit(s) not corroborated')
+    return message if any(marker in message for marker in markers) else ''
+
+
 def list_actors(params):
     search = params.get('search', [''])[0].strip()
     section = params.get('section', [''])[0]
@@ -973,11 +982,20 @@ def list_actors(params):
     with db_open() as db:
         overrides = {row['actor_key']: (row['version'], row['source'])
                      for row in db.execute('SELECT actor_key,version,source FROM actor_art')}
+        warnings = {}
+        if result:
+            placeholders = ','.join('?' for _ in result)
+            warnings = {row['actor_key']: visible_match_warning(row['message'])
+                for row in db.execute(
+                    "SELECT actor_key,message FROM enrichment_results WHERE status='auto' "
+                    "AND actor_key IN (" + placeholders + ")",
+                    [actor['key'] for actor in result])}
     for r in result:
         art = overrides.get(r['key'])
         r['image'] = ('/api/image?kind=actor&key=' + quote(r['key']) +
                       ('&v='+str(art[0]) if art else '')) if (r['thumb'] or art) else ''
         r['image_source'] = (art[1] if art else ('Plex fallback' if r['thumb'] else 'No artwork'))
+        r['match_warning'] = warnings.get(r['key'], '')
         r['has_art'] = bool(r['thumb'] or art)
         del r['thumb']
     return {'total': total, 'results': result, 'offset': offset, 'limit': limit}
@@ -999,6 +1017,11 @@ def get_actor(key):
     actor = dict(actor)
     with db_open() as db:
         override = db.execute('SELECT source,source_url,attribution,version FROM actor_art WHERE actor_key=?', (key,)).fetchone()
+        enrichment = db.execute(
+            "SELECT status,message FROM enrichment_results WHERE actor_key=?", (key,)
+        ).fetchone()
+    actor['match_warning'] = (visible_match_warning(enrichment['message'])
+                               if enrichment and enrichment['status'] == 'auto' else '')
     actor['image'] = ('/api/image?kind=actor&key=' + quote(key) +
                       ('&v='+str(override['version']) if override else '')) if actor['thumb'] or override else ''
     actor['art'] = dict(override) if override else {'source': 'Plex' if actor['thumb'] else '', 'source_url': '', 'attribution': ''}
