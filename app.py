@@ -1635,8 +1635,16 @@ def portrait_match_quality(actor_name, entry):
         return False, ['Performer name does not match']
     if entry.get('source') not in ('TMDB', 'ThePornDB'):
         return False, ['Unsupported portrait provider']
-    if not allowed_https_image_url(str(entry.get('url') or ''), IMAGE_HOSTS):
+    image_url = str(entry.get('url') or '')
+    if not allowed_https_image_url(image_url, IMAGE_HOSTS):
         return False, ['Untrusted portrait URL']
+    host = urlsplit(image_url).hostname
+    allowed_source_hosts = {
+        'TMDB': {'image.tmdb.org'},
+        'ThePornDB': {'cdn.theporndb.net', 'api.theporndb.net'}
+    }
+    if host not in allowed_source_hosts[entry['source']]:
+        return False, ['Portrait image is not from its credited provider']
     matches = entry.get('matches')
     if not isinstance(matches, list) or not matches:
         return False, ['No matching production credits']
