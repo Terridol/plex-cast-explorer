@@ -1284,7 +1284,7 @@ def find_art(key):
     results = []
     warnings = []
     def add(name_found, image, source, reference, credit):
-        if normal_name(name_found) != normal_name(name):
+        if normalize_title(name_found) != normalize_title(name):
             return
         choice = new_art_candidate(key, name_found, image, source, reference, credit)
         if choice:
@@ -1320,7 +1320,7 @@ def find_art(key):
         try:
             response = provider_json('https://www.wikidata.org/w/api.php?' + urlencode({
                 'action': 'wbsearchentities', 'search': name, 'language': 'en', 'format': 'json', 'limit': 6}))
-            hits = [x for x in response.get('search', []) if normal_name(x.get('label', '')) == normal_name(name)][:3]
+            hits = [x for x in response.get('search', []) if normalize_title(x.get('label', '')) == normalize_title(name)][:3]
             if hits:
                 more = provider_json('https://www.wikidata.org/w/api.php?' + urlencode({
                     'action': 'wbgetentities', 'ids': '|'.join(x['id'] for x in hits), 'props': 'claims', 'format': 'json'}))
