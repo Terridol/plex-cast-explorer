@@ -1,6 +1,6 @@
 # Artwork providers and attribution — v1.0
 
-Plex Cast Explorer first uses actor portraits supplied by **your own Plex server**. It never bundles downloaded provider portraits or credentials inside Setup.
+Plex Cast Explorer prefers verified **TMDB** portraits, falls back to **ThePornDB**, and finally uses **Plex** artwork. It never bundles downloaded provider portraits or credentials inside Setup.
 
 ## Automatic actor matching and artwork source priority
 
