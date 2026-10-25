@@ -319,8 +319,6 @@
     try{const data=await api('/api/art/search?key='+encodeURIComponent(key));picker.replaceChildren();
       const h=elt('h3','','Choose a portrait for '+data.actor);picker.append(h);
       picker.append(elt('p','note',(automatic?.reason||'Automatic verification did not confirm a unique identity')+'. Compare these suggestions manually before saving.'));
-      const h=elt('h3','','Choose a portrait for '+data.actor);picker.append(h);
-      picker.append(elt('p','note','Matches are suggestions only. Confirm the image represents the right person before applying.'));
       const providers=elt('p','note','TMDB: '+(data.configured.tmdb?'enabled':'not enabled')+' · ThePornDB fallback: '+(data.configured.theporndb?'ready':'add a token')+' · Wikimedia: disabled');picker.append(providers);
       for(const warning of data.warnings){picker.append(elt('p','note',warning));}
       if(!data.results.length){picker.append(elt('p','note','No portraits found. Add provider keys in Settings or try again later.'));return;}
