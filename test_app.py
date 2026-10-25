@@ -709,6 +709,62 @@ class PlexCastExplorerTests(unittest.TestCase):
         self.assertIsNotNone(winner)
         self.assertEqual(winner['source'], 'ThePornDB')
 
+    def test_manual_find_auto_upgrades_plex_to_unique_name_only_tmdb(self):
+        with patch.object(app, 'plex_xml', side_effect=self.fake_xml):
+            app.sync_all(force=True)
+        tmdb = {'name': 'Sample Actor', 'source': 'TMDB',
+                'url': 'https://image.tmdb.org/t/p/w342/person.jpg',
+                'reference': 'https://www.themoviedb.org/person/234',
+                'credit': 'The Movie Database (TMDB)', 'matches': []}
+        before = app.get_actor('sample actor')
+        self.assertEqual(before['art']['source'], 'Plex')
+        with patch.object(app, 'verified_portrait_candidates', return_value=([tmdb], [])), \
+             patch.object(app, 'external_image',
+                          return_value=(bytes([255, 216, 255]) + b'TMDB', 'jpg')) as image:
+            result = app.auto_upgrade_actor_portrait('sample actor')
+            self.assertTrue(result['applied'])
+            self.assertEqual(result['source'], 'TMDB')
+            self.assertIn('No matching Plex production credits', result['warning'])
+            self.assertEqual(image.call_count, 1)
+            # A second check must not download art that's already saved.
+            app.auto_upgrade_actor_portrait('sample actor')
+            self.assertEqual(image.call_count, 1)
+        self.assertEqual(app.get_actor('sample actor')['art']['source'], 'TMDB')
+        self.assertEqual(app.image_bytes('actor', 'sample actor'),
+                         bytes([255, 216, 255]) + b'TMDB')
+        self.assertEqual(app.enrichment_status()['db_auto'], 1)
+
+    def test_manual_find_does_not_replace_plex_for_competing_tmdb_profiles(self):
+        with patch.object(app, 'plex_xml', side_effect=self.fake_xml):
+            app.sync_all(force=True)
+        candidate = {'name': 'Sample Actor', 'source': 'TMDB',
+                     'url': 'https://image.tmdb.org/t/p/w342/first.jpg',
+                     'reference': 'https://www.themoviedb.org/person/234',
+                     'matches': []}
+        other = dict(candidate, reference='https://www.themoviedb.org/person/235',
+                     url='https://image.tmdb.org/t/p/w342/second.jpg')
+        with patch.object(app, 'verified_portrait_candidates',
+                          return_value=([candidate, other], [])), \
+             patch.object(app, 'external_image') as download:
+            result = app.auto_upgrade_actor_portrait('sample actor')
+            download.assert_not_called()
+        self.assertFalse(result['applied'])
+        self.assertEqual(app.get_actor('sample actor')['art']['source'], 'Plex')
+
+    def test_legacy_unmatched_plex_fallback_is_requeued_once_without_art_loss(self):
+        with patch.object(app, 'plex_xml', side_effect=self.fake_xml):
+            app.sync_all(force=True)
+        app.remember_enrichment('sample actor', 'unmatched')
+        self.assertNotIn('sample actor', app.pending_enrichment_keys())
+        with patch.object(app, 'artwork_keys',
+                          return_value={'tmdb':'token','theporndb':''}), \
+             patch.object(app, 'provider_enabled', return_value=True):
+            changed = app.requeue_legacy_plex_fallbacks()
+            self.assertGreaterEqual(changed, 1)
+            self.assertEqual(app.requeue_legacy_plex_fallbacks(), 0)
+        self.assertIn('sample actor', app.pending_enrichment_keys())
+        self.assertEqual(app.get_actor('sample actor')['art']['source'], 'Plex')
+
     def test_tmdb_overrides_tpdb_but_tpdb_never_overrides_tmdb(self):
         with patch.object(app, 'plex_xml', side_effect=self.fake_xml):
             app.sync_all(force=True)
