@@ -1366,12 +1366,16 @@ def auto_upgrade_actor_portrait(actor_key):
                     'Multiple plausible identities or no matching film credits',
                     'candidate_count': len(choices),
                     'warnings': errors}
-        source = selected['source']
         if source_upgrade_needed(actor_key, selected):
             save_verified_art(actor_key, selected)
+        with db_open() as db:
+            saved = db.execute(
+                'SELECT source FROM actor_art WHERE actor_key=?',
+                (actor_key,)).fetchone()
         warning = portrait_match_warning(actor_name, selected, titles)
         remember_enrichment(actor_key, 'auto', [], warning)
-        return {'applied': True, 'source': source, 'warning': warning}
+        return {'applied': bool(saved), 'source': saved['source'] if saved else '',
+                'warning': warning}
 
 
 def apply_art(actor_key, choice_token):
