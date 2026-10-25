@@ -1221,8 +1221,16 @@ class PlexCastExplorerTests(unittest.TestCase):
         self.assertTrue(app.singleton_is_verified('Verne Lundquist', [entry]))
         self.assertTrue(app.confident_portrait_replacement('Verne Lundquist', [entry]))
         self.assertIsNone(app.choose_automatic_candidate([entry, entry], 'Verne Lundquist'))
-        self.assertFalse(app.confident_portrait_replacement(
-            'Verne Lundquist', [dict(entry, matches=[]) ]))
+        # One exact-name TMDB portrait without overlapping credits is now
+        # accepted with a warning; competing identities still require review.
+        name_only = dict(entry, matches=[])
+        self.assertTrue(app.confident_portrait_replacement(
+            'Verne Lundquist', [name_only]))
+        self.assertIn('No matching Plex production credits',
+                      app.portrait_match_warning('Verne Lundquist', name_only))
+        self.assertIsNone(app.choose_automatic_candidate(
+            [name_only, dict(name_only, url='https://image.tmdb.org/t/p/w342/other.jpg')],
+            'Verne Lundquist'))
 
     def test_single_exact_year_credit_can_replace_existing_plex_portrait(self):
         with patch.object(app, 'plex_xml', side_effect=self.fake_xml):
