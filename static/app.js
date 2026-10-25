@@ -6,6 +6,13 @@
   const formatNumber = n => Number(n || 0).toLocaleString();
   const q = (selector, root = document) => root.querySelector(selector);
   const elt = (tag, cls, text) => { const node=document.createElement(tag); if(cls) node.className=cls; if(text !== undefined) node.textContent=text; return node; };
+  const metadataFlag = note => {
+    const flag=elt('span','match-warning-flag','⚠');
+    flag.title='Metadata note: '+note;
+    flag.setAttribute('role','img');
+    flag.setAttribute('aria-label','Metadata note: '+note);
+    return flag;
+  };
   const initials = name => name.split(/\s+/).map(p=>p[0]||'').slice(0,2).join('').toUpperCase();
   const imageOrInitials = (url, label, cls) => {
     const wrap=elt('div',cls);
@@ -67,11 +74,12 @@
         card.title='Explore '+actor.name;
         card.append(imageOrInitials(actor.image ? actor.image+'&v='+state.artRevision : '',actor.name,'actor-photo'));
         const info=elt('div','actor-info');
-        const strong=elt('strong','',actor.name);
+        const nameRow=elt('div','actor-name-row');
+        nameRow.append(elt('strong','',actor.name));
+        if(actor.match_warning)nameRow.append(metadataFlag(actor.match_warning));
         const count=elt('span','',formatNumber(actor.appearance_count)+' '+(actor.appearance_count===1?'title':'titles'));
         const origin=elt('span','', 'Portrait: '+(actor.image_source||'Unknown'));
-        info.append(strong,count,origin);
-        if(actor.match_warning)info.append(elt('small','note','Metadata note: '+actor.match_warning));
+        info.append(nameRow,count,origin);
         card.append(info);
         card.addEventListener('click',()=>openActor(actor.key));
         fragment.append(card);
@@ -339,9 +347,9 @@
   async function openActor(key){modal('actorOverlay',true);$('actorDetail').replaceChildren(elt('p','','Loading performer…'));
     try{const actor=await api('/api/actor?key='+encodeURIComponent(key));const host=$('actorDetail');host.replaceChildren();
       const header=elt('div','actor-header');header.append(imageOrInitials(actor.image ? actor.image+'&v='+state.artRevision : '',actor.name,'actor-avatar'));
-      const right=elt('div');right.append(elt('div','eyebrow','PERFORMER PROFILE'));const h=elt('h2','',actor.name);h.id='actorName';right.append(h,elt('p','actor-caption',formatNumber(actor.titles.length)+' '+(actor.titles.length===1?'title':'titles')+' in your Plex collection'));
+      const right=elt('div');right.append(elt('div','eyebrow','PERFORMER PROFILE'));const h=elt('h2','',actor.name);h.id='actorName';if(actor.match_warning)h.append(metadataFlag(actor.match_warning));right.append(h,elt('p','actor-caption',formatNumber(actor.titles.length)+' '+(actor.titles.length===1?'title':'titles')+' in your Plex collection'));
       if(actor.art?.source){const artNote=elt('p','note','Portrait: '+actor.art.source);if(actor.art.source_url){const a=document.createElement('a');a.href=actor.art.source_url;a.target='_blank';a.rel='noopener noreferrer';a.textContent=' · Source / license';artNote.append(a);}right.append(artNote);}
-      if(actor.match_warning)right.append(elt('p','note','Metadata note: '+actor.match_warning));
+
       if(state.admin){const artActions=elt('div','art-actions');const search=elt('button','secondary-button','Find / upgrade portrait');search.type='button';search.addEventListener('click',()=>findArt(key));artActions.append(search);
         if(actor.art?.source && actor.art.source!=='Plex'){const remove=elt('button','secondary-button','Remove custom portrait');remove.type='button';remove.addEventListener('click',()=>removeArt(key));artActions.append(remove);}right.append(artActions);}
       header.append(right);host.append(header);
