@@ -83,3 +83,9 @@
  .verification-credits{max-height:340px}
  .enrich-candidates{grid-template-columns:repeat(auto-fill,minmax(175px,1fr))}
 }
+
+/* Metadata discrepancy marker; keep performer cards compact. */
+.actor-name-row{display:flex;align-items:center;gap:5px;min-width:0}
+.actor-info .actor-name-row strong{min-width:0;flex:0 1 auto;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.actor-info .actor-name-row .match-warning-flag{display:inline-flex;flex:none;margin:0;color:var(--gold2);font-size:13px;line-height:1;align-items:center;cursor:help}
+.actor-header h2 .match-warning-flag{display:inline-block;margin-left:9px;vertical-align:middle;color:var(--gold2);font:18px/1 system-ui,sans-serif;cursor:help}
