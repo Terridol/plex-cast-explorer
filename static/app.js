@@ -301,8 +301,24 @@
   }catch(err){$('artSettingsStatus').textContent=err.message}}
   async function findArt(key){
     const picker=$('artPicker');if(!picker)return;
-    picker.replaceChildren(elt('p','note','Searching your enabled portrait providers…'));
+    picker.replaceChildren(elt('p','note','Checking TMDB filmography and portrait priority…'));
+    let automatic;
+    try{
+      automatic=await post('/api/art/auto-upgrade',{key});
+      if(automatic.applied){
+        state.artRevision=Date.now();
+        await openActor(key);
+        await loadActors(false);
+        notify('Verified '+automatic.source+' portrait is now in use.'+(automatic.warning?' Metadata differences noted.':''));
+        return;
+      }
+    }catch(error){
+      automatic={reason:'Automatic verification unavailable: '+error.message};
+    }
+    picker.replaceChildren(elt('p','note','No uniquely verified portrait was applied. '+(automatic?.reason||'Review the available choices.')));
     try{const data=await api('/api/art/search?key='+encodeURIComponent(key));picker.replaceChildren();
+      const h=elt('h3','','Choose a portrait for '+data.actor);picker.append(h);
+      picker.append(elt('p','note','Automatic verification did not confirm a unique identity. Compare these suggestions manually before saving.'));
       const h=elt('h3','','Choose a portrait for '+data.actor);picker.append(h);
       picker.append(elt('p','note','Matches are suggestions only. Confirm the image represents the right person before applying.'));
       const providers=elt('p','note','TMDB: '+(data.configured.tmdb?'enabled':'not enabled')+' · ThePornDB fallback: '+(data.configured.theporndb?'ready':'add a token')+' · Wikimedia: disabled');picker.append(providers);
