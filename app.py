@@ -1344,6 +1344,35 @@ def find_art(key):
             'configured': {'tmdb': bool(keys['tmdb']) and provider_enabled('tmdb'), 'theporndb': bool(keys['theporndb']), 'wikimedia': provider_enabled('wikimedia')}}
 
 
+def auto_upgrade_actor_portrait(actor_key):
+    """On-demand verified portrait upgrade for an actor already in the Plex catalog.
+
+    Unlike the manual image-only search, this checks the actor's Plex
+    filmography against provider credits before automatically saving a photo.
+    An unavailable provider or an ambiguous identity never replaces art.
+    """
+    with REVIEW_MUTATION_LOCK:
+        actor_name, titles = actor_titles_for_matching(actor_key)
+        if not actor_name:
+            raise ValueError('Performer not found')
+        choices, errors = verified_portrait_candidates(actor_key)
+        choices = deduplicate_portrait_candidates(choices)
+        selected = choose_automatic_candidate(choices, actor_name, errors)
+        if selected is None and len(choices) > 1 and not errors:
+            selected = imdb_resolve_candidates(choices, actor_key)
+        if selected is None:
+            return {'applied': False, 'reason':
+                    'Multiple plausible identities or no matching film credits',
+                    'candidate_count': len(choices),
+                    'warnings': errors}
+        source = selected['source']
+        if source_upgrade_needed(actor_key, selected):
+            save_verified_art(actor_key, selected)
+        warning = portrait_match_warning(actor_name, selected, titles)
+        remember_enrichment(actor_key, 'auto', [], warning)
+        return {'applied': True, 'source': source, 'warning': warning}
+
+
 def apply_art(actor_key, choice_token):
     entry = candidate(choice_token)
     if entry['actor_key'] != actor_key:
@@ -2481,7 +2510,7 @@ class Handler(BaseHTTPRequestHandler):
             return self.respond(400, {'error': 'Chunked requests not supported'})
         if not self.logged_in() and path != '/api/login':
             return self.respond(401, {'error': 'Authentication required'})
-        if path in ('/api/config', '/api/sync', '/api/art/config', '/api/art/apply', '/api/art/remove', '/api/enrich/start', '/api/enrich/stop', '/api/enrich/approve', '/api/enrich/skip', '/api/enrich/reject', '/api/enrich/retry-errors', '/api/enrich/accept-unique') and not self.is_admin():
+        if path in ('/api/config', '/api/sync', '/api/art/config', '/api/art/apply', '/api/art/remove', '/api/art/auto-upgrade', '/api/enrich/start', '/api/enrich/stop', '/api/enrich/approve', '/api/enrich/skip', '/api/enrich/reject', '/api/enrich/retry-errors', '/api/enrich/accept-unique') and not self.is_admin():
             return self.respond(403, {'error': 'Server setup and indexing can only be initiated on the Plex server itself.'})
         try:
             length = int(self.headers.get('Content-Length', '0'))
@@ -2545,6 +2574,11 @@ class Handler(BaseHTTPRequestHandler):
                     return self.respond(400, {'error': 'Invalid provider token'})
                 save_artwork_keys(tmdb.strip(), tpdb.strip())
                 self.respond(200, {'ok': True})
+            elif path == '/api/art/auto-upgrade':
+                key = data.get('key', '')
+                if not isinstance(key, str) or len(key) > 250:
+                    return self.respond(400, {'error': 'Invalid performer'})
+                self.respond(200, auto_upgrade_actor_portrait(key))
             elif path == '/api/art/apply':
                 key, identifier = data.get('key', ''), data.get('id', '')
                 if not isinstance(key, str) or not isinstance(identifier, str):
