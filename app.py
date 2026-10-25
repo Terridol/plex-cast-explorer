@@ -1599,17 +1599,23 @@ def verified_portrait_candidates(actor_key):
                         re.fullmatch(r'/[a-zA-Z0-9_./-]+\.(?:jpg|png|webp)', p.get('profile_path') or '', re.I)]
             for item in matching[:4]:
                 try:
-                    credits = paced_provider_json(f'https://api.themoviedb.org/3/person/{item["id"]}/combined_credits', keys['tmdb'])
-                    matches = credit_matches(local, credits.get('cast', []), 'TMDB')
-                    # One exact-name TMDB result remains a valid identity
-                    # candidate even when Plex uses different film titles or
-                    # the person has no TMDB credits. Multiple identities are
-                    # still reviewed, and missing overlap is flagged.
+                    # A single exact-name person already resolves identity
+                    # under the user's matching policy. TMDB search includes
+                    # known_for credits: use them without a second API call.
+                    # Only competing namesakes need full combined_credits.
+                    if len(matching) == 1:
+                        external_credits = item.get('known_for') or []
+                    else:
+                        credits = paced_provider_json(
+                            f'https://api.themoviedb.org/3/person/{item["id"]}/combined_credits',
+                            keys['tmdb'])
+                        external_credits = credits.get('cast', [])
+                    matches = credit_matches(local, external_credits, 'TMDB')
                     found.append({'name': item['name'], 'source': 'TMDB',
                                   'url': 'https://image.tmdb.org/t/p/w342' + item['profile_path'],
                                   'reference': f'https://www.themoviedb.org/person/{item["id"]}',
                                   'credit': 'The Movie Database (TMDB)', 'matches': matches,
-                                  'other_titles': provider_other_credits(local, credits.get('cast', []))})
+                                  'other_titles': provider_other_credits(local, external_credits)})
                 except Exception as exc:
                     errors.append('TMDB credits: ' + str(exc)[:100])
         except Exception as exc:
