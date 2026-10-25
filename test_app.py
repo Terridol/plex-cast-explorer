@@ -653,7 +653,7 @@ class PlexCastExplorerTests(unittest.TestCase):
         self.assertEqual(app.choose_automatic_candidate([good], actor_name='Ada Example'), good)
         self.assertIsNone(app.choose_automatic_candidate([good], actor_name='Other Person'))
         self.assertIsNone(app.choose_automatic_candidate([good], actor_name='Ada Example', errors=['TPDB timed out']))
-        self.assertIsNone(app.choose_automatic_candidate([dict(good, matches=[])], actor_name='Ada Example'))
+        self.assertIsNotNone(app.choose_automatic_candidate([dict(good, matches=[])], actor_name='Ada Example'))
         self.assertIs(app.choose_automatic_candidate([dict(good, matches=[dict(evidence[0], role_conflict=True)])], actor_name='Ada Example')['source'], good['source'])
         self.assertIsNone(app.choose_automatic_candidate([dict(good, matches=[dict(evidence[0], external_year=2020)])], actor_name='Ada Example'))
         self.assertIsNone(app.choose_automatic_candidate([dict(good, url='http://127.0.0.1/p.jpg')], actor_name='Ada Example'))
@@ -681,7 +681,7 @@ class PlexCastExplorerTests(unittest.TestCase):
                  'matches':[{'title':'Film Alpha','year':2018,
                              'external_year':1990}]}
         self.assertIsNone(app.choose_automatic_candidate([entry], 'Ada Example'))
-        self.assertIsNone(app.choose_automatic_candidate([
+        self.assertIsNotNone(app.choose_automatic_candidate([
             dict(entry, matches=[] )], 'Ada Example'))
 
     def test_tpdb_fallback_when_tmdb_filmography_is_genuinely_wrong(self):
@@ -1066,16 +1066,20 @@ class PlexCastExplorerTests(unittest.TestCase):
                          [{'title':'Different Project','year':2020}])
 
     @patch.object(app, 'provider_enabled', new=lambda name: name in ('tmdb', 'wikimedia'))
-    def test_unmatched_is_not_automatically_assigned(self):
+    def test_exact_name_without_tmdb_filmography_is_a_single_candidate(self):
         with patch.object(app, 'plex_xml', side_effect=self.fake_xml):
             app.sync_all(force=True)
         with patch.object(app, 'artwork_keys', return_value={'tmdb':'token','theporndb':''}), \
-                patch.object(app, 'paced_provider_json', return_value={'results':[{
-                    'id':33,'name':'Second Actor','profile_path':'/person.jpg'}]} ) as provider:
-            # The person-search result exists, but no filmography match is available.
-            matches, errors = app.verified_portrait_candidates('second actor')
-        self.assertEqual(matches, [])
+             patch.object(app, 'paced_provider_json', side_effect=[
+                 {'results':[{'id':33,'name':'Second Actor','profile_path':'/person.jpg'}]},
+                 {'cast':[]}]) as provider:
+            candidates, errors = app.verified_portrait_candidates('second actor')
         self.assertEqual(errors, [])
+        self.assertEqual(len(candidates), 1)
+        self.assertEqual(candidates[0]['matches'], [])
+        self.assertIs(app.choose_automatic_candidate(candidates, 'Second Actor'), candidates[0])
+        self.assertIn('No matching Plex production credits',
+                      app.portrait_match_warning('Second Actor', candidates[0]))
         self.assertEqual(provider.call_count, 2)
 
     def test_tmdb_enabled_scans_plex_portraits_without_touching_saved_art(self):
