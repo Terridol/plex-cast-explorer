@@ -1600,12 +1600,15 @@ def verified_portrait_candidates(actor_key):
                 try:
                     credits = paced_provider_json(f'https://api.themoviedb.org/3/person/{item["id"]}/combined_credits', keys['tmdb'])
                     matches = credit_matches(local, credits.get('cast', []), 'TMDB')
-                    if matches:
-                        found.append({'name': item['name'], 'source': 'TMDB',
-                                      'url': 'https://image.tmdb.org/t/p/w342' + item['profile_path'],
-                                      'reference': f'https://www.themoviedb.org/person/{item["id"]}',
-                                      'credit': 'The Movie Database (TMDB)', 'matches': matches,
-                                      'other_titles': provider_other_credits(local, credits.get('cast', []))})
+                    # One exact-name TMDB result remains a valid identity
+                    # candidate even when Plex uses different film titles or
+                    # the person has no TMDB credits. Multiple identities are
+                    # still reviewed, and missing overlap is flagged.
+                    found.append({'name': item['name'], 'source': 'TMDB',
+                                  'url': 'https://image.tmdb.org/t/p/w342' + item['profile_path'],
+                                  'reference': f'https://www.themoviedb.org/person/{item["id"]}',
+                                  'credit': 'The Movie Database (TMDB)', 'matches': matches,
+                                  'other_titles': provider_other_credits(local, credits.get('cast', []))})
                 except Exception as exc:
                     errors.append('TMDB credits: ' + str(exc)[:100])
         except Exception as exc:
@@ -1677,8 +1680,10 @@ def portrait_match_quality(actor_name, entry):
     if host not in allowed_source_hosts[entry['source']]:
         return False, ['Portrait image is not from its credited provider']
     matches = entry.get('matches')
-    if not isinstance(matches, list) or not matches:
-        return False, ['No matching production credits']
+    if not isinstance(matches, list):
+        return False, ['Invalid production credits']
+    if not matches:
+        return True, ['No matching Plex production credits; exact-name match only']
     good, bad, warnings = 0, 0, []
     for credit in matches:
         if not isinstance(credit, dict) or not normalize_title(credit.get('title')):
