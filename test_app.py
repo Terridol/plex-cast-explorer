@@ -689,7 +689,8 @@ class PlexCastExplorerTests(unittest.TestCase):
             app.sync_all(force=True)
         def provider(url, key):
             if '/search/person' in url:
-                return {'results':[{'id':7,'name':'Sample Actor','profile_path':'/wrong.jpg'}]}
+                return {'results':[{'id':7,'name':'Sample Actor','profile_path':'/wrong.jpg',
+                                    'known_for':[{'title':'Alpha','media_type':'movie','release_date':'2001-04-01'}]}]}
             if '/person/7/combined_credits' in url:
                 return {'cast':[{'title':'Alpha','media_type':'movie',
                                  'release_date':'2001-04-01'}]}
@@ -941,7 +942,9 @@ class PlexCastExplorerTests(unittest.TestCase):
             app.sync_all(force=True)
         def fake_provider(url, token):
             if '/search/person' in url:
-                return {'results':[{'id':24,'name':'Sample Actor','profile_path':'/ok.jpg'},
+                return {'results':[{'id':24,'name':'Sample Actor','profile_path':'/ok.jpg',
+                                    'known_for':[{'title':'Alpha','media_type':'movie','release_date':'2024-06-11'},
+                                                 {'name':'Series 1','media_type':'tv','first_air_date':'2022-11-01'}]},
                                    {'id':25,'name':'Sample Actor Other','profile_path':'/wrong.jpg'}]}
             if '/person/24/combined_credits' in url:
                 return {'cast':[{'title':'Alpha','media_type':'movie','release_date':'2024-06-11'},
@@ -1127,8 +1130,7 @@ class PlexCastExplorerTests(unittest.TestCase):
             app.sync_all(force=True)
         with patch.object(app, 'artwork_keys', return_value={'tmdb':'token','theporndb':''}), \
              patch.object(app, 'paced_provider_json', side_effect=[
-                 {'results':[{'id':33,'name':'Second Actor','profile_path':'/person.jpg'}]},
-                 {'cast':[]}]) as provider:
+                 {'results':[{'id':33,'name':'Second Actor','profile_path':'/person.jpg'}]}]) as provider:
             candidates, errors = app.verified_portrait_candidates('second actor')
         self.assertEqual(errors, [])
         self.assertEqual(len(candidates), 1)
@@ -1136,7 +1138,7 @@ class PlexCastExplorerTests(unittest.TestCase):
         self.assertIs(app.choose_automatic_candidate(candidates, 'Second Actor'), candidates[0])
         self.assertIn('No matching Plex production credits',
                       app.portrait_match_warning('Second Actor', candidates[0]))
-        self.assertEqual(provider.call_count, 2)
+        self.assertEqual(provider.call_count, 1)
 
     def test_tmdb_enabled_scans_plex_portraits_without_touching_saved_art(self):
         with patch.object(app, 'plex_xml', side_effect=self.fake_xml):
@@ -1385,7 +1387,7 @@ class PlexCastExplorerTests(unittest.TestCase):
         def fake_provider(url, token):
             calls.append(url)
             if '/search/person?' in url:
-                return {'results': [{'id': 24, 'name': 'Sample Actor', 'profile_path': '/ok.jpg'}]}
+                return {'results': [{'id': 24, 'name': 'Sample Actor', 'profile_path': '/ok.jpg', 'known_for': [{'title':'Alpha','media_type':'movie','release_date':'2024-06-11'}]}]}
             if '/person/24/combined_credits' in url:
                 return {'cast': [{'title': 'Alpha', 'media_type': 'movie', 'release_date': '2024-06-11'}]}
             raise AssertionError('TPDB should not be queried: '+url)
@@ -1394,7 +1396,7 @@ class PlexCastExplorerTests(unittest.TestCase):
             candidates, errors = app.verified_portrait_candidates('sample actor')
         self.assertEqual(errors, [])
         self.assertEqual([c['source'] for c in candidates], ['TMDB'])
-        self.assertEqual(len(calls), 2)
+        self.assertEqual(len(calls), 1)
 
     @patch.object(app, 'provider_enabled', new=lambda name: name == 'tmdb')
     def test_existing_plex_fallback_remains_when_tpdb_has_no_match(self):
