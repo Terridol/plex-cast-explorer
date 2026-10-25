@@ -14,12 +14,28 @@ previously queued reviews.
    Plex art but cannot replace saved TMDB art.
 3. **Plex** is an on-demand fallback and is never falsely labeled TMDB.
 
-An exact normalized actor name and one matching production are sufficient to
-automatically accept a **single credible provider identity**. Character-name
-differences do not reject the match. One missing/incorrect film title or
-release year is an **informational warning** if the remaining filmography
-corroborates the performer. A unique title whose *only* year disagrees
-substantially is not corroborated.
+A single exact-name TMDB person with an authorized portrait is automatically
+accepted even when TMDB has no overlapping credits for the titles in Plex.
+In that case the performer is flagged **name-only (credits not corroborated)**.
+Where titles can be compared, minor year differences and isolated missing
+credits are informational notes, not automatic rejections. Multiple exact-name
+TMDB identities are still checked using filmography and, optionally, IMDb.
+A genuinely conflicting filmography (for example, the only overlapping
+production having a substantially incompatible release year) still blocks
+automatic approval.
+
+On the actor profile, **Find / upgrade portrait** now tries to verify and
+save a better TMDB/TPDB portrait before displaying manual search choices.
+The saved source appears immediately after a successful replacement; a
+name-only suggestion is never mislabeled as credit-verified.
+
+During enrichment startup a one-time migration requeues previously processed
+actors still displaying Plex thumbnails or saved ThePornDB portraits, so
+old "unmatched" decisions do not permanently block TMDB upgrades.
+This targeted refresh preserves existing photos while work proceeds.
+To revisit past unmatched actors without any portrait, use
+**Rescan unmatched performers**; those lookups still need to access the
+external provider.
 
 Manual review is reserved for multiple plausible identities (unless optional
 IMDb evidence independently resolves the tie) or genuinely contradictory /
