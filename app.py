@@ -930,7 +930,8 @@ def visible_match_warning(message):
     if not message:
         return ''
     markers = ('Release year differs', 'Release year unverified',
-               'Plex production credit(s) not corroborated')
+               'Plex production credit(s) not corroborated',
+               'No matching Plex production credits')
     return message if any(marker in message for marker in markers) else ''
 
 
@@ -1977,6 +1978,43 @@ def requeue_provider_upgrades():
     return count
 
 
+def requeue_legacy_plex_fallbacks():
+    """One-time targeted migration for previously processed Plex thumbnails.
+
+    Earlier rules marked many valid TMDB matches 'unmatched' and never tried
+    them again. Recheck those actors and TPDB overrides once, without wiping
+    stored portraits or endlessly rescanning actors with no artwork.
+    """
+    keys = artwork_keys()
+    if not (keys.get('tmdb') and provider_enabled('tmdb')):
+        return 0
+    with db_open() as db:
+        marker = db.execute(
+            "SELECT 1 FROM metadata WHERE key='portrait_match_refresh_v2'"
+        ).fetchone()
+        if marker:
+            return 0
+        count = db.execute("""
+            DELETE FROM enrichment_results
+            WHERE status IN ('unmatched','auto','approved')
+            AND (
+                actor_key IN (
+                    SELECT actor_key FROM actor_art WHERE source='ThePornDB'
+                )
+                OR actor_key IN (
+                    SELECT a.actor_key FROM actors a
+                    WHERE a.thumb!=''
+                    AND NOT EXISTS (
+                        SELECT 1 FROM actor_art art WHERE art.actor_key=a.actor_key
+                    )
+                )
+            )
+        """).rowcount
+        db.execute("INSERT INTO metadata(key,value) VALUES (?,?)",
+                   ('portrait_match_refresh_v2', datetime.now(timezone.utc).isoformat()))
+    return count
+
+
 def pending_enrichment_keys():
     with db_open() as db:
         return [r[0] for r in db.execute('''SELECT a.actor_key FROM actors a JOIN credits c ON c.actor_key=a.actor_key
@@ -2078,6 +2116,7 @@ def enrichment_start():
         ENRICH_STATE['phase'] = 'Preparing'
     try:
         requeue_provider_upgrades()
+        requeue_legacy_plex_fallbacks()
     except Exception:
         with ENRICH_LOCK:
             ENRICH_STATE['running'] = False
