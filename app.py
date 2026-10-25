@@ -1586,13 +1586,8 @@ def verified_portrait_candidates(actor_key):
         return [], ['Actor no longer exists']
     keys = artwork_keys()
     found, errors = [], []
-    # A Plex portrait is the fallback after TMDB. TPDB is only eligible
-    # when neither provider has usable artwork.
-    with db_open() as db:
-        existing = db.execute('''SELECT a.thumb, art.actor_key AS saved_art
-            FROM actors a LEFT JOIN actor_art art ON art.actor_key=a.actor_key
-            WHERE a.actor_key=?''', (actor_key,)).fetchone()
-    has_existing_art = bool(existing and (existing['thumb'] or existing['saved_art']))
+    # Plex is only an image fallback; existing thumbnails must not block
+    # a TMDB-first lookup.
     if keys['tmdb'] and provider_enabled('tmdb'):
         try:
             search = paced_provider_json('https://api.themoviedb.org/3/search/person?' + urlencode({
