@@ -1727,9 +1727,10 @@ def confident_portrait_replacement(actor_name, candidates, errors=None):
 def choose_automatic_candidate(candidates, actor_name=None, errors=None):
     """Pick one credible performer at the highest available portrait priority.
 
-    Invalid search hits are not competing identities. A unique TMDB identity
-    outranks TPDB. Multiple credible records from the same best source wait
-    for review (or an optional IMDb tie-break).
+    Invalid search hits are not competing identities. TMDB outranks TPDB.
+    Among same-source namesakes, one independently year-confirmed production
+    wins over candidates with zero shared productions. Genuine credit ties
+    remain for review or optional IMDb verification.
     """
     if errors or not candidates:
         return None
@@ -1739,7 +1740,24 @@ def choose_automatic_candidate(candidates, actor_name=None, errors=None):
         return None
     top_rank = max(ARTWORK_PRIORITY.get(c['source'], 0) for c in credible)
     best = [c for c in credible if ARTWORK_PRIORITY.get(c['source'], 0) == top_rank]
-    return best[0] if len(best) == 1 else None
+    if len(best) == 1:
+        return best[0]
+    # Multiple exact-name identities are NOT equally evidenced when one has
+    # a matching Plex film with a verified release year and every rival has
+    # no overlapping titles at all. This resolves cases such as a credited
+    # actor competing with an unrelated namesake in TMDB results.
+    # A shared title on any rival (even without a verified year) retains the
+    # ambiguity for review / optional IMDb verification.
+    with_credits = [c for c in best if c.get('matches')]
+    if len(with_credits) == 1:
+        winner = with_credits[0]
+        if any(m.get('year_verified') or
+               (credit_year({'year': m.get('year')}) is not None and
+                credit_year({'year': m.get('year')}) ==
+                credit_year({'year': m.get('external_year')}))
+               for m in winner['matches']):
+            return winner
+    return None
 
 
 def source_upgrade_needed(actor_key, entry):
@@ -1844,6 +1862,18 @@ def save_verified_art(actor_key, entry):
     image_bytes.cache_clear()
 
 
+def review_has_provider_failure(message):
+    """Only actual failed provider operations are lookup warnings.
+
+    Old review records also store explanatory messages like 'Multiple plausible
+    performer identities'. Those are not failed lookups and must not block
+    local re-evaluation of their saved candidates.
+    """
+    return any(tag in str(message or '') for tag in (
+        'TMDB credits:', 'TMDB search:', 'ThePornDB credits:',
+        'ThePornDB search:', 'Portrait download:'))
+
+
 def enrichment_status():
     with ENRICH_LOCK:
         data = dict(ENRICH_STATE)
@@ -1876,7 +1906,7 @@ def enrichment_status():
                     (SELECT 1 FROM actor_art art WHERE art.actor_key=a.actor_key) AS has_external
                     FROM enrichment_results e JOIN actors a ON a.actor_key=e.actor_key
                     WHERE e.status='review'"""):
-            if item['message']:
+            if review_has_provider_failure(item['message']):
                 review['lookup_warning'] += 1
                 continue
             try:
@@ -2206,9 +2236,7 @@ def review_single_batch_worker():
                     # Old review messages can be informational. Only actual
                     # provider failures must be retried rather than auto-accepted.
                     msg = str(current['message'] or '')
-                    if any(marker in msg for marker in (
-                        'TMDB credits:', 'TMDB search:', 'ThePornDB credits:',
-                        'ThePornDB search:', 'Portrait download:')):
+                    if review_has_provider_failure(msg):
                         remember_enrichment(row['actor_key'], 'error', choices, msg)
                         with REVIEW_BATCH_LOCK: REVIEW_BATCH_STATE['skipped'] += 1
                         continue
