@@ -6,6 +6,13 @@
   const formatNumber = n => Number(n || 0).toLocaleString();
   const q = (selector, root = document) => root.querySelector(selector);
   const elt = (tag, cls, text) => { const node=document.createElement(tag); if(cls) node.className=cls; if(text !== undefined) node.textContent=text; return node; };
+  const metadataFlag = note => {
+    const flag=elt('span','match-warning-flag','⚠');
+    flag.title='Metadata note: '+note;
+    flag.setAttribute('role','img');
+    flag.setAttribute('aria-label','Metadata note: '+note);
+    return flag;
+  };
   const initials = name => name.split(/\s+/).map(p=>p[0]||'').slice(0,2).join('').toUpperCase();
   const imageOrInitials = (url, label, cls) => {
     const wrap=elt('div',cls);
@@ -20,7 +27,7 @@
   function modal(id,open){$(id).hidden=!open;document.body.style.overflow=(!$('settingsOverlay').hidden||!$('actorOverlay').hidden||!$('reviewOverlay').hidden)?'hidden':'';}
   async function openSettings(){
     if(!state.admin){notify('To change Plex settings, open Cast Explorer on the server at http://127.0.0.1:8765');return;}
-    try{const conf=await api('/api/config');$('plexUrl').value=conf.url;$('plexToken').value='';$('plexToken').placeholder=conf.token_set?'Already configured — leave blank to keep':'Paste your Plex authentication token';$('settingsError').textContent='';try{const a=await api('/api/art/config');$('artSettingsStatus').textContent='TMDB: '+(a.tmdb_set?'configured':'not configured')+' · ThePornDB: '+(a.theporndb_set?'configured':'not configured')+' · Wikimedia: available';}catch(e){$('artSettingsStatus').textContent=e.message}modal('settingsOverlay',true);$('plexUrl').focus();void refreshEnrichment(true);}catch(e){notify(e.message)}
+    try{const conf=await api('/api/config');$('plexUrl').value=conf.url;$('plexToken').value='';$('plexToken').placeholder=conf.token_set?'Already configured — leave blank to keep':'Paste your Plex authentication token';$('settingsError').textContent='';try{const a=await api('/api/art/config');$('artSettingsStatus').textContent='TMDB: '+(a.tmdb_enabled?'enabled':(a.tmdb_set?'token saved; enable via installer':'not configured'))+' · ThePornDB: '+(a.theporndb_set?'configured':'not configured')+' · Wikimedia: disabled';}catch(e){$('artSettingsStatus').textContent=e.message}modal('settingsOverlay',true);$('plexUrl').focus();void refreshEnrichment(true);}catch(e){notify(e.message)}
   }
   function buildAlphabet(){const bar=$('alphabet');bar.replaceChildren();for(const letter of alphabet){const btn=elt('button','alpha'+((state.letter||'ALL')===letter?' active':''),letter);btn.addEventListener('click',()=>{state.letter=letter==='ALL'?'':letter;buildAlphabet();loadActors(false);});bar.append(btn)}}
   function renderLibraries(){const nav=$('libraryNav');nav.replaceChildren();if(!state.stats.sections?.length){nav.append(elt('div','nav-muted','Your libraries will appear after the first index.'));return;}
@@ -67,9 +74,12 @@
         card.title='Explore '+actor.name;
         card.append(imageOrInitials(actor.image ? actor.image+'&v='+state.artRevision : '',actor.name,'actor-photo'));
         const info=elt('div','actor-info');
-        const strong=elt('strong','',actor.name);
+        const nameRow=elt('div','actor-name-row');
+        nameRow.append(elt('strong','',actor.name));
+        if(actor.match_warning)nameRow.append(metadataFlag(actor.match_warning));
         const count=elt('span','',formatNumber(actor.appearance_count)+' '+(actor.appearance_count===1?'title':'titles'));
-        info.append(strong,count);
+        const origin=elt('span','', 'Portrait: '+(actor.image_source||'Unknown'));
+        info.append(nameRow,count,origin);
         card.append(info);
         card.addEventListener('click',()=>openActor(actor.key));
         fragment.append(card);
@@ -118,16 +128,20 @@
         formatNumber(result.review_waiting||0)+' waiting for review',
         formatNumber(result.db_unmatched||0)+' unmatched',
         formatNumber(result.remaining||0)+' not yet scanned'];
+      const source=result.portrait_sources||{};
+      summary.push('Portraits: '+formatNumber(source.TMDB||0)+' TMDB · '+formatNumber(source['ThePornDB']||0)+' ThePornDB · '+formatNumber(source['Plex fallback']||0)+' Plex fallback · '+formatNumber(source['No artwork']||0)+' without art');
+      summary.push('TMDB lookup '+(result.tmdb_lookup_enabled?'enabled':'disabled')+' · IMDb verification dataset '+(result.imdb_dataset_available?'installed':'not installed'));
       $('enrichSummary').textContent=summary.join(' · ')+(result.last_error?' · Latest warning: '+result.last_error:'');
       $('enrichProgress').style.width=(result.total?Math.round(100*result.checked/result.total):0)+'%';
       const batch=result.single_batch||{};
       $('enrichAcceptUnique').disabled=!!batch.running;
-      $('enrichAcceptUnique').textContent=batch.running?'Applying one-result portraits…':'Auto-accept queued single matches';
+      $('enrichAcceptUnique').textContent=batch.running?'Evaluating stored portraits…':'Auto-verify queued portraits';
       $('enrichBatchSummary').hidden=!(batch.running||batch.checked||batch.failed);
-      $('enrichBatchSummary').textContent='Single-result queue: '+formatNumber(batch.checked||0)+' / '+formatNumber(batch.total||0)+' checked · '+formatNumber(batch.applied||0)+' applied · '+formatNumber(batch.skipped||0)+' retained for review'+(batch.failed?' · '+batch.failed+' download errors':'')+(batch.last_error?' · '+batch.last_error:'');
+      $('enrichBatchSummary').textContent='Review queue: '+formatNumber(batch.checked||0)+' / '+formatNumber(batch.total||0)+' checked · '+formatNumber(batch.applied||0)+' reviews resolved · '+formatNumber(batch.skipped||0)+' retained for review'+(batch.failed?' · '+batch.failed+' download errors':'')+(batch.last_error?' · '+batch.last_error:'');
       $('enrichStart').disabled=result.running;
       $('enrichPause').disabled=!result.running;
-      $('enrichReviewCount').textContent=formatNumber(result.review_waiting||0)+' awaiting review (showing the newest 12).';
+      const triage=result.review_triage||{};
+      $('enrichReviewCount').textContent=formatNumber(result.review_waiting||0)+' awaiting review (newest 12 below). '+formatNumber(triage.ready||0)+' ready for safe bulk approval · '+formatNumber(triage.multiple_candidates||0)+' competing identities · '+formatNumber(triage.needs_more_evidence||0)+' need more evidence · '+formatNumber(triage.lookup_warning||0)+' provider lookup failures. The bulk action also checks optional IMDb evidence.';
       if(forceReview || lastReviewTotal!==result.review_waiting){
         lastReviewTotal=result.review_waiting;
         const reviews=await api('/api/enrich/review');renderEnrichmentReviews(reviews.results||[]);
@@ -141,10 +155,10 @@
   function evidenceTag(choice){
     const n=(choice.matches||[]).length;
     const dated=(choice.matches||[]).filter(m=>m.year_verified).length;
-    if((choice.matches||[]).some(m=>m.role_conflict))return ['caution','Conflicting credited roles — investigate before approving'];
-    if(n>=2 && dated>=1)return ['corroborated','Multiple matching credits; confirm the identity'];
-    if(n===1)return ['caution','Only one matching title — identity not confirmed'];
-    return ['caution','Limited credit evidence — review carefully'];
+    if(n>=2 && dated>=1)return ['corroborated','Multiple corroborating film credits'];
+    if(n===1 && dated===1)return ['corroborated','Film title and release year both match'];
+    if(n===1)return ['caution','Matching production; year still needs corroboration'];
+    return ['caution','Insufficient matching film credits'];
   }
   function plexTitlesList(person, limit=12){
     const box=elt('div','verification-credits');
@@ -277,7 +291,7 @@
     const button=$('enrichAcceptUnique');button.disabled=true;
     try{
       const r=await post('/api/enrich/accept-unique',{});
-      notify(r.started?'Processing single-result review entries in the background.':'Single-result approvals are already running.');
+      notify(r.started?'Reevaluating saved portrait reviews with filmography and IMDb evidence.':'Review processing is already running.');
       await refreshEnrichment(true);
     }catch(e){notify('Could not process singles: '+e.message);button.disabled=false;}
   }
@@ -295,11 +309,25 @@
   }catch(err){$('artSettingsStatus').textContent=err.message}}
   async function findArt(key){
     const picker=$('artPicker');if(!picker)return;
-    picker.replaceChildren(elt('p','note','Searching TMDB, ThePornDB and Wikimedia Commons…'));
+    picker.replaceChildren(elt('p','note','Checking TMDB filmography and portrait priority…'));
+    let automatic;
+    try{
+      automatic=await post('/api/art/auto-upgrade',{key});
+      if(automatic.applied){
+        state.artRevision=Date.now();
+        await openActor(key);
+        await loadActors(false);
+        notify('Verified '+automatic.source+' portrait is now in use.'+(automatic.warning?' Metadata differences noted.':''));
+        return;
+      }
+    }catch(error){
+      automatic={reason:'Automatic verification unavailable: '+error.message};
+    }
+    picker.replaceChildren(elt('p','note','No uniquely verified portrait was applied. '+(automatic?.reason||'Review the available choices.')));
     try{const data=await api('/api/art/search?key='+encodeURIComponent(key));picker.replaceChildren();
       const h=elt('h3','','Choose a portrait for '+data.actor);picker.append(h);
-      picker.append(elt('p','note','Matches are suggestions only. Confirm the image represents the right person before applying.'));
-      const providers=elt('p','note','TMDB: '+(data.configured.tmdb?'enabled':'add API token')+' · ThePornDB: '+(data.configured.theporndb?'enabled':'add API token')+' · Wikimedia: enabled');picker.append(providers);
+      picker.append(elt('p','note',(automatic?.reason||'Automatic verification did not confirm a unique identity')+'. Compare these suggestions manually before saving.'));
+      const providers=elt('p','note','TMDB: '+(data.configured.tmdb?'enabled':'not enabled')+' · ThePornDB fallback: '+(data.configured.theporndb?'ready':'add a token')+' · Wikimedia: disabled');picker.append(providers);
       for(const warning of data.warnings){picker.append(elt('p','note',warning));}
       if(!data.results.length){picker.append(elt('p','note','No portraits found. Add provider keys in Settings or try again later.'));return;}
       const results=elt('div','art-choice-grid');
@@ -315,13 +343,14 @@
       picker.append(results);
     }catch(e){picker.replaceChildren(elt('p','note','Artwork search failed: '+e.message))}
   }
-  async function removeArt(key){try{await post('/api/art/remove',{key});state.artRevision=Date.now();await openActor(key);await loadActors(false);notify('Custom portrait removed; using Plex image again.')}catch(e){notify(e.message)}}
+  async function removeArt(key){try{await post('/api/art/remove',{key});state.artRevision=Date.now();await openActor(key);await loadActors(false);notify('Custom portrait removed; the Plex fallback will display until another source is selected.')}catch(e){notify(e.message)}}
   async function openActor(key){modal('actorOverlay',true);$('actorDetail').replaceChildren(elt('p','','Loading performer…'));
     try{const actor=await api('/api/actor?key='+encodeURIComponent(key));const host=$('actorDetail');host.replaceChildren();
       const header=elt('div','actor-header');header.append(imageOrInitials(actor.image ? actor.image+'&v='+state.artRevision : '',actor.name,'actor-avatar'));
-      const right=elt('div');right.append(elt('div','eyebrow','PERFORMER PROFILE'));const h=elt('h2','',actor.name);h.id='actorName';right.append(h,elt('p','actor-caption',formatNumber(actor.titles.length)+' '+(actor.titles.length===1?'title':'titles')+' in your Plex collection'));
+      const right=elt('div');right.append(elt('div','eyebrow','PERFORMER PROFILE'));const h=elt('h2','',actor.name);h.id='actorName';if(actor.match_warning)h.append(metadataFlag(actor.match_warning));right.append(h,elt('p','actor-caption',formatNumber(actor.titles.length)+' '+(actor.titles.length===1?'title':'titles')+' in your Plex collection'));
       if(actor.art?.source){const artNote=elt('p','note','Portrait: '+actor.art.source);if(actor.art.source_url){const a=document.createElement('a');a.href=actor.art.source_url;a.target='_blank';a.rel='noopener noreferrer';a.textContent=' · Source / license';artNote.append(a);}right.append(artNote);}
-      if(state.admin){const artActions=elt('div','art-actions');const search=elt('button','secondary-button','Find portrait');search.type='button';search.addEventListener('click',()=>findArt(key));artActions.append(search);
+
+      if(state.admin){const artActions=elt('div','art-actions');const search=elt('button','secondary-button','Find / upgrade portrait');search.type='button';search.addEventListener('click',()=>findArt(key));artActions.append(search);
         if(actor.art?.source && actor.art.source!=='Plex'){const remove=elt('button','secondary-button','Remove custom portrait');remove.type='button';remove.addEventListener('click',()=>removeArt(key));artActions.append(remove);}right.append(artActions);}
       header.append(right);host.append(header);
       if(state.admin){const picker=elt('div','art-picker');picker.id='artPicker';host.append(picker);}host.append(elt('div','section-divider'));
@@ -331,8 +360,21 @@
         a.append(poster,elt('strong','',title.title));tile.append(a);tile.append(elt('small','',[(title.year||'Year unknown'),title.library].join(' · ')));if(title.character)tile.append(elt('small','',title.character));grid.append(tile)}host.append(grid);
     }catch(e){$('actorDetail').textContent='Could not load this performer: '+e.message}
   }
-  async function refreshStatus(){try{const s=await api('/api/status');const progress=$('syncBanner');progress.hidden=!s.running&&s.phase==='Not scanned';if(s.running||s.phase==='Sync failed'||s.phase==='Finished with warnings'){
-      progress.hidden=false;$('syncPhase').textContent=s.phase;$('syncFraction').textContent=s.total?formatNumber(s.current)+' / '+formatNumber(s.total)+' titles':'';$('syncBar').style.width=s.total?Math.min(100,Math.round(s.current/s.total*100))+'%':'3%';$('syncError').textContent=s.last_error?(s.errors+' error(s). Latest: '+s.last_error):'';
+  async function refreshStatus(){try{const s=await api('/api/status');const progress=$('syncBanner');progress.hidden=!s.running&&s.phase==='Not scanned';const hasImageSummary=!!(s.portrait_missing||s.portrait_failed||s.portrait_skipped);if(s.running||s.phase==='Sync failed'||s.phase==='Finished with warnings'||hasImageSummary){
+      progress.hidden=false;
+      $('syncPhase').textContent=s.phase;
+      const unit=s.phase==='Caching Plex actor portraits'||((s.phase==='Finished'||s.phase==='Finished with warnings')&&(s.portrait_downloaded||s.portrait_missing||s.portrait_failed||s.portrait_skipped))?'portraits':s.phase==='Resolving Plex actor artwork'?'performers':'titles';
+      $('syncFraction').textContent=s.total?formatNumber(s.current)+' / '+formatNumber(s.total)+' '+unit:'';
+      $('syncBar').style.width=s.total?Math.min(100,Math.round(s.current/s.total*100))+'%':'3%';
+      const details=[];
+      if(s.phase==='Caching Plex actor portraits'||s.portrait_downloaded||s.portrait_missing||s.portrait_failed){
+        details.push(formatNumber(s.portrait_downloaded||0)+' downloaded');
+        if(s.portrait_missing)details.push(formatNumber(s.portrait_missing)+' missing in Plex');
+        if(s.portrait_skipped)details.push(formatNumber(s.portrait_skipped)+' skipped due to source errors');
+      }
+      if(s.errors)details.push(formatNumber(s.errors)+' error(s)');
+      if(s.last_error)details.push('Latest: '+s.last_error);
+      $('syncError').textContent=details.join(' · ');
     }else if(!s.running)progress.hidden=true;
     $('refreshBtn').disabled=!!s.running;
     if(s.running){state.wasRunning=true;}else if(state.wasRunning){state.wasRunning=false;notify(s.errors?'Index completed with warnings.':'Your cast directory is up to date.');await loadStats();await loadActors(false)}
@@ -340,13 +382,13 @@
   async function sync(force=false){try{const result=await post('/api/sync',{force});if(result.started){notify('Indexing started. You can keep browsing while it runs.');state.wasRunning=true;await refreshStatus()}else notify('Indexing is already in progress.')}catch(e){notify('Could not sync: '+e.message)}}
   async function saveSettings(event){event.preventDefault();$('settingsError').textContent='';const url=$('plexUrl').value.trim();const token=$('plexToken').value.trim();try{await post('/api/config',{url,token:token||null});state.tokenSet=true;modal('settingsOverlay',false);$('connDot').classList.add('online');$('connectionLabel').textContent='Plex configured';await sync();}catch(e){$('settingsError').textContent=e.message}}
   async function start(){
-    $('artSettingsForm').addEventListener('submit',saveArtSettings);$('enrichStart').addEventListener('click',startEnrichment);$('enrichAcceptUnique').addEventListener('click',acceptQueuedSingles);$('enrichPause').addEventListener('click',pauseEnrichment);$('enrichReload').addEventListener('click',()=>refreshEnrichment(true));$('enrichRetry').addEventListener('click',async()=>{try{const r=await post('/api/enrich/retry-errors',{});notify('Reset '+r.reset+' failed lookups. Click Start / resume to retry them.');await refreshEnrichment(true);}catch(e){notify(e.message)}});$('settingsBtn').addEventListener('click',openSettings);$('settingsTopBtn').addEventListener('click',openSettings);$('reviewClose').addEventListener('click',()=>modal('reviewOverlay',false));document.addEventListener('keydown',e=>{if(e.key==='Escape'&&!$('reviewOverlay').hidden)modal('reviewOverlay',false)});$('settingsClose').addEventListener('click',()=>modal('settingsOverlay',false));$('settingsCancel').addEventListener('click',()=>modal('settingsOverlay',false));$('settingsForm').addEventListener('submit',saveSettings);
+    $('artSettingsForm').addEventListener('submit',saveArtSettings);$('enrichStart').addEventListener('click',startEnrichment);$('enrichAcceptUnique').addEventListener('click',acceptQueuedSingles);$('enrichPause').addEventListener('click',pauseEnrichment);$('enrichReload').addEventListener('click',()=>refreshEnrichment(true));$('enrichRetry').addEventListener('click',async()=>{try{const r=await post('/api/enrich/retry-errors',{});notify('Reset '+r.reset+' failed lookups. Click Start / resume to retry them.');await refreshEnrichment(true);}catch(e){notify(e.message)}});$('enrichRetryUnmatched').addEventListener('click',async()=>{try{const r=await post('/api/enrich/retry-unmatched',{});notify('Requeued '+r.reset+' unmatched performers. Click Start / resume to search with the updated provider order.');await refreshEnrichment(true);}catch(e){notify(e.message)}});$('settingsBtn').addEventListener('click',openSettings);$('settingsTopBtn').addEventListener('click',openSettings);$('reviewClose').addEventListener('click',()=>modal('reviewOverlay',false));document.addEventListener('keydown',e=>{if(e.key==='Escape'&&!$('reviewOverlay').hidden)modal('reviewOverlay',false)});$('settingsClose').addEventListener('click',()=>modal('settingsOverlay',false));$('settingsCancel').addEventListener('click',()=>modal('settingsOverlay',false));$('settingsForm').addEventListener('submit',saveSettings);
     $('actorClose').addEventListener('click',()=>modal('actorOverlay',false));$('settingsOverlay').addEventListener('click',e=>{if(e.target===$('settingsOverlay'))modal('settingsOverlay',false)});$('actorOverlay').addEventListener('click',e=>{if(e.target===$('actorOverlay'))modal('actorOverlay',false)});document.addEventListener('keydown',e=>{if(e.key==='Escape'){modal('settingsOverlay',false);modal('actorOverlay',false)}});
-    $('emptyAction').addEventListener('click',openSettings);$('logoutBtn').addEventListener('click',async()=>{try{await post('/api/logout',{});location.assign('/login')}catch(e){notify(e.message)}});$('refreshBtn').addEventListener('click',()=>sync());$('loadMore').addEventListener('click',()=>loadActors(true));$('sortSelect').addEventListener('change',e=>{state.sort=e.target.value;loadActors(false)});$('missingOnly').addEventListener('change',e=>{state.missing=e.target.checked;loadActors(false)});let typing;
+    $('adminLogoutBtn').addEventListener('click',async()=>{try{await post('/api/admin/logout',{});location.assign('/');}catch(e){notify(e.message)}});$('emptyAction').addEventListener('click',openSettings);$('logoutBtn').addEventListener('click',async()=>{try{await post('/api/logout',{});location.assign('/login')}catch(e){notify(e.message)}});$('refreshBtn').addEventListener('click',()=>sync());$('loadMore').addEventListener('click',()=>loadActors(true));$('sortSelect').addEventListener('change',e=>{state.sort=e.target.value;loadActors(false)});$('missingOnly').addEventListener('change',e=>{state.missing=e.target.checked;loadActors(false)});let typing;
     $('searchInput').addEventListener('input',e=>{clearTimeout(typing);typing=setTimeout(()=>{state.search=e.target.value;loadActors(false)},180)});
     $('mediaNav').addEventListener('click',e=>{const button=e.target.closest('[data-type]');if(!button)return;state.type=button.dataset.type;renderMediaNav();loadActors(false)});
     buildAlphabet();try{const c=await api('/api/config');state.tokenSet=c.token_set;state.admin=!!c.admin;
-      $('logoutBtn').hidden=state.admin;$('settingsBtn').hidden=!state.admin;$('settingsTopBtn').hidden=!state.admin;$('refreshBtn').hidden=!state.admin;$('emptyAction').hidden=!state.admin;$('connDot').classList.toggle('online',!!c.token_set);$('connectionLabel').textContent=c.token_set?'Plex configured':'Not configured';}catch(e){notify(e.message)}
+      $('adminLoginLink').hidden=state.admin||!c.admin_login_available; $('adminLogoutBtn').hidden=!state.admin||!c.admin_login_available; $('logoutBtn').hidden=state.admin;$('settingsBtn').hidden=!state.admin;$('settingsTopBtn').hidden=!state.admin;$('refreshBtn').hidden=!state.admin;$('emptyAction').hidden=!state.admin;$('connDot').classList.toggle('online',!!c.token_set);$('connectionLabel').textContent=c.token_set?'Plex configured':'Not configured';}catch(e){notify(e.message)}
     await Promise.all([loadStats(),getPlexLinkMode()]);await loadActors(false);await refreshStatus();state.timer=setInterval(refreshStatus,2200);setInterval(()=>refreshEnrichment(false),6000);
   }
   start();

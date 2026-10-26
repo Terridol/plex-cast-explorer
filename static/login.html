@@ -18,13 +18,13 @@
 <main>
 <h1>Cast Explorer</h1>
 <p>Sign in to browse your Plex cast directory.</p>
-<div id="setup" hidden><p>LAN access is locked until the server administrator sets a gallery password. On the Plex server, run <code>set_password_windows.bat</code>.</p></div>
+<div id="setup" hidden><p>LAN access is locked until the server administrator sets a gallery password. On the Plex server, select <strong>Start → Plex Cast Explorer → Set Gallery Password</strong>.</p></div>
 <form id="form">
 <label for="password">Gallery password</label>
 <input id="password" type="password" autocomplete="current-password" required autofocus>
 <button type="submit" id="submit">Sign in</button><p id="error" role="alert"></p>
 </form>
-<small>Designed for trusted home networks. Do not expose port 8765 to the public internet.</small>
+<small>Designed for trusted home networks. Do not expose port 8765 to the public internet. <a href="/privacy">Privacy &amp; legal notices</a></small>
 </main>
 <script>
 (async()=>{const res=await fetch('/api/session');const s=await res.json();if(s.logged_in){location.assign('/');return;}if(!s.password_set){document.getElementById('form').hidden=true;document.getElementById('setup').hidden=false;}})().catch(()=>{});

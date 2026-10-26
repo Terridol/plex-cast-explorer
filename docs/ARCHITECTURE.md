@@ -11,9 +11,9 @@ Browser on LAN → Cast Explorer HTTP (:8765) → SQLite index and local portrai
 
 - **`app.py`**: HTTP routes, authentication, Plex indexing, SQLite queries, artwork lookups, matching, and background tasks.
 - **`static/`**: user interface; no client-side Plex/API secrets.
-- **`manage.py`** and Windows scripts: setup and lifecycle helpers.
+- **`BUILD-INSTALLER.cmd`** and **`build_installer_windows.ps1`**: supported local Windows build pipeline; `installer/` holds service/updater utilities.
 - **`test_app.py`**: synthetic indexing, matching, and route tests.
-- **`*.json` / SQLite / `portraits/`** (runtime): per-installation credentials, settings, index, queue, and downloaded media; excluded from Git.
+- **`*.json` / SQLite / `portraits/` / `plex-portraits/`** (runtime): per-installation credentials, settings, index, queue, manually chosen portrait overrides, and downloaded Plex actor-image cache; excluded from Git.
 
 ## Authentication and boundaries
 
@@ -21,4 +21,4 @@ LAN viewing requires a gallery password and signed cookie. Localhost traffic byp
 
 ## Data updates
 
-The app uses scheduled incremental Plex sync and optional background enrichment. SQLite holds the combined library index, cached review decisions, and override references. Refresh jobs and image downloads are I/O-bound; large libraries can take significant time. A request for a performer does not modify Plex.
+The app uses scheduled incremental Plex sync and optional background enrichment. Sync also fetches missing Plex actor images from the URL supplied in each Plex `Role.thumb` and stores them in `plex-portraits/` before reporting completion; third-party metadata-agent images on public HTTPS hosts can be requested through Plex's authenticated image transcoder after URL and resolved-IP validation; metadata:// and media:// bundle references are resolved through Plex's metadata-file endpoint and a valid Role person key can supply a missing thumbnail from person metadata; private/LAN destinations remain blocked; unchanged titles do not block portrait-cache backfilling. Existing manual overrides in `portraits/` always take priority. SQLite holds the combined library index, cached review decisions, and override references. Refresh jobs and image downloads are I/O-bound; large libraries can take significant time. A request for a performer does not modify Plex.
