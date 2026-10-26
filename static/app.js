@@ -141,7 +141,7 @@
       $('enrichStart').disabled=result.running;
       $('enrichPause').disabled=!result.running;
       const triage=result.review_triage||{};
-      $('enrichReviewCount').textContent=formatNumber(result.review_waiting||0)+' awaiting review (newest 12 below). '+formatNumber(triage.ready||0)+' ready for safe bulk approval · '+formatNumber(triage.multiple_candidates||0)+' competing identities · '+formatNumber(triage.needs_more_evidence||0)+' need more evidence · '+formatNumber(triage.lookup_warning||0)+' lookup warnings. The bulk action also checks optional IMDb evidence.';
+      $('enrichReviewCount').textContent=formatNumber(result.review_waiting||0)+' awaiting review (newest 12 below). '+formatNumber(triage.ready||0)+' ready for safe bulk approval · '+formatNumber(triage.multiple_candidates||0)+' competing identities · '+formatNumber(triage.needs_more_evidence||0)+' need more evidence · '+formatNumber(triage.lookup_warning||0)+' provider lookup failures. The bulk action also checks optional IMDb evidence.';
       if(forceReview || lastReviewTotal!==result.review_waiting){
         lastReviewTotal=result.review_waiting;
         const reviews=await api('/api/enrich/review');renderEnrichmentReviews(reviews.results||[]);
