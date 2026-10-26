@@ -826,6 +826,73 @@ class PlexCastExplorerTests(unittest.TestCase):
         self.assertIsNone(app.choose_automatic_candidate([weaker, good]))
         self.assertIs(app.choose_automatic_candidate([good, dict(good, source='ThePornDB')]), good)
 
+    def test_namesake_film_credit_beats_unrelated_same_name_tmdb_result(self):
+        confirmed = {'name': 'Eric Thompson', 'source': 'TMDB',
+                     'url': 'https://image.tmdb.org/t/p/w342/matching.jpg',
+                     'reference': 'https://www.themoviedb.org/person/11',
+                     'matches': [{'title': 'Countdown', 'year': 2016,
+                                  'external_year': 2016, 'year_verified': True}]}
+        namesake = dict(confirmed,
+                        url='https://image.tmdb.org/t/p/w342/namesake.jpg',
+                        reference='https://www.themoviedb.org/person/12',
+                        matches=[])
+        self.assertIs(app.choose_automatic_candidate(
+            [namesake, confirmed], 'Eric Thompson'), confirmed)
+        self.assertIs(app.choose_automatic_candidate(
+            [confirmed, namesake], 'Eric Thompson'), confirmed)
+        self.assertIsNone(app.choose_automatic_candidate(
+            [dict(confirmed, matches=[dict(confirmed['matches'][0],
+                                           external_year=None,
+                                           year_verified=False)]), namesake],
+            'Eric Thompson'))
+        self.assertIsNone(app.choose_automatic_candidate(
+            [confirmed, dict(namesake, matches=[{
+                'title': 'Countdown', 'year': 2016,
+                'external_year': None, 'year_verified': False}])],
+            'Eric Thompson'))
+        self.assertIsNone(app.choose_automatic_candidate(
+            [namesake, dict(namesake, url='https://image.tmdb.org/t/p/w342/third.jpg')],
+            'Eric Thompson'))
+
+    def test_stored_namesake_review_resolves_and_ambiguity_note_is_not_lookup_error(self):
+        with patch.object(app, 'plex_xml', side_effect=self.fake_xml):
+            app.sync_all(force=True)
+        winner = {'name': 'Sample Actor', 'source': 'TMDB',
+                  'url': 'https://image.tmdb.org/t/p/w342/winner.jpg',
+                  'reference': 'https://www.themoviedb.org/person/101',
+                  'credit': 'TMDB',
+                  'matches': [{'title': 'Alpha', 'year': 2024,
+                               'external_year': 2024, 'year_verified': True}]}
+        other = dict(winner, url='https://image.tmdb.org/t/p/w342/other.jpg',
+                     reference='https://www.themoviedb.org/person/102',
+                     matches=[])
+        app.remember_enrichment('sample actor', 'review', [other, winner],
+                                'Multiple plausible performer identities')
+        triage = app.enrichment_status()['review_triage']
+        self.assertEqual(triage['ready'], 1)
+        self.assertEqual(triage['lookup_warning'], 0)
+        self.assertEqual(sum(triage.values()), 1)
+        with patch.object(app, 'external_image',
+                          return_value=(bytes([255,216,255])+b'winner', 'jpg')) as download:
+            app.review_single_batch_worker()
+            download.assert_called_once()
+        self.assertEqual(app.get_actor('sample actor')['art']['source'], 'TMDB')
+        self.assertEqual(app.enrichment_status()['review_waiting'], 0)
+        self.assertEqual(app.enrichment_status()['single_batch']['applied'], 1)
+
+    def test_review_triage_only_calls_actual_provider_failure_a_lookup_warning(self):
+        with patch.object(app, 'plex_xml', side_effect=self.fake_xml):
+            app.sync_all(force=True)
+        entry = {'name': 'Sample Actor', 'source': 'TMDB',
+                 'url': 'https://image.tmdb.org/t/p/w342/name.jpg',
+                 'reference': 'https://www.themoviedb.org/person/11',
+                 'matches': []}
+        app.remember_enrichment('sample actor', 'review', [entry],
+                                'TMDB credits: timeout')
+        triage = app.enrichment_status()['review_triage']
+        self.assertEqual(triage['lookup_warning'], 1)
+        self.assertEqual(triage['ready'], 0)
+
     def test_existing_review_queue_batch_accepts_only_verified_singletons(self):
         with patch.object(app, 'plex_xml', side_effect=self.fake_xml):
             app.sync_all(force=True)
