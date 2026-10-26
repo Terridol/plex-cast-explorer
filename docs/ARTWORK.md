@@ -18,8 +18,11 @@ A single exact-name TMDB person with an authorized portrait is automatically
 accepted even when TMDB has no overlapping credits for the titles in Plex.
 In that case the performer is flagged **name-only (credits not corroborated)**.
 Where titles can be compared, minor year differences and isolated missing
-credits are informational notes, not automatic rejections. Multiple exact-name
-TMDB identities are still checked using filmography and, optionally, IMDb.
+credits are informational notes, not automatic rejections. When several
+exact-name TMDB profiles appear, a candidate with a verified matching Plex
+film title and release year can be accepted automatically **if every competing
+profile has zero overlapping titles**. Rivals that also share productions
+still require review or independent optional IMDb corroboration.
 A genuinely conflicting filmography (for example, the only overlapping
 production having a substantially incompatible release year) still blocks
 automatic approval.
@@ -37,9 +40,11 @@ To revisit past unmatched actors without any portrait, use
 **Rescan unmatched performers**; those lookups still need to access the
 external provider.
 
-Manual review is reserved for multiple plausible identities (unless optional
-IMDb evidence independently resolves the tie) or genuinely contradictory /
-untrustworthy results. Failed provider lookups are retryable errors, not
+Manual review is reserved for unresolved competing identities or genuinely
+contradictory / untrustworthy results. The **Auto-verify queued portraits**
+action rechecks previously stored candidates using the same decisions; no
+portrait search is repeated. Explanatory review reasons must not be counted
+as provider lookup failures. Failed provider lookups are retryable errors, not
 requests for human identity approval. Missing results retain Plex fallback.
 
 Actor cards show their actual source, and non-blocking metadata warnings appear
